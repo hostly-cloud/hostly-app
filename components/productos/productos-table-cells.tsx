@@ -13,7 +13,6 @@ import {
   auditProductOperationalRouting,
   auditProductResolverParity,
   buildProductResolverParityContextForPlato,
-  resolveCartaFamiliaParityInputForPlato,
   type ProductResolverParityAudit,
   type ProductResolverParityCatalogSources,
   type ProductResolverParityIssue,
@@ -280,28 +279,7 @@ export function ProductosCartaRoutingAuditChip({
   const audit = auditProductOperationalRouting(p, operationStations);
   const parity = parityAudit ?? computeProductResolverParityAudit(p, paritySources);
   const { shortLabel, title, tone } = presentProductOperationalRoutingAudit(audit, t);
-  const catalogHint =
-    (operationStations?.length ?? 0) > 0 ||
-    (productionStations?.length ?? 0) > 0 ||
-    (cartaCategorias?.length ?? 0) > 0
-      ? t("productos.resolverParityCatalogHint", {
-          opCount: operationStations?.length ?? 0,
-          prodCount: productionStations?.length ?? 0,
-          familyLinked: resolveCartaFamiliaParityInputForPlato(
-            p,
-            cartaCategorias ?? [],
-            cartaFamilias ?? [],
-          )
-            ? t("onboarding.yes")
-            : t("onboarding.no"),
-        })
-      : t("productos.resolverParityCatalogEmpty");
-  const fullTitle = presentProductResolverParityAudit(
-    parity,
-    t,
-    title,
-    catalogHint,
-  );
+  const fullTitle = presentProductResolverParityAudit(parity, t, title);
   const recommendation = getProductResolverParityRecommendation(parity, t);
   const hostlyTone =
     tone === "ok" ? "success" : tone === "danger" ? "danger" : ("warning" as const);
