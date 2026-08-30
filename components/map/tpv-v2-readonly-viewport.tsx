@@ -214,7 +214,6 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
     mapLayoutEmphasis = false,
     mapAutoFitKey,
     mapAutoFitNonce,
-    mapRef,
     onWheel,
     className,
     viewportControlsRef,
@@ -350,16 +349,6 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
       ? "editor-v2-operational-content"
       : "legacy-fallback";
 
-  const assignMapRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      rootRef.current = node;
-      if (!mapRef) return;
-      if (typeof mapRef === "function") mapRef(node);
-      else mapRef.current = node;
-    },
-    [mapRef],
-  );
-
   const applyFitToViewport = useCallback(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -487,7 +476,8 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
   );
 
   useLayoutEffect(() => {
-    applyFitToViewport();
+    const frameId = window.requestAnimationFrame(applyFitToViewport);
+    return () => window.cancelAnimationFrame(frameId);
   }, [applyFitToViewport, mapAutoFitKey, mapAutoFitNonce]);
 
   useEffect(() => {
@@ -632,7 +622,7 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
 
   return (
     <div
-      ref={assignMapRef}
+      ref={rootRef}
       className={className}
       data-hostly-v2-viewport="native"
       data-hostly-v2-fit-source={fitSource}
