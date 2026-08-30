@@ -159,7 +159,7 @@ export default function ServiceMetricsBar({
   servidosArchiveToggle?: ServidosArchiveToggleProps;
   /** Cocina Fase 2: abre panel secundario de líneas prepared (Listo / Servir). */
   listosPanelToggle?: ListosPanelToggleProps;
-  /** Cocina Fase 1: una fila compacta operativa (En prod. / Prep / Listos / Crít). */
+  /** Cocina: una fila compacta operativa (En prod. / Listos / Servidos / Crít.). */
   variant?: "default" | "kitchenCompact";
 }) {
   const { restaurantId, ready: authReady, user } = useAuth();
@@ -264,12 +264,12 @@ export default function ServiceMetricsBar({
             tone="info"
           />
           <CompactKitchenKpi
-            label="Preparando"
+            label="Listos"
             value={metrics.prepared}
             tone="warning"
           />
           <CompactKitchenKpi
-            label="Listos"
+            label="Servidos"
             value={metrics.served}
             tone="success"
           />
