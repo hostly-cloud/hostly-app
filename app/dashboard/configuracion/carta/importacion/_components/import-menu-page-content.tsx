@@ -645,7 +645,7 @@ function UploadStep({
             type="file"
             accept={accept}
             capture={inputMethod === "image" ? "environment" : undefined}
-            className="sr-only"
+            hidden
             onChange={(e) => handleFiles(e.target.files)}
           />
 
