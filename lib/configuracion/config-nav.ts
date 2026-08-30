@@ -56,6 +56,10 @@ export const CONFIG_NAV_GROUPS: ConfigNavGroup[] = [
     label: "Espacios",
     children: [
       {
+        href: "/dashboard/configuracion/espacios/zonas",
+        label: "Zonas",
+      },
+      {
         href: "/dashboard/configuracion/espacios/editor-v2",
         label: "Editor V2 Preview",
       },
