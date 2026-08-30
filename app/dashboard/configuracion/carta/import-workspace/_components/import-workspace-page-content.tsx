@@ -22,7 +22,7 @@ const importSources = [
   {
     title: "Código QR",
     icon: "🔗",
-    description: "Reservado para resolver el QR y continuar por el mismo pipeline.",
+    description: "Preparado para leer el QR y continuar en el mismo proceso de importación.",
   },
   {
     title: "Texto pegado",
@@ -125,7 +125,9 @@ export function ImportWorkspacePageContent() {
                   Aquí podrás seguir el análisis paso a paso cuando esta experiencia esté disponible.
                 </p>
               </div>
-              <HostlyStatusBadge tone="muted">Próximamente</HostlyStatusBadge>
+              <HostlyStatusBadge tone="muted" className="shrink-0">
+                Próximamente
+              </HostlyStatusBadge>
             </div>
             <ol className="mt-6 space-y-3">
               {progressSteps.map((step) => (
@@ -168,7 +170,7 @@ export function ImportWorkspacePageContent() {
           </HostlyCard>
         </section>
 
-        <HostlyCard family="configuration" className="overflow-hidden p-0">
+        <HostlyCard family="configuration" className="shrink-0 overflow-hidden p-0">
           <div className="grid gap-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
             <div className="p-6 sm:p-8">
               <div className="flex items-start gap-4">
