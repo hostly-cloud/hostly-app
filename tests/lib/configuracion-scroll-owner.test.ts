@@ -63,5 +63,17 @@ describe("Configuration scroll ownership", () => {
       css,
       /\[data-hostly-config-scroll-owner="content"\] \[data-hostly-config-content\][\s\S]*overflow-y: auto;/,
     );
+    assert.match(
+      css,
+      /\[data-hostly-config-scroll-owner="content"\][\s\S]*\.hostly-data-table-viewport--embedded[\s\S]*overflow: visible !important;/,
+    );
+    assert.match(
+      css,
+      /\[data-hostly-config-scroll-owner="internal"\]\s+main\.hostly-module-shell--mobile:has\(\.hostly-data-table--categorias\)[\s\S]*?\.hostly-mobile-list-shell/,
+    );
+    assert.doesNotMatch(
+      css,
+      /\[data-hostly-config-shell\]\s+main\.hostly-module-shell--mobile:has\(\.hostly-data-table--categorias\)[\s\S]*?\.hostly-mobile-list-shell/,
+    );
   });
 });

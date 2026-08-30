@@ -175,6 +175,25 @@
   overflow: visible !important;
 }
 
+/* Embedded lists on standard pages expand vertically with the page. This
+ * prevents a second vertical scroller inside the content-owned pane. */
+[data-hostly-config-scroll-owner="content"]
+  .hostly-data-table-viewport--embedded,
+[data-hostly-config-scroll-owner="content"]
+  .hostly-data-table-viewport--embedded
+  > .hostly-data-table-shell,
+[data-hostly-config-scroll-owner="content"]
+  .hostly-data-table-viewport--embedded
+  .hostly-data-table-scroll,
+[data-hostly-config-scroll-owner="content"]
+  .hostly-data-table-viewport--embedded
+  .hostly-mobile-list-shell {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
 /* Compact chrome, not touch targets. */
 [data-hostly-config-shell]
   main.hostly-module-shell:has(.hostly-data-table--categorias)
@@ -387,10 +406,10 @@
     padding-top: 6px !important;
   }
 
-  [data-hostly-config-shell]
+  [data-hostly-config-scroll-owner="internal"]
     main.hostly-module-shell--mobile:has(.hostly-data-table--categorias)
     .hostly-data-table-viewport,
-  [data-hostly-config-shell]
+  [data-hostly-config-scroll-owner="internal"]
     main.hostly-module-shell--mobile:has(.hostly-data-table--escandallos)
     .hostly-data-table-viewport {
     flex: 1 1 0 !important;
@@ -399,10 +418,10 @@
     overflow: hidden !important;
   }
 
-  [data-hostly-config-shell]
+  [data-hostly-config-scroll-owner="internal"]
     main.hostly-module-shell--mobile:has(.hostly-data-table--categorias)
     .hostly-mobile-list-shell,
-  [data-hostly-config-shell]
+  [data-hostly-config-scroll-owner="internal"]
     main.hostly-module-shell--mobile:has(.hostly-data-table--escandallos)
     .hostly-mobile-list-shell {
     flex: 1 1 0 !important;
