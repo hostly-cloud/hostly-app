@@ -3,10 +3,11 @@ import { GeistSans } from "geist/font/sans";
 import Script from "next/script";
 import { Providers } from "@/components/providers";
 import { SelectedTableProvider } from "@/context/SelectedTableContext";
+import { getHostlyPublicSiteUrl } from "@/lib/hostly/public-site-url";
 import "./globals.css";
 import "@/components/sala-editor/panels/sala-operational-element-visual.shared.css";
 
-const metadataBase = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://hostly.app");
+const metadataBase = getHostlyPublicSiteUrl();
 
 export const metadata: Metadata = {
   metadataBase,
