@@ -123,7 +123,6 @@ export function ProductFormCommercialInfoModal({
   const [aiResolvedImageUrl, setAiResolvedImageUrl] = useState<string | null>(null);
   const [imageReviewRevision, setImageReviewRevision] = useState(0);
 
-
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
