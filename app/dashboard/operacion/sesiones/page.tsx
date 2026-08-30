@@ -17,12 +17,15 @@ import {
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   ACTIVE_SESSION_STALE_MS,
-  compactDeviceId,
-  compactSessionId,
   listenActiveSessions,
   resolveActiveSessionState,
   type ActiveSessionDocument,
 } from "@/lib/realtime/active-sessions";
+import {
+  sessionRoleLabel,
+  sessionRouteLabel,
+  sessionUserLabel,
+} from "@/lib/operacion/session-presentation";
 import { OperacionModuleShell } from "../_components/operacion-module-shell";
 
 type ViewFilter = "all" | "active" | "stale" | "online" | "offline";
@@ -30,9 +33,9 @@ type ViewFilter = "all" | "active" | "stale" | "online" | "offline";
 const FILTERS: { key: ViewFilter; label: string }[] = [
   { key: "all", label: "Todas" },
   { key: "active", label: "Activas" },
-  { key: "online", label: "Online" },
-  { key: "offline", label: "Offline" },
-  { key: "stale", label: "Stale" },
+  { key: "online", label: "En línea" },
+  { key: "offline", label: "Sin conexión" },
+  { key: "stale", label: "Inactivas" },
 ];
 
 function formatWhen(ms: number): string {
@@ -53,21 +56,6 @@ function formatRelative(ms: number, nowMs: number): string {
   return formatWhen(ms);
 }
 
-function userLabel(session: ActiveSessionDocument): string {
-  return (
-    session.userName?.trim() ||
-    session.userId?.slice(0, 8) ||
-    "Usuario"
-  );
-}
-
-function routeLabel(route?: string): string {
-  const value = route?.trim();
-  if (!value) return "—";
-  if (value.length <= 42) return value;
-  return `…${value.slice(-40)}`;
-}
-
 function statusPill(session: ActiveSessionDocument, nowMs: number): {
   label: string;
   tone: HostlyStatusBadgeTone;
@@ -75,18 +63,18 @@ function statusPill(session: ActiveSessionDocument, nowMs: number): {
   const stale = nowMs - session.lastSeenAt > ACTIVE_SESSION_STALE_MS;
   if (stale) {
     return {
-      label: "Stale",
+      label: "Inactiva",
       tone: "muted",
     };
   }
   if (session.online) {
     return {
-      label: "Online",
+      label: "En línea",
       tone: "success",
     };
   }
   return {
-    label: "Offline",
+    label: "Sin conexión",
     tone: "warning",
   };
 }
@@ -154,8 +142,8 @@ export default function OperacionSesionesPage() {
             ))}
           </HostlySegmentedControl>
           <span className="hostly-operation-audit-summary">
-            {resolved.onlineCount} online · {resolved.offlineCount} offline ·{" "}
-            {resolved.stale.length} stale
+            {resolved.onlineCount} en línea · {resolved.offlineCount} sin conexión ·{" "}
+            {resolved.stale.length} inactivas
           </span>
         </div>
 
@@ -181,10 +169,10 @@ export default function OperacionSesionesPage() {
                 <article key={session.id} className="hostly-operation-session-row">
                   <div className="hostly-operation-audit-primary">
                     <div className="hostly-operation-audit-title">
-                      {userLabel(session)}
+                      {sessionUserLabel(session)}
                     </div>
                     <div className="hostly-operation-audit-meta">
-                      {session.userRole?.trim() || "staff"} ·{" "}
+                      {sessionRoleLabel(session.userRole)} ·{" "}
                       {session.userAgent?.trim() || "Web"}
                     </div>
                   </div>
@@ -192,19 +180,11 @@ export default function OperacionSesionesPage() {
                     className="hostly-operation-session-route"
                     title={session.route}
                   >
-                    {routeLabel(session.route)}
+                    {sessionRouteLabel(session.route)}
                   </div>
                   <HostlyStatusBadge tone={status.tone}>{status.label}</HostlyStatusBadge>
                   <div className="hostly-operation-audit-time">
                     {formatRelative(session.lastSeenAt, nowMs)}
-                  </div>
-                  <div className="hostly-operation-session-ids">
-                    <div title={session.deviceId}>
-                      dev {compactDeviceId(session.deviceId)}
-                    </div>
-                    <div title={session.sessionId}>
-                      ses {compactSessionId(session.sessionId)}
-                    </div>
                   </div>
                 </article>
               );

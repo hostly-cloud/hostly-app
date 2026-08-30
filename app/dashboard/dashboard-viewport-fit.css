@@ -566,7 +566,7 @@
 }
 
 .hostly-operation-session-row {
-  grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 1fr) auto minmax(90px, 0.7fr) minmax(90px, 0.7fr);
+  grid-template-columns: minmax(140px, 1.2fr) minmax(160px, 1fr) auto minmax(90px, 0.7fr);
 }
 
 .hostly-operation-audit-primary {
@@ -619,8 +619,7 @@
   align-items: center;
 }
 
-.hostly-operation-activity-id,
-.hostly-operation-session-ids {
+.hostly-operation-activity-id {
   color: var(--hostly-ink-faint);
   font-family: monospace;
   font-size: 10px;
@@ -677,12 +676,7 @@
     grid-column: 1 / -1;
   }
 
-  .hostly-operation-session-row > .hostly-operation-audit-time,
-  .hostly-operation-session-ids {
+  .hostly-operation-session-row > .hostly-operation-audit-time {
     grid-column: auto;
-  }
-
-  .hostly-operation-session-ids {
-    text-align: right;
   }
 }
