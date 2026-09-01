@@ -7,11 +7,11 @@ type VercelConfig = {
   functionFailoverRegions?: string[];
 };
 
-test("keeps Vercel Functions close to Firebase eur3", () => {
+test("keeps Vercel Functions in one European region close to Firebase eur3", () => {
   const config = JSON.parse(
     readFileSync("vercel.json", "utf8"),
   ) as VercelConfig;
 
   assert.deepEqual(config.regions, ["cdg1"]);
-  assert.deepEqual(config.functionFailoverRegions, ["fra1"]);
+  assert.equal(config.functionFailoverRegions, undefined);
 });

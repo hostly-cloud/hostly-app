@@ -387,10 +387,12 @@ Verificar `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` en Vercel coincide.
 4. Login con cuenta de prueba
 5. Navegar a ruta afectada por el release
 
-Las Functions se ejecutan primariamente en `cdg1` (París), cerca del tenant de
-Firebase `eur3`, con `fra1` (Fráncfort) como región de failover. Esta decisión
-vive en `vercel.json`; no debe volver al valor por defecto `iad1` sin medir el
-impacto sobre TPV, importación y el resto de APIs que acceden a Firestore.
+Las Functions se ejecutan en `cdg1` (París), cerca del tenant de Firebase
+`eur3`. La configuración mantiene una sola región porque las regiones pasivas
+de Functions requieren un plan superior. Esta decisión vive en `vercel.json`;
+no debe volver al valor por defecto `iad1` ni añadir failover sin validar antes
+el plan disponible y medir el impacto sobre TPV, importación y el resto de APIs
+que acceden a Firestore.
 
 ## 10.2 Qué revisar
 
