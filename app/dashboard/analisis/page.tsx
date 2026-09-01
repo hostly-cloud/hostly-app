@@ -33,7 +33,7 @@ type AnalisisTab = "ventas" | "rentabilidad" | "horas" | "productos" | "comensal
 const TABS: { id: AnalisisTab; label: string; placeholder: string }[] = [
   { id: "ventas", label: "Ventas", placeholder: "No hay cobros confirmados en este periodo." },
   { id: "rentabilidad", label: "Rentabilidad", placeholder: "Margen histórico por snapshot de coste" },
-  { id: "comensales", label: "Comensales", placeholder: "Próximamente: análisis de comensales" },
+  { id: "comensales", label: "Comensales", placeholder: "Sin reservas en este periodo." },
 ];
 
 function todayYmd(): string {
@@ -173,6 +173,9 @@ export default function AnalisisPage() {
   const [dateTo, setDateTo] = useState<string>(today);
   const [dateFrom, setDateFrom] = useState<string>(() => addDaysYmd(today, -6));
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [reservationsState, setReservationsState] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
   const [ordersDocs, setOrdersDocs] = useState<Array<Record<string, unknown>>>([]);
   const [ordersState, setOrdersState] = useState<"loading" | "ready" | "error">("loading");
   const [paymentsDocs, setPaymentsDocs] = useState<Array<Record<string, unknown>>>([]);
@@ -300,9 +303,13 @@ export default function AnalisisPage() {
 
   useEffect(() => {
     if (!authReady || !restaurantId || !isFirebaseConfigured || !dateFrom || !dateTo) {
-      queueMicrotask(() => setReservations([]));
+      queueMicrotask(() => {
+        setReservations([]);
+        if (authReady) setReservationsState("ready");
+      });
       return;
     }
+    queueMicrotask(() => setReservationsState("loading"));
     const from = dateFrom <= dateTo ? dateFrom : dateTo;
     const to = dateFrom <= dateTo ? dateTo : dateFrom;
     const inclusives = daysBetweenInclusive(from, to);
@@ -310,7 +317,16 @@ export default function AnalisisPage() {
     const prevPeriodEnd = addDaysYmd(from, -1);
     const prevPeriodStart = addDaysYmd(prevPeriodEnd, -(n - 1));
     const listenFrom = prevPeriodStart < from ? prevPeriodStart : from;
-    const unsub = listenReservationsForRange(restaurantId, listenFrom, to, setReservations);
+    const unsub = listenReservationsForRange(
+      restaurantId,
+      listenFrom,
+      to,
+      (items) => {
+        setReservations(items);
+        setReservationsState("ready");
+      },
+      () => setReservationsState("error"),
+    );
     return () => unsub();
   }, [authReady, restaurantId, dateFrom, dateTo]);
 
@@ -878,6 +894,7 @@ export default function AnalisisPage() {
 
 
   const comensalesSectionProps = buildComensalesSectionProps({
+    dataState: reservationsState,
     dateFrom,
     dateTo,
     setDateFrom,
