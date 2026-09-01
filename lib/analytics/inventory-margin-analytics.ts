@@ -28,6 +28,7 @@ export type InventoryMarginLineInput = {
 export type InventoryMarginOrderInput = {
   id?: string;
   createdAt?: unknown;
+  recognizedSalesTotal?: number;
   items?: InventoryMarginLineInput[];
 };
 
@@ -376,9 +377,35 @@ function flattenOrderLines(
   const out: InventoryMarginLineInput[] = [];
   for (const order of orders) {
     if (!Array.isArray(order.items)) continue;
-    for (const item of order.items) {
-      if (!item || typeof item !== "object") continue;
-      out.push(item);
+    const items = order.items.filter(
+      (item): item is InventoryMarginLineInput => Boolean(item && typeof item === "object"),
+    );
+    const recognizedSalesTotal = Number(order.recognizedSalesTotal);
+    if (!Number.isFinite(recognizedSalesTotal) || recognizedSalesTotal < 0) {
+      out.push(...items);
+      continue;
+    }
+
+    const activeItems = items.filter((item) => !isCancelledLineStatus(item.status));
+    const rawSalesTotal = activeItems.reduce((sum, item) => sum + readLineSales(item), 0);
+    if (activeItems.length === 0 || rawSalesTotal <= 0) {
+      out.push(...items);
+      continue;
+    }
+
+    const lastActiveItem = activeItems.at(-1);
+    let allocatedSales = 0;
+    for (const item of items) {
+      if (isCancelledLineStatus(item.status)) {
+        out.push(item);
+        continue;
+      }
+      const sales =
+        item === lastActiveItem
+          ? roundMoney(recognizedSalesTotal - allocatedSales)
+          : roundMoney((readLineSales(item) / rawSalesTotal) * recognizedSalesTotal);
+      allocatedSales = roundMoney(allocatedSales + sales);
+      out.push({ ...item, total: Math.max(0, sales) });
     }
   }
   return out;
@@ -496,6 +523,11 @@ export function normalizeInventoryMarginOrders(
   return source.map((doc) => ({
     id: typeof doc.id === "string" ? doc.id : undefined,
     createdAt: doc.createdAt,
+    recognizedSalesTotal:
+      typeof doc.recognizedSalesTotal === "number" &&
+      Number.isFinite(doc.recognizedSalesTotal)
+        ? doc.recognizedSalesTotal
+        : undefined,
     items: Array.isArray(doc.items)
       ? (doc.items as InventoryMarginLineInput[])
       : [],

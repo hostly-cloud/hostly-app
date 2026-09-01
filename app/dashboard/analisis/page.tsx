@@ -20,6 +20,7 @@ import {
   buildPaidVentasSource,
   buildVentasOrdersAdapter,
 } from "@/components/analysis/utils/ventas";
+import { buildSettledMarginOrdersSource } from "@/components/analysis/utils/rentabilidad";
 import { useAuth } from "@/components/auth/auth-context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { listenReservationsForRange, type Reservation } from "@/lib/firestore/reservations";
@@ -173,6 +174,7 @@ export default function AnalisisPage() {
   const [dateFrom, setDateFrom] = useState<string>(() => addDaysYmd(today, -6));
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [ordersDocs, setOrdersDocs] = useState<Array<Record<string, unknown>>>([]);
+  const [ordersState, setOrdersState] = useState<"loading" | "ready" | "error">("loading");
   const [paymentsDocs, setPaymentsDocs] = useState<Array<Record<string, unknown>>>([]);
   const [paymentsState, setPaymentsState] = useState<"loading" | "ready" | "error">("loading");
   const [compactViewZonas, setCompactViewZonas] = useState(false);
@@ -313,19 +315,33 @@ export default function AnalisisPage() {
   }, [authReady, restaurantId, dateFrom, dateTo]);
 
   useEffect(() => {
-    if (!authReady || !restaurantId || !isFirebaseConfigured) {
-      queueMicrotask(() => setOrdersDocs([]));
+    if (!authReady) return;
+    if (!restaurantId || !isFirebaseConfigured) {
+      queueMicrotask(() => {
+        setOrdersDocs([]);
+        setOrdersState("ready");
+      });
       return;
     }
 
+    queueMicrotask(() => setOrdersState("loading"));
     const q = query(collection(db, "orders"), where("restaurantId", "==", restaurantId));
     let cancelled = false;
-    const unsub = onSnapshot(q, (snapshot) => {
-      if (cancelled) return;
-      setOrdersDocs(
-        snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) })),
-      );
-    });
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        if (cancelled) return;
+        setOrdersDocs(
+          snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) })),
+        );
+        setOrdersState("ready");
+      },
+      () => {
+        if (cancelled) return;
+        setOrdersDocs([]);
+        setOrdersState("error");
+      },
+    );
 
     return () => {
       cancelled = true;
@@ -921,15 +937,16 @@ export default function AnalisisPage() {
   const ventasOrders: VentasOrderInput[] = buildVentasOrdersAdapter(ventasOrdersSource);
 
   const marginOrdersSource: Array<Record<string, unknown>> | null = useMemo(() => {
-    if (ordersDocs.length === 0) return [];
+    const settledOrders = buildSettledMarginOrdersSource(paymentsDocs, ordersDocs);
+    if (settledOrders.length === 0) return [];
     const fromMs = startOfDayMs(new Date(dateFrom));
     const toMs = endOfDayMs(new Date(dateTo));
-    return ordersDocs.filter((order) => {
+    return settledOrders.filter((order) => {
       const createdAtMs = readFirestoreTsMs(order.createdAt);
       if (createdAtMs == null) return false;
       return createdAtMs >= fromMs && createdAtMs <= toMs;
     });
-  }, [ordersDocs, dateFrom, dateTo]);
+  }, [paymentsDocs, ordersDocs, dateFrom, dateTo]);
 
   const ventasSectionProps = {
     ...buildVentasSectionProps({
@@ -954,6 +971,12 @@ export default function AnalisisPage() {
 
   const rentabilidadSectionProps = {
     orders: marginOrdersSource,
+    dataState:
+      ordersState === "error" || paymentsState === "error"
+        ? ("error" as const)
+        : ordersState === "loading" || paymentsState === "loading"
+          ? ("loading" as const)
+          : ("ready" as const),
     dateFrom,
     dateTo,
     setDateFrom,
