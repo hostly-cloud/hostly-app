@@ -21,8 +21,15 @@ import {
 } from "@/components/productos/productos-table-cells";
 import {
   ConfigCartaStatusFilterSelect,
+  ProductosCategoryNavigation,
   type ConfigCartaListFilterId,
 } from "@/components/productos/productos-config-carta-compact-controls";
+import {
+  PRODUCT_CATEGORY_ALL_ID,
+  PRODUCT_CATEGORY_UNCATEGORIZED_ID,
+  buildProductCategoryNavigationOptions,
+  matchesProductCategoryNavigationOption,
+} from "@/lib/productos/product-category-navigation";
 import { ProductosBulkAssignCourseModal } from "@/components/productos/productos-bulk-assign-course-modal";
 import { ProductosBulkAssignDestinationModal } from "@/components/productos/productos-bulk-assign-destination-modal";
 import { ProductosBulkAssignCategoryModal } from "@/components/productos/productos-bulk-assign-category-modal";
@@ -521,10 +528,6 @@ const productRowActionBtnShell: CSSProperties = {
   background: "rgba(15, 23, 42, 0.2)",
   color: "#8896a8",
 };
-
-function normCatKey(s: string): string {
-  return s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
 
 const TIPO_VENTA_I18N: Record<TipoProductoVenta, string> = {
   plato: "carta.tipoPlato",
@@ -1887,7 +1890,7 @@ export default function ProductosManagementPage({
   const [listSearch, setListSearch] = useState("");
   const [configCartaAdvancedOpen, setConfigCartaAdvancedOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grouped" | "list">("grouped");
-  const [categoryTab, setCategoryTab] = useState<string>("__all__");
+  const [categoryTab, setCategoryTab] = useState<string>(PRODUCT_CATEGORY_ALL_ID);
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderBusyId, setReorderBusyId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -2424,25 +2427,25 @@ export default function ProductosManagementPage({
     [cartaCategorias],
   );
 
-  const tabOptions = useMemo(() => {
-    const out: { id: string; label: string }[] = [{ id: "__all__", label: t("cartaVisual.categoryAll") }];
-    for (const c of categoriasForProductosSelector) {
-      out.push({ id: c.id, label: c.name });
-    }
-    let hasUncategorized = false;
-    for (const p of filteredSorted) {
-      if (!p.categoriaCartaId && !(p.categoria ?? "").trim()) hasUncategorized = true;
-    }
-    if (hasUncategorized) out.push({ id: "__uncat__", label: t("cartaCategories.filterUncat") });
-    return out;
-  }, [categoriasForProductosSelector, filteredSorted, t]);
+  const tabOptions = useMemo(
+    () =>
+      buildProductCategoryNavigationOptions(
+        categoriasForProductosSelector,
+        filteredSorted,
+        {
+          all: t("cartaVisual.categoryAll"),
+          uncategorized: t("cartaCategories.filterUncat"),
+        },
+      ),
+    [categoriasForProductosSelector, filteredSorted, t],
+  );
 
   useEffect(() => {
     let alive = true;
     if (!tabOptions.some((o) => o.id === categoryTab)) {
       queueMicrotask(() => {
         if (!alive) return;
-        setCategoryTab("__all__");
+        setCategoryTab(PRODUCT_CATEGORY_ALL_ID);
       });
     }
     return () => {
@@ -2451,31 +2454,17 @@ export default function ProductosManagementPage({
   }, [tabOptions, categoryTab]);
 
   const tabFilteredSorted = useMemo(() => {
-    let rows: PlatoCarta[];
-    if (categoryTab === "__all__") {
-      rows = filteredSorted;
-      return [...rows].sort((a, b) =>
+    const selectedOption = tabOptions.find((option) => option.id === categoryTab);
+    if (!selectedOption || selectedOption.kind === "all") {
+      return [...filteredSorted].sort((a, b) =>
         a.nombre.localeCompare(b.nombre, undefined, { sensitivity: "base" }),
       );
     }
-    if (categoryTab === "__uncat__") {
-      rows = filteredSorted.filter(
-        (p) => !p.categoriaCartaId && !(p.categoria ?? "").trim(),
-      );
-      return [...rows].sort(comparePlatoCarta);
-    }
-    const cat = cartaCategorias.find((c) => c.id === categoryTab);
-    rows = filteredSorted.filter((p) => {
-      if (p.categoriaCartaId === categoryTab) return true;
-      if (cat && !p.categoriaCartaId) {
-        const a = normCatKey(p.categoria ?? "");
-        const b = normCatKey(cat.name);
-        return a === b && a !== "";
-      }
-      return false;
-    });
+    const rows = filteredSorted.filter((product) =>
+      matchesProductCategoryNavigationOption(product, selectedOption),
+    );
     return [...rows].sort(comparePlatoCarta);
-  }, [filteredSorted, categoryTab, cartaCategorias]);
+  }, [filteredSorted, categoryTab, tabOptions]);
 
   const resolverParityAuditsForTab = useMemo(() => {
     if (!parityCatalogsLoaded) return [];
@@ -2520,36 +2509,39 @@ export default function ProductosManagementPage({
     if (reorderMode) setResolverParityFilter("all");
   }, [reorderMode]);
 
+  const selectedCategoryOption = useMemo(
+    () => tabOptions.find((option) => option.id === categoryTab),
+    [categoryTab, tabOptions],
+  );
+
   const canUseProductReorder =
     isCentralCatalog &&
     !isLegacyReadOnly &&
-    categoryTab !== "__all__" &&
-    categoryTab !== "__uncat__";
+    selectedCategoryOption?.kind === "category" &&
+    selectedCategoryOption.isConfigured;
 
   const activeReorderCategoryLabel = useMemo(() => {
-    if (categoryTab === "__all__" || categoryTab === "__uncat__") return "";
-    return tabOptions.find((tab) => tab.id === categoryTab)?.label ?? "";
-  }, [categoryTab, tabOptions]);
+    return selectedCategoryOption?.kind === "category"
+      ? selectedCategoryOption.label
+      : "";
+  }, [selectedCategoryOption]);
 
   const showCategoryReorderControl =
     configCartaProductosChrome && isCentralCatalog && !isLegacyReadOnly;
 
   const reorderCategoryFullCount = useMemo(() => {
-    if (categoryTab === "__all__" || categoryTab === "__uncat__") return 0;
-    const cat = cartaCategorias.find((c) => c.id === categoryTab);
-    return items.filter((p) => {
-      if (p.categoriaCartaId === categoryTab) return true;
-      if (cat && !p.categoriaCartaId) {
-        const a = normCatKey(p.categoria ?? "");
-        const b = normCatKey(cat.name);
-        return a === b && a !== "";
-      }
-      return false;
-    }).length;
-  }, [items, categoryTab, cartaCategorias]);
+    if (selectedCategoryOption?.kind !== "category") return 0;
+    return items.filter((product) =>
+      matchesProductCategoryNavigationOption(product, selectedCategoryOption),
+    ).length;
+  }, [items, selectedCategoryOption]);
 
   const categoryReorderControl = useMemo(() => {
-    if (categoryTab === "__all__" || categoryTab === "__uncat__") {
+    if (
+      categoryTab === PRODUCT_CATEGORY_ALL_ID ||
+      categoryTab === PRODUCT_CATEGORY_UNCATEGORIZED_ID ||
+      !selectedCategoryOption?.isConfigured
+    ) {
       const hint = t("productos.orderModeSelectCategoryHint");
       return { enabled: false, label: hint, title: hint, ariaLabel: hint };
     }
@@ -2566,7 +2558,13 @@ export default function ProductosManagementPage({
         category: activeReorderCategoryLabel,
       }),
     };
-  }, [categoryTab, reorderCategoryFullCount, t, activeReorderCategoryLabel]);
+  }, [
+    categoryTab,
+    reorderCategoryFullCount,
+    t,
+    activeReorderCategoryLabel,
+    selectedCategoryOption,
+  ]);
 
   const exitReorderMode = useCallback(() => {
     setReorderMode(false);
@@ -5656,29 +5654,12 @@ export default function ProductosManagementPage({
               </div>
               </div>
               <div className="hostly-productos-v3__command-bar-filters">
-              <div
-                  className="hostly-productos-carta-category-rail hostly-productos-carta-category-rail--protagonist hostly-productos-carta-category-rail--premium hostly-productos-v3__category-rail"
-                  aria-label={t("cartaCategories.title")}
-                  role="tablist"
-                >
-                  {tabOptions
-                    .filter((tab) => tab.id !== "__all__")
-                    .map((tab) => {
-                      const active = categoryTab === tab.id;
-                      return (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          role="tab"
-                          onClick={() => setCategoryTab(tab.id)}
-                          aria-selected={active}
-                          className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category hostly-productos-carta-filter-chip--rail hostly-productos-carta-filter-chip--rail-premium${active ? " is-active" : ""}`}
-                        >
-                          {tab.label}
-                        </button>
-                      );
-                    })}
-                </div>
+                <ProductosCategoryNavigation
+                  options={tabOptions}
+                  value={categoryTab}
+                  onChange={setCategoryTab}
+                  categoriesLabel={t("cartaCategories.title")}
+                />
                 {renderCategoryReorderControl()}
               </div>
               </div>
