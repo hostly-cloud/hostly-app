@@ -31,3 +31,15 @@ test("las acciones principales evitan formatos técnicos y redundantes", () => {
   );
   assert.match(zones, /Cuando las reservas tengan una zona asignada/);
 });
+
+test("ventas declara pagos cobrados como fuente y no pedidos abiertos", () => {
+  const source = readFileSync("app/dashboard/analisis/page.tsx", "utf8");
+  const table = readFileSync("components/analysis/VentasTableBlock.tsx", "utf8");
+  const insights = readFileSync("components/analysis/VentasInsightsBlock.tsx", "utf8");
+
+  assert.match(source, /collection\(db, "payments"\)/);
+  assert.match(source, /where\("status", "==", "paid"\)/);
+  assert.match(table, /<th>Ticket<\/th>/);
+  assert.doesNotMatch(table, /<th>Pedido<\/th>/);
+  assert.doesNotMatch(insights, /Mejor rendimiento|Peor rendimiento|Recomendaciones/);
+});

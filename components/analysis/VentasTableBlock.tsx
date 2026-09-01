@@ -21,13 +21,13 @@ export function VentasTableBlock({ data }: VentasTableBlockProps) {
           marginBottom: 10,
         }}
       >
-        Últimos tickets
+        Últimos cobros
       </div>
       <table className="hostly-inv-native-table">
         <thead>
           <tr>
             <th>Fecha</th>
-            <th>Pedido</th>
+            <th>Ticket</th>
             <th className="hostly-inv-th-num">Total</th>
           </tr>
         </thead>
@@ -35,7 +35,7 @@ export function VentasTableBlock({ data }: VentasTableBlockProps) {
           {data.rows.map((row, i) => (
             <tr key={`${row.label}:${row.shortId ?? ""}:${i}`}>
               <td className="hostly-inv-td-muted">{row.label}</td>
-              <td className="hostly-inv-td-primary">{row.shortId ?? "—"}</td>
+              <td className="hostly-inv-td-primary">{row.shortId ?? "Sin número"}</td>
               <td className="hostly-inv-td-amount">{formatCurrency(row.total)}</td>
             </tr>
           ))}

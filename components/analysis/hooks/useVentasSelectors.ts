@@ -253,8 +253,8 @@ export function useVentasSelectors(input: UseVentasSelectorsInput): UseVentasSel
 
         const date = resolveVentasOrderDate(order?.createdAt);
         const shortId =
-          typeof order?.id === "string" && order.id.trim().length > 0
-            ? order.id.trim().slice(0, 8)
+          typeof order?.ticketNumber === "string" && order.ticketNumber.trim().length > 0
+            ? order.ticketNumber.trim()
             : null;
 
         const label = date
@@ -295,9 +295,9 @@ export function useVentasSelectors(input: UseVentasSelectorsInput): UseVentasSel
     const ticketMedio = kpis.ticketMedio;
 
     const summaryLines = [
-      `Ventas totales registradas: ${formatCurrency(totalVentas)}`,
-      `Total de tickets detectados: ${totalTickets}`,
-      `Ticket medio actual: ${formatCurrency(ticketMedio)}`,
+      `Ventas cobradas: ${formatCurrency(totalVentas)}`,
+      `Cobros confirmados: ${totalTickets}`,
+      `Cobro medio: ${formatCurrency(ticketMedio)}`,
     ];
 
     return {

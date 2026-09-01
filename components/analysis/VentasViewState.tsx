@@ -5,8 +5,8 @@ export type VentasViewStateProps = {
 
 export function VentasViewState({ hasOrders, ordersCount }: VentasViewStateProps) {
   const message = hasOrders
-    ? `${ordersCount} pedidos en el periodo`
-    : "Sin pedidos conectados a esta pestaña";
+    ? `${ordersCount} cobros confirmados en el periodo`
+    : "Sin cobros confirmados en el periodo";
 
   return (
     <p className="hostly-muted m-0 min-w-0 flex-1 text-xs leading-snug sm:text-[13px]">{message}</p>
