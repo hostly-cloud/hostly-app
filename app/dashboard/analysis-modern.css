@@ -268,20 +268,24 @@
   justify-content: center;
   gap: 7px;
   padding: 8px 15px;
-  border: 1px solid var(--hostly-navy-deep);
+  border: 1px solid var(--hostly-action-primary-border);
   border-radius: 12px;
-  background: var(--hostly-navy-deep);
+  background: linear-gradient(
+    138deg,
+    var(--hostly-action-primary-hover),
+    var(--hostly-action-primary-deep)
+  );
   color: white;
   font-size: 12px;
   font-weight: 740;
   text-decoration: none;
-  box-shadow: 0 8px 18px rgba(9, 43, 70, 0.15);
+  box-shadow: var(--hostly-action-primary-shadow);
   transition: background-color 140ms ease, transform 120ms ease, box-shadow 140ms ease;
 }
 
 .hostly-analysis-detail-link:hover {
-  background: var(--hostly-navy-mid);
-  box-shadow: 0 10px 22px rgba(9, 43, 70, 0.19);
+  background: linear-gradient(138deg, #1e4864, var(--hostly-action-primary));
+  box-shadow: var(--hostly-action-primary-shadow-hover);
 }
 
 .hostly-analysis-detail-link:active {
