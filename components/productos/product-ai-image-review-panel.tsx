@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   ConfigBtnPrimary,
   ConfigBtnSecondary,
@@ -37,6 +37,108 @@ export type ProductAiImageReviewPanelProps = {
   disabled?: boolean;
   onImageUrlChange: (url: string | null) => void;
 };
+
+type PendingConfirmation =
+  | { kind: "generate" }
+  | { kind: "attach"; candidate: CatalogProductImageCandidate };
+
+function ProductImageActionConfirmDialog({
+  confirmation,
+  onCancel,
+  onConfirm,
+}: {
+  confirmation: PendingConfirmation;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const titleId = useId();
+  const messageId = useId();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  const isGeneration = confirmation.kind === "generate";
+
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    cancelRef.current?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusables = [cancelRef.current, confirmRef.current].filter(
+        (element): element is HTMLButtonElement => element != null,
+      );
+      if (focusables.length === 0) return;
+
+      const currentIndex = focusables.indexOf(document.activeElement as HTMLButtonElement);
+      event.preventDefault();
+      const nextIndex = event.shiftKey
+        ? currentIndex <= 0
+          ? focusables.length - 1
+          : currentIndex - 1
+        : currentIndex < 0 || currentIndex === focusables.length - 1
+          ? 0
+          : currentIndex + 1;
+      focusables[nextIndex]?.focus();
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      previousFocus?.focus();
+    };
+  }, [onCancel]);
+
+  return (
+    <div
+      className="hostly-productos-bulk-course-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onCancel();
+      }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={messageId}
+        className="hostly-productos-bulk-course-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <h2 id={titleId} className="hostly-productos-bulk-course-modal__title">
+          {isGeneration ? "¿Generar imagen con IA?" : "¿Usar esta imagen de catálogo?"}
+        </h2>
+        <p id={messageId} className="hostly-productos-bulk-course-modal__hint">
+          {isGeneration
+            ? "La generación puede tener un pequeño coste y la imagen quedará pendiente de revisión."
+            : `Se copiará la imagen de “${confirmation.candidate.productName}” y quedará pendiente de aprobación.`}
+        </p>
+        <div className="hostly-productos-bulk-course-modal__actions">
+          <button
+            ref={cancelRef}
+            type="button"
+            className="hostly-button-secondary hostly-button-compact"
+            onClick={onCancel}
+          >
+            Cancelar
+          </button>
+          <button
+            ref={confirmRef}
+            type="button"
+            className="hostly-button-primary hostly-button-compact"
+            onClick={onConfirm}
+          >
+            {isGeneration ? "Generar imagen" : "Usar imagen"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function friendlyError(error: unknown): string {
   if (error instanceof CatalogProductImageApiError) {
@@ -245,6 +347,7 @@ export function ProductAiImageReviewPanel({
   const [catalogSearched, setCatalogSearched] = useState(false);
   const [catalogSearching, setCatalogSearching] = useState(false);
   const [catalogAttachingReference, setCatalogAttachingReference] = useState<string | null>(null);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
   const lastAutomaticAppliedUrlRef = useRef<string | null>(null);
 
   const refresh = useCallback(() => setRefreshKey((value) => value + 1), []);
@@ -259,6 +362,7 @@ export function ProductAiImageReviewPanel({
     setCatalogSearched(false);
     setCatalogSearching(false);
     setCatalogAttachingReference(null);
+    setPendingConfirmation(null);
   }, [open, productId, productName]);
 
   useEffect(() => {
@@ -304,13 +408,6 @@ export function ProductAiImageReviewPanel({
 
   const runGeneration = useCallback(async () => {
     if (!resolved || disabled || busyAction || catalogAttachingReference) return;
-    if (
-      !window.confirm(
-        "Generar una imagen con IA puede tener coste. La imagen quedará pendiente de revisión. ¿Continuar?",
-      )
-    ) {
-      return;
-    }
 
     const action: ProductImageReviewUiAction = resolved.hasImage
       ? "regenerate"
@@ -405,13 +502,6 @@ export function ProductAiImageReviewPanel({
   const runCatalogAttach = useCallback(
     async (candidate: CatalogProductImageCandidate) => {
       if (!resolved || localImageDraftDirty || disabled || catalogAttachingReference) return;
-      if (
-        !window.confirm(
-          `Usar la imagen de “${candidate.productName}”. Quedará pendiente de aprobación. ¿Continuar?`,
-        )
-      ) {
-        return;
-      }
       setCatalogAttachingReference(candidate.externalReference);
       setMessage(null);
       setError(null);
@@ -443,6 +533,17 @@ export function ProductAiImageReviewPanel({
   const showCatalogSearch = Boolean(
     resolved?.canSearchCatalog && !localImageDraftDirty,
   );
+
+  const confirmPendingAction = () => {
+    const confirmation = pendingConfirmation;
+    setPendingConfirmation(null);
+    if (!confirmation) return;
+    if (confirmation.kind === "generate") {
+      void runGeneration();
+      return;
+    }
+    void runCatalogAttach(confirmation.candidate);
+  };
 
   return (
     <section
@@ -626,7 +727,7 @@ export function ProductAiImageReviewPanel({
                     key={action}
                     type="button"
                     disabled={buttonDisabled}
-                    onClick={() => void runGeneration()}
+                    onClick={() => setPendingConfirmation({ kind: "generate" })}
                   >
                     {busy
                       ? "Generando…"
@@ -691,7 +792,7 @@ export function ProductAiImageReviewPanel({
                       candidate={candidate}
                       disabled={buttonDisabled}
                       attaching={catalogAttachingReference === candidate.externalReference}
-                      onAttach={() => void runCatalogAttach(candidate)}
+                      onAttach={() => setPendingConfirmation({ kind: "attach", candidate })}
                     />
                   ))}
                 </div>
@@ -746,6 +847,13 @@ export function ProductAiImageReviewPanel({
             Actualizar
           </button>
         </div>
+      ) : null}
+      {pendingConfirmation ? (
+        <ProductImageActionConfirmDialog
+          confirmation={pendingConfirmation}
+          onCancel={() => setPendingConfirmation(null)}
+          onConfirm={confirmPendingAction}
+        />
       ) : null}
     </section>
   );
