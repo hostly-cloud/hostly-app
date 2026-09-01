@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
@@ -18,48 +17,17 @@ import {
   DEFAULT_RESTAURANT_NAME,
   loadRestaurantNameById,
 } from "@/lib/firestore/user-restaurant-profile";
-import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
-
-const inputStyle: CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid var(--hostly-line-strong)",
-  backgroundColor: "#ffffff",
-  color: "var(--hostly-ink)",
-  fontSize: 15,
-  width: "100%",
-  maxWidth: 440,
-  boxSizing: "border-box",
-  outline: "none",
-  boxShadow: "var(--hostly-shadow-hairline)",
-};
-
-const labelStyle: CSSProperties = {
-  display: "block",
-  fontSize: 11,
-  fontWeight: 600,
-  color: "var(--hostly-ink-muted)",
-  marginBottom: 6,
-  letterSpacing: "0.055em",
-  textTransform: "uppercase",
-};
-
-/** Cabecera y filas alineadas (listado tipo inventario). */
-const inviteRowGrid: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1.25fr) minmax(72px, 0.42fr) minmax(104px, auto)",
-  gap: "10px 12px",
-  alignItems: "center",
-};
-
-const colHeadStyle: CSSProperties = {
-  fontSize: 9,
-  fontWeight: 590,
-  color: "var(--hostly-ink-faint)",
-  letterSpacing: "0.1em",
-  textTransform: "uppercase",
-  lineHeight: 1.22,
-};
+import {
+  HostlyAlert,
+  HostlyButton,
+  HostlyField,
+  HostlyInput,
+  HostlyOperationalEmptyState,
+  HostlySection,
+  HostlySectionHeader,
+  HostlySelect,
+  HostlySurface,
+} from "@/components/ui/hostly";
 
 function isValidInviteEmail(raw: string): boolean {
   const s = raw.trim();
@@ -281,154 +249,128 @@ export default function InvitacionesPage() {
   const shellBase = (
     <>
       {!isFirebaseConfigured ? (
-        <HostlySurface variant="flat" className="box-border p-4">
-          <p className="m-0 text-sm font-semibold text-[color:#b91c1c]" role="alert">
-            {t("invites.noFirebase")}
-          </p>
-        </HostlySurface>
+        <HostlyAlert tone="danger" title="Hostly no está conectado">
+          {t("invites.noFirebase")}
+        </HostlyAlert>
       ) : showWait ? (
-        <HostlySurface variant="flat" className="box-border p-4">
-          <p className="hostly-muted mb-0 !text-[13px]">{t("common.loading")}</p>
+        <HostlySurface variant="flat" className="hostly-invites-gate-state">
+          {t("common.loading")}
         </HostlySurface>
       ) : !user ? (
-        <HostlySurface variant="flat" className="box-border p-4">
-          <p className="hostly-muted mb-0 !text-[13px]">{t("invites.needLogin")}</p>
+        <HostlySurface variant="flat" className="hostly-invites-gate-state">
+          {t("invites.needLogin")}
         </HostlySurface>
       ) : !restaurantId ? (
-        <HostlySurface variant="flat" className="box-border p-4">
-          <p className="m-0 text-sm font-semibold text-[color:#b91c1c]" role="alert">
-            {t("invites.errorNoRestaurant")}
-          </p>
-        </HostlySurface>
+        <HostlyAlert tone="danger" title="No se ha encontrado el restaurante">
+          {t("invites.errorNoRestaurant")}
+        </HostlyAlert>
       ) : !canManageUsers ? (
-        <HostlySurface variant="flat" className="box-border p-4">
-          <p className="m-0 text-sm font-semibold text-[color:#b91c1c]">
-            No tienes permisos para gestionar invitaciones
-          </p>
-        </HostlySurface>
+        <HostlyAlert tone="warning" title="Acceso restringido">
+          No tienes permisos para gestionar invitaciones.
+        </HostlyAlert>
       ) : (
-        <HostlySection stack="sm" className="min-h-0 flex-1 overflow-hidden">
-          <div
-            style={{
-              flexShrink: 0,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
-              gap: 12,
-            }}
-          >
-            <HostlyKpiCard
-              title={t("invites.kpiPendingTitle")}
-              value={invitesLoading ? "—" : pendingInvites.length}
-              helper={t("invites.kpiPendingSub")}
-              accentColor="#a78bfa"
-              valueTitle={invitesLoading ? undefined : String(pendingInvites.length)}
-              className="px-3 py-2.5"
-            />
+        <HostlySection stack="md" className="hostly-invites-page">
+          <div className="hostly-invites-context-strip">
+            <span className="hostly-invites-context-icon" aria-hidden>
+              +
+            </span>
+            <div>
+              <strong>Añade personas a tu restaurante</strong>
+              <span>
+                Elige el acceso ahora; podrás cambiarlo después desde Empleados.
+              </span>
+            </div>
           </div>
 
-          <HostlySurface variant="ice" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden box-border">
-            <div
-              style={{
-                flexShrink: 0,
-                padding: "7px 10px 5px",
-                borderBottom: "1px solid var(--hostly-table-divider-soft)",
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "flex-end",
-                justifyContent: "space-between",
-                gap: 8,
-              }}
-            >
+          <div className="hostly-invites-workspace">
+            <HostlySurface variant="ice" className="hostly-invites-compose-card">
               <HostlySectionHeader
                 title={t("invites.composeTitle")}
                 description={t("invites.help")}
-                descriptionClassName="m-0 !text-[11px] !leading-snug text-[color:var(--hostly-ink-muted)] !font-semibold max-w-[560px]"
-                className="min-w-0 flex-1"
               />
-            </div>
 
-            <div style={{ flexShrink: 0, padding: "10px 10px 0" }}>
-              <label style={labelStyle}>{t("invites.emailLabel")}</label>
-              <input
-                type="email"
-                autoComplete="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder={t("invites.emailPlaceholder")}
-                disabled={sending}
-                style={{ ...inputStyle, marginBottom: 16 }}
-              />
-              <label style={labelStyle}>{t("invites.roleLabel")}</label>
-              <select
-                value={inviteRole}
-                onChange={(e) =>
-                  setInviteRole(
-                    e.target.value as "admin" | "manager" | "waiter",
-                  )
-                }
-                disabled={sending}
-                style={{ ...inputStyle, marginBottom: 20, maxWidth: 440 }}
-              >
-                <option value="waiter">Operativo / Camarero</option>
-                <option value="manager">Encargado</option>
-                <option value="admin" disabled={actorRole !== "owner"}>
-                  Administrador
-                </option>
-              </select>
-              <button
-                type="button"
-                disabled={!canSubmit}
-                onClick={() => void onInvite()}
-                style={{
-                  padding: "12px 20px",
-                  borderRadius: 10,
-                  border: "none",
-                  backgroundColor: "#16a34a",
-                  color: "#fff",
-                  fontWeight: 600,
-                  cursor: sending ? "wait" : "pointer",
-                  fontSize: 15,
+              <form
+                className="hostly-invites-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!canSubmit) return;
+                  void onInvite();
                 }}
               >
-                {sending ? t("common.saving") : t("invites.cta")}
-              </button>
-              {message ? (
-                <p className="m-0 mt-4 text-sm font-semibold text-[color:#15803d]" role="status">
-                  {message}
-                </p>
+                <HostlyField label={t("invites.emailLabel")}>
+                  <HostlyInput
+                    type="email"
+                    autoComplete="email"
+                    inputMode="email"
+                    value={inviteEmail}
+                    onChange={(event) => setInviteEmail(event.target.value)}
+                    placeholder={t("invites.emailPlaceholder")}
+                    disabled={sending}
+                  />
+                </HostlyField>
+
+                <HostlyField
+                  label={t("invites.roleLabel")}
+                  hint="Define qué podrá hacer esta persona dentro de Hostly."
+                >
+                  <HostlySelect
+                    value={inviteRole}
+                    onChange={(event) =>
+                      setInviteRole(
+                        event.target.value as "admin" | "manager" | "waiter",
+                      )
+                    }
+                    disabled={sending}
+                  >
+                    <option value="waiter">Operativo / Camarero</option>
+                    <option value="manager">Encargado</option>
+                    <option value="admin" disabled={actorRole !== "owner"}>
+                      Administrador
+                    </option>
+                  </HostlySelect>
+                </HostlyField>
+
+                <HostlyButton
+                  type="submit"
+                  variant="primary"
+                  disabled={!canSubmit}
+                  className="hostly-invites-submit"
+                >
+                  {sending ? t("common.saving") : t("invites.cta")}
+                </HostlyButton>
+              </form>
+
+              {message && !createdInvite ? (
+                <HostlyAlert tone="success">{message}</HostlyAlert>
               ) : null}
+
               {createdInvite ? (
-                <div
-                  className="mt-3 box-border max-w-[560px] rounded-xl border border-emerald-200 bg-emerald-50 p-3"
-                  role="status"
+                <HostlyAlert
+                  tone="success"
+                  title={`Invitación lista para ${createdInvite.email}`}
+                  className="hostly-invites-created"
                   aria-label="Enlace de invitación creado"
                 >
-                  <p className="m-0 text-sm font-semibold text-emerald-900">
-                    Enlace para {createdInvite.email}
+                  <p>
+                    Copia el enlace ahora. Por seguridad, Hostly no podrá volver a
+                    mostrarlo después.
                   </p>
-                  <p className="mb-0 mt-1 text-xs leading-snug text-emerald-800">
-                    Este enlace solo se muestra ahora. No se puede recuperar después.
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
+                  <div className="hostly-invites-created-actions">
+                    <HostlyButton
+                      variant="primary"
                       onClick={() => void onCopyInviteLink()}
-                      className="hostly-button-secondary min-h-11 px-4"
                     >
                       {copyState === "copied" ? "Enlace copiado" : "Copiar enlace"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={dismissCreatedInvite}
-                      className="hostly-button-ghost min-h-11 px-4"
-                    >
+                    </HostlyButton>
+                    <HostlyButton variant="ghost" onClick={dismissCreatedInvite}>
                       Cerrar
-                    </button>
+                    </HostlyButton>
                   </div>
                   {copyState === "error" ? (
-                    <div className="mt-2">
-                      <p className="mb-2 mt-0 text-xs font-semibold text-red-700" role="alert">
-                        No se pudo copiar automáticamente. Selecciona el enlace y cópialo manualmente.
+                    <div className="hostly-invites-manual-copy">
+                      <p role="alert">
+                        No se pudo copiar automáticamente. Selecciona el enlace y
+                        cópialo manualmente.
                       </p>
                       <input
                         ref={manualCopyInputRef}
@@ -436,151 +378,104 @@ export default function InvitacionesPage() {
                         value={createdInvite.inviteUrl}
                         onFocus={(event) => event.currentTarget.select()}
                         aria-label="Enlace de invitación para copiar manualmente"
-                        className="hostly-input w-full text-xs"
+                        className="hostly-input"
                       />
                     </div>
                   ) : null}
-                </div>
+                </HostlyAlert>
               ) : null}
+
               {error ? (
-                <p className="m-0 mt-4 text-sm font-semibold text-[color:#b91c1c]" role="alert">
+                <HostlyAlert tone="danger" title="No se pudo completar la invitación">
                   {error}
-                </p>
+                </HostlyAlert>
               ) : null}
-            </div>
+            </HostlySurface>
 
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: "auto",
-                padding: "8px 10px 10px",
-                WebkitOverflowScrolling: "touch",
-              }}
-            >
-              <div
-                style={{
-                  marginTop: 6,
-                  paddingTop: 12,
-                  borderTop: "1px solid var(--hostly-table-divider-soft)",
-                }}
-              >
-                <HostlySectionHeader title={t("invites.pendingListTitle")} titleVariant="section" className="shrink-0" />
+            <HostlySurface variant="flat" className="hostly-invites-pending-card">
+              <div className="hostly-invites-pending-header">
+                <HostlySectionHeader
+                  title={t("invites.pendingListTitle")}
+                  description="Enlaces enviados que todavía pueden utilizarse."
+                  titleVariant="section"
+                />
+                <span
+                  className="hostly-invites-pending-count"
+                  aria-label={`${pendingInvites.length} invitaciones pendientes`}
+                >
+                  {invitesLoading ? "—" : pendingInvites.length}
+                </span>
+              </div>
 
+              <div className="hostly-invites-pending-body">
                 {invitesLoading ? (
-                  <p className="hostly-muted mb-0 !text-[13px]">{t("common.loading")}</p>
+                  <p className="hostly-invites-loading">{t("common.loading")}</p>
                 ) : pendingInvites.length === 0 ? (
-                  <p className="hostly-muted mb-0 !text-[13px]">{t("invites.pendingEmpty")}</p>
+                  <HostlyOperationalEmptyState
+                    title="No hay invitaciones pendientes"
+                    text="Cuando invites a alguien, su acceso aparecerá aquí hasta que lo acepte."
+                    className="hostly-invites-empty"
+                  />
                 ) : (
-                  <div
-                    style={{
-                      borderRadius: 8,
-                      border: "1px solid var(--hostly-table-divider-soft)",
-                      overflow: "hidden",
-                      background: "var(--hostly-surface-card-solid)",
-                      maxWidth: 560,
-                    }}
-                  >
-                    <div
-                      style={{
-                        ...inviteRowGrid,
-                        padding: "10px 12px",
-                        background: "var(--hostly-table-head-surface)",
-                        borderBottom: "1px solid var(--hostly-table-divider-soft)",
-                      }}
-                    >
-                      <span style={colHeadStyle}>{t("invites.emailLabel")}</span>
-                      <span style={{ ...colHeadStyle }}>{t("invites.roleLabel")}</span>
-                      <span style={{ ...colHeadStyle, textAlign: "right" }}>{t("common.actions")}</span>
+                  <div className="hostly-invites-list">
+                    <div className="hostly-invites-list-head" aria-hidden>
+                      <span>{t("invites.emailLabel")}</span>
+                      <span>{t("invites.roleLabel")}</span>
+                      <span>{t("common.actions")}</span>
                     </div>
-                    {pendingInvites.map((invite, idx) => {
-                      const isLast = idx === pendingInvites.length - 1;
-                      return (
-                        <div
-                          key={invite.id}
-                          className="bg-[color:var(--hostly-surface-card-solid)] transition-[background-color] duration-150 ease-out hover:bg-[color:var(--hostly-table-row-hover)]"
-                          style={{
-                            ...inviteRowGrid,
-                            padding: "11px 12px",
-                            borderBottom: isLast ? "none" : "1px solid var(--hostly-table-divider-faint)",
+                    {pendingInvites.map((invite) => (
+                      <article className="hostly-invites-row" key={invite.id}>
+                        <div className="hostly-invites-row-person">
+                          <span className="hostly-invites-row-avatar" aria-hidden>
+                            {(invite.email?.trim().slice(0, 1) || "E").toUpperCase()}
+                          </span>
+                          <strong title={invite.email}>
+                            {invite.email || t("common.emDash")}
+                          </strong>
+                        </div>
+                        <span className="hostly-invites-role-badge">
+                          {inviteRoleLabel(invite.role) ?? t("common.emDash")}
+                        </span>
+                        <HostlyButton
+                          variant="secondary"
+                          disabled={revokingId === invite.id}
+                          className="hostly-invites-revoke"
+                          onClick={() => {
+                            void (async () => {
+                              setRevokingId(invite.id);
+                              setError(null);
+                              try {
+                                await requestRevokeStaffInvite(invite.id);
+                                if (createdInvite?.inviteId === invite.id) {
+                                  dismissCreatedInvite();
+                                }
+                                await loadInvites();
+                              } catch (err) {
+                                console.error(err);
+                                setError(safeInviteErrorMessage(err));
+                              } finally {
+                                setRevokingId(null);
+                              }
+                            })();
                           }}
                         >
-                          <div
-                            style={{
-                              minWidth: 0,
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: "var(--hostly-ink-strong)",
-                              letterSpacing: "-0.015em",
-                              lineHeight: 1.25,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                            title={typeof invite.email === "string" ? invite.email : undefined}
-                          >
-                            {typeof invite.email === "string" ? invite.email : t("common.emDash")}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 12,
-                              fontWeight: 600,
-                              color: "var(--hostly-ink-soft)",
-                              fontVariantNumeric: "tabular-nums",
-                            }}
-                          >
-                            {inviteRoleLabel(invite.role) ?? t("common.emDash")}
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                            <button
-                              type="button"
-                              disabled={revokingId === invite.id}
-                              onClick={() => {
-                                void (async () => {
-                                  setRevokingId(invite.id);
-                                  setError(null);
-                                  try {
-                                    await requestRevokeStaffInvite(invite.id);
-                                    if (createdInvite?.inviteId === invite.id) {
-                                      dismissCreatedInvite();
-                                    }
-                                    await loadInvites();
-                                  } catch (err) {
-                                    console.error(err);
-                                    setError(safeInviteErrorMessage(err));
-                                  } finally {
-                                    setRevokingId(null);
-                                  }
-                                })();
-                              }}
-                              style={{
-                                padding: "9px 14px",
-                                borderRadius: 10,
-                                border: "1px solid var(--hostly-table-divider-soft)",
-                                background: "var(--hostly-surface-page-soft)",
-                                color: "var(--hostly-ink-muted)",
-                                cursor: revokingId === invite.id ? "wait" : "pointer",
-                                fontSize: 13,
-                                fontWeight: 600,
-                              }}
-                            >
-                              {t("invites.revoke")}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                          {revokingId === invite.id
+                            ? t("common.loading")
+                            : t("invites.revoke")}
+                        </HostlyButton>
+                      </article>
+                    ))}
                   </div>
                 )}
+
                 {pendingInvites.length > 0 && !invitesLoading ? (
-                  <p className="hostly-muted mb-0 mt-3 max-w-[560px] !text-xs !leading-snug">
-                    Si ya no conservas el enlace de una invitación pendiente, revócala,
-                    crea una nueva y copia el nuevo enlace antes de cerrar el resultado.
+                  <p className="hostly-invites-pending-note">
+                    Si has perdido un enlace, revócalo y crea una nueva invitación.
                   </p>
                 ) : null}
               </div>
-            </div>
-          </HostlySurface>
+            </HostlySurface>
+          </div>
         </HostlySection>
       )}
     </>
@@ -592,10 +487,13 @@ export default function InvitacionesPage() {
       subtitle={subtitle}
       maxWidth={1180}
       compactLayout
-      lockViewport
+      operationalFocus
+      denseWorkbench
       shellSurface="configLight"
+      backHref="/dashboard/configuracion/empleados"
+      backLabel="Volver al equipo"
     >
-      <HostlySection stack="sm" className="min-h-0 flex-1 overflow-hidden">
+      <HostlySection stack="sm" className="min-h-0 flex-1">
         {shellBase}
       </HostlySection>
     </ModulePageShell>
