@@ -60,6 +60,11 @@ import {
   COMANDA_PANEL_WIDTH_MAX,
   COMANDA_PANEL_WIDTH_MIN,
 } from "@/lib/tpv/comanda-panel-width-preference";
+import {
+  parseTpvProductCardDisplayMode,
+  TPV_PRODUCT_CARD_DISPLAY_STORAGE_KEY,
+  type TpvProductCardDisplayMode,
+} from "@/lib/tpv/product-card-display-preference";
 import type { TableOperatorAssignment } from "@/lib/tpv/table-operator-assignment";
 import type { ActiveOperatorSession } from "@/lib/tpv/active-operator-session";
 import { clearOperacionTpvUrlParams } from "@/lib/tpv/clear-operacion-tpv-url";
@@ -290,9 +295,10 @@ import {
 import { TpvTablePresenceIndicators } from "./_components/tpv/tpv-table-presence-indicators";
 import {
   Beer,
+  ImageIcon,
   MapPin,
   Martini,
-  type LucideIcon,
+  Type,
 } from "lucide-react";
 import { useTablePresenceHeartbeat } from "@/hooks/useTablePresenceHeartbeat";
 import { useConnectivityStatus } from "@/hooks/useConnectivityStatus";
@@ -1717,12 +1723,14 @@ function formatTpveurEs(amount: number): string {
   );
 }
 
-function resolveTpvFloorPlanIcon(planName: string): LucideIcon | null {
+function resolveTpvFloorPlanIconName(
+  planName: string,
+): "martini" | "beer" | "map" | null {
   const n = planName.trim().toLowerCase();
   if (!n) return null;
-  if (n.includes("cocktail") || n.includes("martini")) return Martini;
-  if (/\bbar\b/.test(n) && !n.includes("cocktail")) return Beer;
-  if (n.includes("principal") || n.includes("main")) return MapPin;
+  if (n.includes("cocktail") || n.includes("martini")) return "martini";
+  if (/\bbar\b/.test(n) && !n.includes("cocktail")) return "beer";
+  if (n.includes("principal") || n.includes("main")) return "map";
   return null;
 }
 
@@ -1733,16 +1741,12 @@ function TpvFloorPlanIcon({
   planName: string;
   className?: string;
 }) {
-  const Icon = resolveTpvFloorPlanIcon(planName);
-  if (!Icon) return null;
-  return (
-    <Icon
-      className={className}
-      size={12}
-      strokeWidth={2.25}
-      aria-hidden
-    />
-  );
+  const iconName = resolveTpvFloorPlanIconName(planName);
+  const props = { className, size: 12, strokeWidth: 2.25, "aria-hidden": true };
+  if (iconName === "martini") return <Martini {...props} />;
+  if (iconName === "beer") return <Beer {...props} />;
+  if (iconName === "map") return <MapPin {...props} />;
+  return null;
 }
 
 function paymentMethodLabelEs(method: string): string {
@@ -1757,7 +1761,7 @@ function paymentMethodLabelEs(method: string): string {
 
 /** Teclado TPV europeo: solo `,` como decimal; máximo 2 decimales. */
 function tpvAppendDigit(prev: string, digit: string): string {
-  let p = String(prev ?? "").replace(/\./g, ",");
+  const p = String(prev ?? "").replace(/\./g, ",");
   if (digit === "00") {
     if (p === "" || p === "0") return "0";
     const lastComma = p.lastIndexOf(",");
@@ -2378,9 +2382,14 @@ export function CartaPageContent({
   const [preAddQuantity, setPreAddQuantity] = useState(1);
   const [preAddQuantityInputActive, setPreAddQuantityInputActive] =
     useState(false);
+  const [preAddQuantityPadOpen, setPreAddQuantityPadOpen] = useState(false);
+  const [productCardDisplayMode, setProductCardDisplayMode] =
+    useState<TpvProductCardDisplayMode>("images");
   const [modifierModalPreAddQuantity, setModifierModalPreAddQuantity] =
     useState(1);
   const preAddQuantityRef = useRef(1);
+  const preAddQuantityControlRef = useRef<HTMLDivElement | null>(null);
+  const preAddQuantityTriggerRef = useRef<HTMLButtonElement | null>(null);
   const activeProductTimeoutRef = useRef<number | null>(null);
   const addingTimeoutsRef = useRef<Record<string, number>>({});
   const lastClickAtByProductIdRef = useRef<Record<string, number>>({});
@@ -2444,6 +2453,41 @@ export function CartaPageContent({
   useEffect(() => {
     preAddQuantityRef.current = normalizeTpvPreAddQuantity(preAddQuantity);
   }, [preAddQuantity]);
+
+  useEffect(() => {
+    try {
+      setProductCardDisplayMode(
+        parseTpvProductCardDisplayMode(
+          window.localStorage.getItem(TPV_PRODUCT_CARD_DISPLAY_STORAGE_KEY),
+        ),
+      );
+    } catch {
+      setProductCardDisplayMode("images");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!preAddQuantityPadOpen) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const control = preAddQuantityControlRef.current;
+      if (control && event.target instanceof Node && !control.contains(event.target)) {
+        setPreAddQuantityPadOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setPreAddQuantityPadOpen(false);
+      window.requestAnimationFrame(() => preAddQuantityTriggerRef.current?.focus());
+    };
+
+    window.addEventListener("pointerdown", closeOnOutsidePointer, true);
+    window.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      window.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+      window.removeEventListener("keydown", closeOnEscape, true);
+    };
+  }, [preAddQuantityPadOpen]);
 
   useEffect(() => {
     try {
@@ -5624,9 +5668,23 @@ export function CartaPageContent({
     setPreAddQuantityInputActive(false);
   }, []);
 
+  const toggleProductCardDisplayMode = useCallback(() => {
+    setProductCardDisplayMode((current) => {
+      const next: TpvProductCardDisplayMode =
+        current === "images" ? "names" : "images";
+      try {
+        window.localStorage.setItem(TPV_PRODUCT_CARD_DISPLAY_STORAGE_KEY, next);
+      } catch {
+        /* La preferencia visual puede seguir activa durante esta sesión. */
+      }
+      return next;
+    });
+  }, []);
+
   const handleProductAddRequest = useCallback(
     (product: Product) => {
       const quantityToAdd = normalizeTpvPreAddQuantity(preAddQuantityRef.current);
+      setPreAddQuantityPadOpen(false);
       const category = resolveCategoryForProduct(product, cartaCategories);
       const groups = resolveActiveEffectiveModifierGroups(
         product,
@@ -12545,44 +12603,98 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 }
 
 .carta-tpv-preqty {
+  position: relative;
   display: flex;
   align-items: center;
+  min-width: 0;
+}
+
+.carta-products-menu-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   min-width: 0;
-  max-width: 100%;
-  overflow-x: auto;
-  padding: 3px;
+}
+
+.carta-tpv-product-display-toggle,
+.carta-tpv-preqty__trigger {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 11px;
   border-radius: 12px;
   border: 1px solid rgba(203, 213, 225, 0.72);
   background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
-
-.carta-tpv-preqty__badge {
-  min-width: 58px;
-  padding: 0 8px;
-  color: #64748b;
+  color: #475569;
+  font-family: inherit;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 850;
   line-height: 1;
-  text-align: center;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  cursor: pointer;
+  touch-action: manipulation;
   white-space: nowrap;
 }
 
-.carta-tpv-preqty__badge--active {
+.carta-tpv-product-display-toggle:hover,
+.carta-tpv-preqty__trigger:hover,
+.carta-tpv-preqty__trigger[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--hostly-accent) 32%, #cbd5e1);
+  background: var(--hostly-accent-soft);
   color: var(--hostly-accent);
 }
 
+.carta-tpv-product-display-toggle:focus-visible,
+.carta-tpv-preqty__trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.carta-tpv-preqty__value {
+  min-width: 28px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.carta-tpv-preqty__popover {
+  position: absolute;
+  z-index: 45;
+  top: calc(100% + 7px);
+  right: 0;
+  width: 190px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+}
+
+.carta-tpv-preqty__popover-title {
+  margin: 0 0 8px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
 .carta-tpv-preqty__keys {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .carta-tpv-preqty__key {
-  min-width: 30px;
-  min-height: 30px;
-  padding: 0 8px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 6px;
   border-radius: 9px;
   border: 1px solid transparent;
   background: transparent;
@@ -12618,8 +12730,11 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 }
 
 .carta-tpv-preqty__key--clear {
-  min-width: 34px;
-  color: #64748b;
+  color: var(--hostly-accent);
+}
+
+.carta-tpv-preqty__key--done {
+  color: #166534;
 }
 
 .carta-current-cat-title {
@@ -14377,6 +14492,39 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 
 @media (min-width: 1280px) {
   .carta-product-grid { grid-template-columns: repeat(6, 1fr); }
+}
+
+.carta-product-card.carta-product-card--name-only {
+  height: 88px;
+  min-height: 88px;
+  justify-content: center;
+  gap: 8px;
+}
+
+.carta-product-card--name-only .carta-product-name {
+  font-size: 14px;
+  font-weight: 800;
+  -webkit-line-clamp: 3;
+}
+
+@media (max-width: 767.98px) {
+  .carta-products-menu-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .carta-tpv-product-display-toggle,
+  .carta-tpv-preqty__trigger {
+    flex: 1 1 0;
+  }
+
+  .carta-tpv-preqty {
+    flex: 1 1 0;
+  }
+
+  .carta-tpv-preqty__trigger {
+    width: 100%;
+  }
 }
 
 @media (min-width: 1536px) {
@@ -18742,42 +18890,100 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         );
                       })}
                     </div>
-                    <div
-                      className="carta-tpv-preqty"
-                      aria-label="Cantidad previa para añadir producto"
-                    >
-                      <div
-                        className={`carta-tpv-preqty__badge${
-                          preAddQuantity > 1
-                            ? " carta-tpv-preqty__badge--active"
-                            : ""
-                        }`}
-                        aria-live="polite"
+                    <div className="carta-products-menu-actions">
+                      <button
+                        type="button"
+                        className="carta-tpv-product-display-toggle"
+                        aria-pressed={productCardDisplayMode === "images"}
+                        aria-label={
+                          productCardDisplayMode === "images"
+                            ? "Ocultar imágenes de productos"
+                            : "Mostrar imágenes de productos"
+                        }
+                        onClick={toggleProductCardDisplayMode}
                       >
-                        {preAddQuantity > 1
-                          ? `x${preAddQuantity} activo`
-                          : "x1"}
-                      </div>
-                      <div className="carta-tpv-preqty__keys">
-                        {([1, 2, 3, 4, 5, 6, 7, 8, 9, 0] as const).map((n) => (
-                          <button
-                            key={n}
-                            type="button"
-                            className="carta-tpv-preqty__key"
-                            onClick={() => appendPreAddQuantityDigit(n)}
-                            aria-label={`Cantidad ${n}`}
-                          >
-                            {n}
-                          </button>
-                        ))}
+                        {productCardDisplayMode === "images" ? (
+                          <ImageIcon size={16} aria-hidden />
+                        ) : (
+                          <Type size={16} aria-hidden />
+                        )}
+                        <span>
+                          {productCardDisplayMode === "images"
+                            ? "Con imágenes"
+                            : "Solo nombres"}
+                        </span>
+                      </button>
+                      <div
+                        ref={preAddQuantityControlRef}
+                        className="carta-tpv-preqty"
+                      >
                         <button
+                          ref={preAddQuantityTriggerRef}
                           type="button"
-                          className="carta-tpv-preqty__key carta-tpv-preqty__key--clear"
-                          onClick={clearPreAddQuantity}
-                          aria-label="Borrar cantidad previa"
+                          className="carta-tpv-preqty__trigger"
+                          aria-haspopup="dialog"
+                          aria-controls="carta-tpv-quantity-pad"
+                          aria-expanded={preAddQuantityPadOpen}
+                          onClick={() => setPreAddQuantityPadOpen((open) => !open)}
                         >
-                          C
+                          Cantidad
+                          <span className="carta-tpv-preqty__value" aria-live="polite">
+                            x{preAddQuantity}
+                          </span>
                         </button>
+                        {preAddQuantityPadOpen ? (
+                          <div
+                            id="carta-tpv-quantity-pad"
+                            className="carta-tpv-preqty__popover"
+                            role="dialog"
+                            aria-label="Cantidad previa para añadir producto"
+                          >
+                            <p className="carta-tpv-preqty__popover-title">
+                              Unidades del próximo producto
+                            </p>
+                            <div className="carta-tpv-preqty__keys">
+                              {([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((n) => (
+                                <button
+                                  key={n}
+                                  type="button"
+                                  className="carta-tpv-preqty__key"
+                                  onClick={() => appendPreAddQuantityDigit(n)}
+                                  aria-label={`Cantidad ${n}`}
+                                >
+                                  {n}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                className="carta-tpv-preqty__key carta-tpv-preqty__key--clear"
+                                onClick={clearPreAddQuantity}
+                                aria-label="Restablecer cantidad a una unidad"
+                              >
+                                x1
+                              </button>
+                              <button
+                                type="button"
+                                className="carta-tpv-preqty__key"
+                                onClick={() => appendPreAddQuantityDigit(0)}
+                                aria-label="Cantidad 0"
+                              >
+                                0
+                              </button>
+                              <button
+                                type="button"
+                                className="carta-tpv-preqty__key carta-tpv-preqty__key--done"
+                                onClick={() => {
+                                  setPreAddQuantityPadOpen(false);
+                                  window.requestAnimationFrame(() =>
+                                    preAddQuantityTriggerRef.current?.focus(),
+                                  );
+                                }}
+                              >
+                                Listo
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                     </>
@@ -18948,7 +19154,11 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                       isAdding ? " carta-product-card--adding" : ""
                                     }${isActive ? " scale-95 ring-2 ring-sky-200/70 bg-sky-50/90" : ""}${
                                       holdingProductId === product.id ? " holding" : ""
-                                    }${hasSent ? " has-sent" : ""}`}
+                                    }${hasSent ? " has-sent" : ""}${
+                                      productCardDisplayMode === "names"
+                                        ? " carta-product-card--name-only"
+                                        : ""
+                                    }`}
                                     type="button"
                                     onClick={(e) => {
                                       if (touchMovedRef.current) return;
@@ -19153,33 +19363,35 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                                 : ""}
                                       </div>
                                     ) : null}
-                                    <div className="carta-product-media">
-                                      {hasImg ? (
-                                        <img
-                                          src={product.imageUrl}
-                                          alt=""
-                                          className="carta-product-media__img"
-                                        />
-                                      ) : (
-                                        <div
-                                          className="carta-product-media__fallback"
-                                          style={{
-                                            backgroundColor: softBackgroundFromName(
-                                              product.nombre,
-                                            ),
-                                          }}
-                                        >
-                                          <span className="carta-product-media__initial">
-                                            {(
-                                              product.nombre.trim().charAt(0) || "?"
-                                            ).toUpperCase()}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
+                                    {productCardDisplayMode === "images" ? (
+                                      <div className="carta-product-media">
+                                        {hasImg ? (
+                                          <img
+                                            src={product.imageUrl}
+                                            alt=""
+                                            className="carta-product-media__img"
+                                          />
+                                        ) : (
+                                          <div
+                                            className="carta-product-media__fallback"
+                                            style={{
+                                              backgroundColor: softBackgroundFromName(
+                                                product.nombre,
+                                              ),
+                                            }}
+                                          >
+                                            <span className="carta-product-media__initial">
+                                              {(
+                                                product.nombre.trim().charAt(0) || "?"
+                                              ).toUpperCase()}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : null}
                                     <div className="flex-1 min-h-0 flex items-center justify-center px-1 w-full">
                                       <div
-                                        className="text-xs font-semibold leading-tight text-center line-clamp-2 text-slate-800"
+                                        className="carta-product-name text-xs font-semibold leading-tight text-center line-clamp-2 text-slate-800"
                                         title={product.nombre}
                                       >
                                         {product.nombre}
