@@ -6,6 +6,12 @@ export type BuildVentasSectionPropsInput = {
   orders: VentasOrderInput[];
   dataState?: "loading" | "ready" | "error";
   errorMessage?: string;
+  dateFrom: string;
+  dateTo: string;
+  setDateFrom: (value: string) => void;
+  setDateTo: (value: string) => void;
+  formatDateEs: (value: string) => string;
+  detailHref: string;
 };
 
 export function buildVentasSectionProps({
@@ -14,6 +20,12 @@ export function buildVentasSectionProps({
   orders,
   dataState,
   errorMessage,
+  dateFrom,
+  dateTo,
+  setDateFrom,
+  setDateTo,
+  formatDateEs,
+  detailHref,
 }: BuildVentasSectionPropsInput): VentasAnalyticsSectionProps {
   return {
     placeholder,
@@ -21,5 +33,11 @@ export function buildVentasSectionProps({
     orders,
     dataState,
     errorMessage,
+    dateFrom,
+    dateTo,
+    setDateFrom,
+    setDateTo,
+    formatDateEs,
+    detailHref,
   };
 }

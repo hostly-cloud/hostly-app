@@ -18,6 +18,7 @@ import {
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import { paymentSaleAmount } from "@/lib/payments/paymentSaleAmount";
 import { summarizePaymentsForCierre } from "@/lib/payments/summarizePaymentsForCierre";
+import { parseSalesDetailRange } from "@/lib/analytics/analysis-navigation";
 
 type PaymentDoc = {
   id: string;
@@ -154,6 +155,16 @@ export default function AnalisisVentasPage() {
   const [paymentFilter, setPaymentFilter] = useState<
     "all" | "cash" | "card" | "voucher"
   >("all");
+
+  useEffect(() => {
+    const range = parseSalesDetailRange(window.location.search);
+    if (!range) return;
+    queueMicrotask(() => {
+      setDateFrom(range.dateFrom);
+      setDateTo(range.dateTo);
+      setDateFilter("range");
+    });
+  }, []);
 
   useEffect(() => {
     if (!authReady) return;
