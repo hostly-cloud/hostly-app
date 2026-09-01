@@ -53,10 +53,10 @@ export const marketingNav: MarketingNavItem[] = [
 ];
 
 export const marketingHero = {
-  eyebrow: "Hostly · Software para restaurantes",
+  eyebrow: "Hostly · Nueva generación de software para restaurantes",
   headline: "El restaurante entero, bajo control.",
   subcopy:
-    "TPV, cocina, barra, reservas, carta, productos y pagos conectados en una plataforma diseñada para trabajar al ritmo de un servicio real.",
+    "Una plataforma SaaS nacida para la hostelería que viene: TPV, cocina, barra, reservas, carta, productos, pagos e IA conectados con una experiencia visual, rápida y actual.",
   primaryCta: { label: "Ver Hostly en acción", href: demoMailHref },
   secondaryCta: { label: "Explorar el producto", href: "#producto" },
   trustLine:
@@ -93,9 +93,9 @@ export const marketingKeyBenefits: MarketingCard[] = [
 
 export const marketingProductIntro = {
   eyebrow: "Producto",
-  title: "Todo lo que ocurre durante el servicio, en una sola operación.",
+  title: "Software nuevo para una forma nueva de gestionar hostelería.",
   description:
-    "Hostly no te obliga a adaptar tu restaurante al software. Conecta las herramientas que tu equipo necesita para vender, coordinar sala, preparar comandas y cobrar sin perder contexto.",
+    "Hostly se está construyendo desde cero como SaaS moderno para restaurantes: visual, táctil, conectado y preparado para incorporar IA sin obligar al equipo a cambiar su forma natural de trabajar.",
 };
 
 export const marketingProductModules: MarketingCard[] = [
@@ -173,10 +173,10 @@ export const marketingFlow = {
 };
 
 export const marketingAi = {
-  eyebrow: "IA aplicada",
-  title: "IA donde ahorra trabajo de verdad.",
+  eyebrow: "IA nativa",
+  title: "IA integrada desde el diseño, no añadida después.",
   description:
-    "Hostly incorpora IA para reducir tareas reales: importar una carta desde una foto, ordenar información y ayudar a revisar datos antes de publicarlos, manteniendo siempre el control en el restaurante.",
+    "Hostly nace en una generación de software donde la IA forma parte de la plataforma. La usamos para reducir tareas reales, ordenar información y ayudar a tomar mejores decisiones manteniendo siempre el control en el restaurante.",
   features: [
     {
       icon: UtensilsCrossed,
@@ -239,10 +239,10 @@ export const marketingBusinessTypes = {
 };
 
 export const marketingDifferentiators = {
-  eyebrow: "Por qué Hostly",
-  title: "Hostly trabaja como trabaja tu restaurante.",
+  eyebrow: "Nueva generación",
+  title: "Hostly no moderniza un sistema antiguo. Empieza de nuevo.",
   description:
-    "No queremos añadir complejidad al servicio. Queremos quitarla: menos pasos, información más clara y las acciones importantes siempre a mano.",
+    "La ventaja de llegar ahora es poder diseñar el producto alrededor de cómo trabajan hoy los restaurantes y de lo que necesitarán mañana: SaaS, tiempo real, móvil, tactilidad, datos conectados e IA.",
   items: [
     {
       icon: Timer,
@@ -251,33 +251,33 @@ export const marketingDifferentiators = {
     },
     {
       icon: Layers,
-      title: "Visual sin ser complejo.",
-      description: "Plano, mesas y estados ayudan a entender la sala sin convertirla en una herramienta pesada.",
+      title: "Diseño de nueva generación.",
+      description: "Jerarquía visual, espacios claros y una experiencia coherente en TPV, tablet, móvil y escritorio.",
     },
     {
       icon: Zap,
-      title: "Rápido para el equipo, útil para gerencia.",
-      description: "El camarero trabaja rápido y el encargado conserva contexto para controlar la operación.",
+      title: "SaaS conectado desde el origen.",
+      description: "La plataforma comparte contexto entre operación, gestión y analítica en lugar de funcionar como módulos aislados.",
     },
     {
-      icon: BarChart3,
-      title: "Preparado para crecer.",
-      description: "La base permite avanzar hacia inventario, compras e inteligencia operativa sin perder simplicidad.",
+      icon: BrainCircuit,
+      title: "Preparado para la era de la IA.",
+      description: "La arquitectura permite incorporar inteligencia útil progresivamente sin convertir el producto en algo más complejo.",
     },
   ] satisfies MarketingCard[],
 };
 
 export const marketingProductShowcase = {
   eyebrow: "Hostly en acción",
-  title: "No te lo contamos. Te enseñamos cómo se trabaja.",
+  title: "Un software de hostelería que se siente actual desde el primer toque.",
   description:
     "TPV táctil, plano de mesas, comandas y KDS trabajando como una misma operación en tablet, móvil y escritorio.",
 };
 
 export const marketingFinalCta = {
-  title: "Tu próximo servicio puede ser más sencillo.",
+  title: "La nueva generación de hostelería empieza por una operación mejor.",
   description:
-    "Descubre Hostly y comprueba cómo una operación conectada puede reducir pasos, errores y tiempo perdido durante el servicio.",
+    "Descubre Hostly y comprueba cómo una plataforma SaaS moderna puede reducir pasos, errores y tiempo perdido durante el servicio.",
   primaryCta: { label: "Ver Hostly en acción", href: demoMailHref },
   secondaryCta: { label: "Escribir a hola@hostlyapp.app", href: "mailto:hola@hostlyapp.app" },
 };
@@ -296,5 +296,5 @@ export const marketingFooter = {
     { label: "Contacto", href: "mailto:hola@hostlyapp.app" },
   ],
   contactEmail: "hola@hostlyapp.app",
-  copyright: "© Hostly. Software para restaurantes diseñado para el servicio real.",
+  copyright: "© Hostly. Nueva generación de software para restaurantes.",
 };
