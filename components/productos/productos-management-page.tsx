@@ -1896,7 +1896,7 @@ export default function ProductosManagementPage({
   const [formOpen, setFormOpen] = useState(false);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [editFocus, setEditFocus] = useState<ProductEditFocus | null>(null);
-  const [productFormTab, setProductFormTab] = useState<ProductFormDrawerTabId>("basico");
+  const [productFormTab, setProductFormTab] = useState<ProductFormDrawerTabId>("producto");
   const routingFocusRef = useRef<HTMLDivElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftNombre, setDraftNombre] = useState("");
@@ -3635,14 +3635,14 @@ export default function ProductosManagementPage({
   useEffect(() => {
     if (!formOpen) return;
     if (editFocus === "routing") {
-      setProductFormTab("basico");
+      setProductFormTab("operacion");
       return;
     }
     if (editFocus === "recipe") {
       setProductFormTab("escandallo");
       return;
     }
-    setProductFormTab("basico");
+    setProductFormTab("producto");
   }, [formOpen, editFocus]);
 
   const openRecipeFromDeepLink = useEffectEvent((plato: PlatoCarta) => {
@@ -4824,11 +4824,28 @@ export default function ProductosManagementPage({
                     : t("carta.productFormEyebrowNew")}
                 </span>
                 <h2 className="hostly-product-form-drawer__title">
-                  {editingId ? t("carta.editProduct") : t("carta.newProduct")}
+                  {editingId && draftNombre.trim()
+                    ? draftNombre.trim()
+                    : editingId
+                      ? t("carta.editProduct")
+                      : t("carta.newProduct")}
                 </h2>
                 <p className="hostly-product-form-drawer__subtitle">
-                  {editingId ? t("carta.productFormEditHint") : t("carta.productFormNewHint")}
+                  Venta, cocina y costes en una sola ficha.
                 </p>
+                <div className="hostly-product-form-drawer__context" aria-label="Resumen del producto">
+                  <span>{draftSelectedCategory?.name || "Sin categoría"}</span>
+                  <span>{draftPrecio.trim() ? `${draftPrecio.trim()} €` : "Sin precio"}</span>
+                  <span
+                    className={
+                      draftActivo
+                        ? "hostly-product-form-drawer__context-status is-active"
+                        : "hostly-product-form-drawer__context-status"
+                    }
+                  >
+                    {draftActivo ? "A la venta" : "No disponible"}
+                  </span>
+                </div>
               </div>
               <button
                 type="button"
@@ -4846,7 +4863,7 @@ export default function ProductosManagementPage({
             <ProductFormDrawerTabs activeTab={productFormTab} onTabChange={setProductFormTab} />
 
             <div className="hostly-product-form-drawer__body hostly-product-form-drawer__body--tabbed">
-              <ProductFormDrawerTabPanel tabId="basico" activeTab={productFormTab}>
+              <ProductFormDrawerTabPanel tabId="producto" activeTab={productFormTab}>
                 <div className="hostly-product-form-drawer-tab-panel__stack">
                   <ProductFormDrawerZone
                     title={t("carta.productFormBlockProduct")}
@@ -4902,6 +4919,26 @@ export default function ProductosManagementPage({
                         </div>
                       </div>
                     </div>
+                    <label className="hostly-product-form-sale-status">
+                      <input
+                        type="checkbox"
+                        checked={draftActivo}
+                        onChange={(e) => setDraftActivo(e.target.checked)}
+                      />
+                      <span className="hostly-product-form-sale-status__copy">
+                        <strong>Disponible para la venta</strong>
+                        <small>Se muestra en el catálogo operativo y puede añadirse a comandas.</small>
+                      </span>
+                      <span
+                        className={
+                          draftActivo
+                            ? "hostly-product-form-sale-status__badge is-active"
+                            : "hostly-product-form-sale-status__badge"
+                        }
+                      >
+                        {draftActivo ? "Activo" : "Inactivo"}
+                      </span>
+                    </label>
                   </ProductFormDrawerZone>
 
                   <ProductFormDrawerZone
@@ -5002,7 +5039,11 @@ export default function ProductosManagementPage({
                       </details>
                     </div>
                   </ProductFormDrawerZone>
+                </div>
+              </ProductFormDrawerTabPanel>
 
+              <ProductFormDrawerTabPanel tabId="operacion" activeTab={productFormTab}>
+                <div className="hostly-product-form-drawer-tab-panel__stack">
                   <ProductFormDrawerZone
                     title={t("carta.productFormBlockProduction")}
                     description={t("carta.productFormBlockProductionHint")}
@@ -5118,16 +5159,6 @@ export default function ProductosManagementPage({
                         </div>
                       ) : null}
 
-                      <div className="hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__cell--status">
-                        <label className="hostly-product-form-drawer-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={draftActivo}
-                            onChange={(e) => setDraftActivo(e.target.checked)}
-                          />
-                          <span className="hostly-carta-config-form-label">{t("carta.fieldActivo")}</span>
-                        </label>
-                      </div>
                     </div>
                   </ProductFormDrawerZone>
 
