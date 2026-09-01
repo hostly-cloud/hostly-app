@@ -28,6 +28,11 @@ export { HostlySectionHeader } from "./HostlySectionHeader";
 export type { HostlySectionHeaderProps } from "./HostlySectionHeader";
 export { HostlyKpiCard } from "./HostlyKpiCard";
 export type { HostlyKpiCardProps } from "./HostlyKpiCard";
+export { HostlyFilterCard } from "./HostlyFilterCard";
+export type {
+  HostlyFilterCardProps,
+  HostlyFilterCardTone,
+} from "./HostlyFilterCard";
 export { HostlyOperationalEmptyState } from "./HostlyOperationalEmptyState";
 export type {
   HostlyOperationalEmptyAction,
