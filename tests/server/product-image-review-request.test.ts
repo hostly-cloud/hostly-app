@@ -11,6 +11,14 @@ import {
   handleReviewProductImageRequestSafe,
 } from "@/lib/server/product-images/handle-review-product-image-request";
 import { ReviewProductImageError } from "@/lib/server/product-images/review-product-image";
+import { resolveCatalogImageAccessFromRestaurant } from "@/lib/server/product-images/resolve-catalog-image-access";
+
+const PRO_ACCESS = resolveCatalogImageAccessFromRestaurant({
+  subscription: { plan: "pro" },
+});
+const BASIC_ACCESS = resolveCatalogImageAccessFromRestaurant({
+  subscription: { plan: "basic" },
+});
 
 function authContext(
   overrides: Partial<AuthenticatedRestaurantContext> = {},
@@ -74,6 +82,7 @@ test("image state rejects restaurantId supplied by the browser", async () => {
     ),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       resolveStateById: async () => {
         resolved = true;
         return { resolution: "not_found" };
@@ -111,6 +120,7 @@ test("image state prefers product id and receives only the server tenant", async
     ),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       resolveStateById: async (params) => {
         received = {
           restaurantId: params.restaurantId,
@@ -142,6 +152,7 @@ test("image state keeps name fallback for legacy callers", async () => {
     ),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       resolveState: async (params) => {
         received = {
           restaurantId: params.restaurantId,
@@ -157,6 +168,27 @@ test("image state keeps name fallback for legacy callers", async () => {
     restaurantId: "restaurant-server",
     productName: "Lubina a la sal",
   });
+});
+
+test("image state removes automatic actions for the Basic plan", async () => {
+  const response = await handleProductImageStateRequest(
+    new Request(
+      "http://localhost/api/catalog/product-image-state?productId=product-1",
+      { headers: { authorization: "Bearer test-token" } },
+    ),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => BASIC_ACCESS,
+      resolveStateById: async () => resolvedState(),
+    },
+  );
+
+  assert.equal(response.status, 200);
+  const body = await json(response);
+  const state = body.state as ProductImageReviewResolvedState;
+  assert.equal(state.canGenerate, false);
+  assert.equal(state.canSearchCatalog, false);
+  assert.deepEqual(body.access, BASIC_ACCESS);
 });
 
 test("review rejects browser tenant and invalid actions", async () => {

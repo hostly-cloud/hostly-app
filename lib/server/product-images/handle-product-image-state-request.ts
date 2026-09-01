@@ -5,11 +5,16 @@ import {
   type AuthenticatedRestaurantContext,
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
+import {
+  hasCatalogImageCapability,
+  type CatalogImageAccess,
+} from "@/lib/productos/catalog-image-plan";
 import type { ProductImageReviewResolution } from "@/lib/productos/product-image-review-contract";
 import {
   resolveProductImageReviewState,
   resolveProductImageReviewStateById,
 } from "@/lib/server/product-images/resolve-product-image-review-state";
+import { resolveCatalogImageAccess } from "@/lib/server/product-images/resolve-catalog-image-access";
 
 type Authenticate = (
   req: Request,
@@ -27,10 +32,16 @@ type ResolveById = (params: {
   productId: string;
 }) => Promise<ProductImageReviewResolution>;
 
+type ResolveAccess = (params: {
+  db: AuthenticatedRestaurantContext["db"];
+  restaurantId: string;
+}) => Promise<CatalogImageAccess>;
+
 export type ProductImageStateRequestDependencies = {
   authenticate?: Authenticate;
   resolveState?: ResolveByName;
   resolveStateById?: ResolveById;
+  resolveAccess?: ResolveAccess;
 };
 
 function jsonError(status: number, error: string, details?: string) {
@@ -38,6 +49,22 @@ function jsonError(status: number, error: string, details?: string) {
     { ok: false as const, error, details: details ?? null },
     { status },
   );
+}
+
+function applyAccess(
+  state: ProductImageReviewResolution,
+  access: CatalogImageAccess,
+): ProductImageReviewResolution {
+  if (state.resolution !== "resolved") return state;
+  return {
+    ...state,
+    canGenerate:
+      state.canGenerate &&
+      hasCatalogImageCapability(access, "catalog.image.ai.single"),
+    canSearchCatalog:
+      state.canSearchCatalog &&
+      hasCatalogImageCapability(access, "catalog.image.catalogSearch"),
+  };
 }
 
 export async function handleProductImageStateRequest(
@@ -63,16 +90,27 @@ export async function handleProductImageStateRequest(
     );
   }
 
+  const resolveAccess =
+    dependencies?.resolveAccess ?? resolveCatalogImageAccess;
+  const access = await resolveAccess({
+    db: authCtx.db,
+    restaurantId: authCtx.restaurantId,
+  });
+
   const productId = url.searchParams.get("productId")?.trim() ?? "";
   if (productId) {
     const resolveById =
       dependencies?.resolveStateById ?? resolveProductImageReviewStateById;
-    const state = await resolveById({
+    const resolvedState = await resolveById({
       db: authCtx.db,
       restaurantId: authCtx.restaurantId,
       productId,
     });
-    return NextResponse.json({ ok: true as const, state });
+    return NextResponse.json({
+      ok: true as const,
+      state: applyAccess(resolvedState, access),
+      access,
+    });
   }
 
   const productName = url.searchParams.get("name")?.trim() ?? "";
@@ -81,13 +119,17 @@ export async function handleProductImageStateRequest(
 
   const resolveByName =
     dependencies?.resolveState ?? resolveProductImageReviewState;
-  const state = await resolveByName({
+  const resolvedState = await resolveByName({
     db: authCtx.db,
     restaurantId: authCtx.restaurantId,
     productName,
   });
 
-  return NextResponse.json({ ok: true as const, state });
+  return NextResponse.json({
+    ok: true as const,
+    state: applyAccess(resolvedState, access),
+    access,
+  });
 }
 
 export async function handleProductImageStateRequestSafe(

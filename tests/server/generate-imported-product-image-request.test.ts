@@ -2,11 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Firestore } from "firebase-admin/firestore";
 import type { AuthenticatedRestaurantContext } from "@/lib/server/auth/require-authenticated-restaurant";
+import { resolveCatalogImageAccessFromRestaurant } from "@/lib/server/product-images/resolve-catalog-image-access";
 import {
   handleGenerateImportedProductImageRequest,
   handleGenerateImportedProductImageRequestSafe,
 } from "@/lib/server/product-images/handle-generate-imported-product-image-request";
 import { GenerateImportedProductImageError } from "@/lib/server/product-images/generate-imported-product-image";
+
+const PRO_ACCESS = resolveCatalogImageAccessFromRestaurant({
+  subscription: { plan: "pro" },
+});
+const BASIC_ACCESS = resolveCatalogImageAccessFromRestaurant({
+  subscription: { plan: "basic" },
+});
+const ULTRA_ACCESS = resolveCatalogImageAccessFromRestaurant({
+  subscription: { plan: "ultra" },
+});
 
 function authContext(
   overrides: Partial<AuthenticatedRestaurantContext> = {},
@@ -48,6 +59,7 @@ test("restaurantId from the client is rejected", async () => {
     }),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       generate: async () => {
         generated = true;
         return {
@@ -67,9 +79,13 @@ test("restaurantId from the client is rejected", async () => {
 test("explicit confirmation is required before a paid provider call", async () => {
   let generated = false;
   const response = await handleGenerateImportedProductImageRequest(
-    request({ productId: "product-1" }),
+    request({
+      productId: "product-1",
+      idempotencyKey: "request-confirmation",
+    }),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       generate: async () => {
         generated = true;
         return {
@@ -112,29 +128,89 @@ test("only roles with settings.manage can generate images", async () => {
   assert.equal(generated, false);
 });
 
+test("the Basic plan is blocked before an individual generation", async () => {
+  let generated = false;
+  const response = await handleGenerateImportedProductImageRequest(
+    request({
+      productId: "product-1",
+      idempotencyKey: "request-basic-plan",
+      confirmGeneration: true,
+    }),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => BASIC_ACCESS,
+      generate: async () => {
+        generated = true;
+        return {
+          outcome: "skipped",
+          productId: "product-1",
+          reason: "not_food",
+        };
+      },
+    },
+  );
+
+  assert.equal(response.status, 403);
+  assert.equal(
+    (await json(response)).error,
+    "CATALOG_IMAGE_AI_SINGLE_PLAN_REQUIRED",
+  );
+  assert.equal(generated, false);
+});
+
+test("the Ultra plan can use the individual generation endpoint", async () => {
+  let generated = false;
+  const response = await handleGenerateImportedProductImageRequest(
+    request({
+      productId: "product-1",
+      idempotencyKey: "request-ultra-plan",
+      confirmGeneration: true,
+    }),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => ULTRA_ACCESS,
+      generate: async () => {
+        generated = true;
+        return {
+          outcome: "skipped",
+          productId: "product-1",
+          reason: "not_food",
+        };
+      },
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(generated, true);
+});
+
 test("generator receives the server-resolved tenant and authenticated user", async () => {
   let received:
     | {
         restaurantId: string;
         productId: string;
-        userId: string;
-        description?: string;
+      userId: string;
+      idempotencyKey: string;
+      description?: string;
       }
     | undefined;
 
   const response = await handleGenerateImportedProductImageRequest(
     request({
       productId: " product-1 ",
+      idempotencyKey: "request-generation-success",
       confirmGeneration: true,
       description: "  Lubina con patata y verduras  ",
     }),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       generate: async (params) => {
         received = {
           restaurantId: params.restaurantId,
           productId: params.productId,
           userId: params.userId,
+          idempotencyKey: params.idempotencyKey,
           description: params.description,
         };
         return {
@@ -154,6 +230,7 @@ test("generator receives the server-resolved tenant and authenticated user", asy
     restaurantId: "restaurant-server",
     productId: "product-1",
     userId: "owner-1",
+    idempotencyKey: "request-generation-success",
     description: "Lubina con patata y verduras",
   });
   const body = await json(response);
@@ -164,11 +241,39 @@ test("generator receives the server-resolved tenant and authenticated user", asy
   );
 });
 
-test("structured provider errors preserve their code and status", async () => {
-  const response = await handleGenerateImportedProductImageRequestSafe(
+test("an idempotency key is required before calling the provider", async () => {
+  let generated = false;
+  const response = await handleGenerateImportedProductImageRequest(
     request({ productId: "product-1", confirmGeneration: true }),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
+      generate: async () => {
+        generated = true;
+        return {
+          outcome: "skipped",
+          productId: "product-1",
+          reason: "not_food",
+        };
+      },
+    },
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal((await json(response)).error, "INVALID_IMAGE_IDEMPOTENCY_KEY");
+  assert.equal(generated, false);
+});
+
+test("structured provider errors preserve their code and status", async () => {
+  const response = await handleGenerateImportedProductImageRequestSafe(
+    request({
+      productId: "product-1",
+      idempotencyKey: "request-provider-error",
+      confirmGeneration: true,
+    }),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       generate: async () => {
         throw new GenerateImportedProductImageError(
           "IMAGE_GENERATION_NOT_CONFIGURED",
@@ -190,11 +295,13 @@ test("invalid description types are rejected before generation", async () => {
   const response = await handleGenerateImportedProductImageRequest(
     request({
       productId: "product-1",
+      idempotencyKey: "request-invalid-description",
       confirmGeneration: true,
       description: { unsafe: true },
     }),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       generate: async () => {
         generated = true;
         return {

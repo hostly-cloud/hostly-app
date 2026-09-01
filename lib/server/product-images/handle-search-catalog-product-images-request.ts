@@ -5,8 +5,13 @@ import {
   type AuthenticatedRestaurantContext,
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
+import {
+  hasCatalogImageCapability,
+  type CatalogImageAccess,
+} from "@/lib/productos/catalog-image-plan";
 import type { CatalogProductImageSearchResult } from "@/lib/productos/catalog-product-image-contract";
 import { searchCatalogProductImages } from "@/lib/server/product-images/search-catalog-product-images";
+import { resolveCatalogImageAccess } from "@/lib/server/product-images/resolve-catalog-image-access";
 
 type Authenticate = (
   req: Request,
@@ -19,9 +24,15 @@ type SearchCatalog = (params: {
   query: string;
 }) => Promise<CatalogProductImageSearchResult>;
 
+type ResolveAccess = (params: {
+  db: AuthenticatedRestaurantContext["db"];
+  restaurantId: string;
+}) => Promise<CatalogImageAccess>;
+
 export type SearchCatalogProductImagesRequestDependencies = {
   authenticate?: Authenticate;
   searchCatalog?: SearchCatalog;
+  resolveAccess?: ResolveAccess;
 };
 
 function jsonError(status: number, error: string, details?: string) {
@@ -43,6 +54,19 @@ export async function handleSearchCatalogProductImagesRequest(
 
   if (!serverRoleHasCapability(authCtx.role, "settings.manage")) {
     return jsonError(403, "SETTINGS_MANAGE_REQUIRED");
+  }
+
+  const resolveAccess = dependencies?.resolveAccess ?? resolveCatalogImageAccess;
+  const access = await resolveAccess({
+    db: authCtx.db,
+    restaurantId: authCtx.restaurantId,
+  });
+  if (!hasCatalogImageCapability(access, "catalog.image.catalogSearch")) {
+    return jsonError(
+      403,
+      "CATALOG_IMAGE_SEARCH_PLAN_REQUIRED",
+      "La búsqueda de imágenes reales está disponible en los planes Pro y Ultra",
+    );
   }
 
   const body = (await req.json().catch(() => null)) as {

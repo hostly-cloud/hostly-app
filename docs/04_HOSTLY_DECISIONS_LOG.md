@@ -175,6 +175,28 @@ Consecuencias:
 
 ---
 
+### H-018 - Capacidades y transición de imágenes de catálogo
+
+**Estado:** aceptada.
+
+Las automatizaciones de imágenes se autorizan mediante capacidades explícitas:
+`catalog.image.ai.single`, `catalog.image.ai.bulk` y
+`catalog.image.catalogSearch`. La subida manual permanece disponible para todos los
+planes y estas capacidades se comprueban siempre en el servidor.
+
+`restaurants/{restaurantId}.subscription.plan` es la fuente canónica del plan. Durante
+la transición, `billing.plan` y `plan` se leen como alias. Un restaurante existente sin
+plan reconocible conserva temporalmente el acceso individual equivalente a Pro, pero
+no recibe la capacidad masiva de Ultra. Esto evita bloquear tenants actuales al
+introducir el nuevo contrato.
+
+Cada intento individual usa una clave idempotente y deja un registro exclusivo de
+servidor en `restaurants/{restaurantId}/catalogImageUsage/{idempotencyKey}` con tenant,
+producto, usuario, plan efectivo, proveedor, resultado, coste disponible y motivo de
+fallo. La colección no amplía el acceso del cliente ni cambia las reglas del catálogo.
+
+---
+
 ## Decisiones pendientes de cierre
 
 - Fuente Ãºnica definitiva de stock y costes.

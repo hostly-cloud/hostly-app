@@ -5,12 +5,17 @@ import {
   type AuthenticatedRestaurantContext,
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
+import {
+  hasCatalogImageCapability,
+  type CatalogImageAccess,
+} from "@/lib/productos/catalog-image-plan";
 import type { CatalogProductImageAttachResult } from "@/lib/productos/catalog-product-image-contract";
 import { attachCatalogProductImage } from "@/lib/server/product-images/attach-catalog-product-image";
 import { getOpenFoodFactsCandidateByCode } from "@/lib/server/product-images/open-food-facts-catalog";
 import { normalizeCatalogBarcode } from "@/lib/server/product-images/open-food-facts-exact-product";
 import { catalogMatchContextFromProduct } from "@/lib/server/product-images/search-catalog-product-images";
 import { assessWineCatalogIdentity } from "@/lib/server/product-images/wine-catalog-identity";
+import { resolveCatalogImageAccess } from "@/lib/server/product-images/resolve-catalog-image-access";
 
 type Authenticate = (
   req: Request,
@@ -24,9 +29,15 @@ type AttachCatalog = (params: {
   userId: string;
 }) => Promise<CatalogProductImageAttachResult>;
 
+type ResolveAccess = (params: {
+  db: AuthenticatedRestaurantContext["db"];
+  restaurantId: string;
+}) => Promise<CatalogImageAccess>;
+
 export type AttachCatalogProductImageRequestDependencies = {
   authenticate?: Authenticate;
   attachCatalog?: AttachCatalog;
+  resolveAccess?: ResolveAccess;
 };
 
 function jsonError(status: number, error: string, details?: string) {
@@ -108,6 +119,19 @@ export async function handleAttachCatalogProductImageRequest(
 
   if (!serverRoleHasCapability(authCtx.role, "settings.manage")) {
     return jsonError(403, "SETTINGS_MANAGE_REQUIRED");
+  }
+
+  const resolveAccess = dependencies?.resolveAccess ?? resolveCatalogImageAccess;
+  const access = await resolveAccess({
+    db: authCtx.db,
+    restaurantId: authCtx.restaurantId,
+  });
+  if (!hasCatalogImageCapability(access, "catalog.image.catalogSearch")) {
+    return jsonError(
+      403,
+      "CATALOG_IMAGE_SEARCH_PLAN_REQUIRED",
+      "La búsqueda de imágenes reales está disponible en los planes Pro y Ultra",
+    );
   }
 
   const body = (await req.json().catch(() => null)) as {
