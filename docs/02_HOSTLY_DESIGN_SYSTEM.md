@@ -387,6 +387,7 @@ Clases operacionales unificadas (post-[L]):
 - **Escandallos Config Carta (v2.10):** variantes `.hostly-data-table--escandallos`, `--recipe-ingredients`; vistas `EscandallosCartaDataView`, `EscandalloRecipeEditor`; badges `.hostly-cost-badge`, `.hostly-margin-badge`; editor `.hostly-recipe-editor-*`; ruta `/dashboard/configuracion/carta/escandallos`
 - **Compras / Recepciones / Facturas (v2.11):** variantes `.hostly-data-table--compras`, `--compras-draft`, `--recepciones`, `--facturas-proveedor`, `--invoice-ocr-lines`; vistas `ComprasInteligentesDataView`, `ComprasDraftLinesDataView`, `RecepcionesListDataView`, `FacturasProveedorListDataView`; utilidades `.hostly-procurement-*`, `.hostly-receiving-*`, `.hostly-invoice-ocr-*`; rutas `/dashboard/inventario/compras-inteligentes`, `/dashboard/recepciones`, `/dashboard/inventario/facturas-proveedor`
 - **Mobile Operational Layout (v2.12):** `.hostly-mobile-operational-layout`, `.hostly-mobile-operational-tabs`, `.hostly-mobile-operational-tab`, `.hostly-mobile-op-page-stack`, `.hostly-mobile-op-kpi-grid`, `.hostly-mobile-op-toolbar*`; hub inventario/compras/recepciones/mermas en móvil
+- **Reservas — agenda diaria (v2.13):** `.hostly-reservations-day-toolbar*`, `.hostly-reservations-day-stepper`; navegación Anterior/Hoy/Siguiente, fecha editable y acción principal en una única banda responsive
 
 ---
 
@@ -515,6 +516,7 @@ Validar: npm run build.
 | **v2.10** | Migración Escandallos al HostlyDataTable + editor culinario compacto | ✅ `--escandallos` + `EscandallosCartaDataView` + `EscandalloRecipeEditor` |
 | **v2.11** | Compras / Recepciones / Facturas proveedor → HostlyDataTable + densidad ERP ligero | ✅ `--compras` / `--recepciones` / `--facturas-proveedor` + data views procurement |
 | **v2.12** | Mobile Operational Layout — header/tabs/KPI/toolbars compactos hub inventario | ✅ `.hostly-mobile-operational-*` + `.hostly-mobile-op-*` |
+| **v2.13** | Reservas — banda de agenda diaria compacta y táctil | ✅ `.hostly-reservations-day-toolbar*` + `ReservationDayToolbar` |
 
 ---
 
