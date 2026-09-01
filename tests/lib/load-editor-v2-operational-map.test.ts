@@ -64,6 +64,48 @@ describe("loadTpvEditorV2OperationalMap", () => {
     assert.equal(result?.document, draftDocument);
   });
 
+  it("inicia published y draft en paralelo para evitar una cascada de red", async () => {
+    let resolvePublished!: (
+      value: Awaited<
+        ReturnType<
+          (typeof import("@/lib/sala-editor/persistence/sala-editor-published-store"))["loadSalaEditorPublished"]
+        >
+      >,
+    ) => void;
+    let draftStarted = false;
+    const publishedPending = new Promise<
+      Awaited<
+        ReturnType<
+          (typeof import("@/lib/sala-editor/persistence/sala-editor-published-store"))["loadSalaEditorPublished"]
+        >
+      >
+    >((resolve) => {
+      resolvePublished = resolve;
+    });
+
+    const resultPending = loadTpvEditorV2OperationalMap("restaurant-1", {
+      loadPublished: () => publishedPending,
+      loadDraft: async () => {
+        draftStarted = true;
+        return {
+          document: draftDocument,
+          updatedAt: 300,
+        } as Awaited<
+          ReturnType<
+            (typeof import("@/lib/sala-editor/persistence/sala-editor-draft-store"))["loadSalaEditorDraftSource"]
+          >
+        >;
+      },
+    });
+
+    await Promise.resolve();
+    assert.equal(draftStarted, true);
+
+    resolvePublished(null);
+    const result = await resultPending;
+    assert.equal(result?.source, "draft-migration");
+  });
+
   it("restaura solo el enlace operativo perdido sin importar geometría draft", () => {
     const published = {
       espacios: [],

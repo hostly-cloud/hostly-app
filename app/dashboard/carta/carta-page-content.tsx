@@ -294,11 +294,16 @@ import {
 } from "./_components/tpv/tpv-quick-actions-menu";
 import { TpvTablePresenceIndicators } from "./_components/tpv/tpv-table-presence-indicators";
 import {
+  ArrowLeft,
   Beer,
+  CreditCard,
   ImageIcon,
   MapPin,
   Martini,
   Type,
+  ReceiptText,
+  Send,
+  UsersRound,
 } from "lucide-react";
 import { useTablePresenceHeartbeat } from "@/hooks/useTablePresenceHeartbeat";
 import { useConnectivityStatus } from "@/hooks/useConnectivityStatus";
@@ -8811,41 +8816,21 @@ export function CartaPageContent({
       >
         <span
           className="carta-comanda-status-grid__cell carta-comanda-status-grid__cell--pending"
-          style={{
-            color: "#0f172a",
-            background: "rgba(15,23,42,0.06)",
-            border: "1px solid rgba(15,23,42,0.12)",
-          }}
         >
           {`Pendiente ${linesPending.length}`}
         </span>
         <span
           className="carta-comanda-status-grid__cell carta-comanda-status-grid__cell--prepared"
-          style={{
-            color: "#9a3412",
-            background: "rgba(245,158,11,0.14)",
-            border: "1px solid rgba(245, 158, 11, 0.25)",
-          }}
         >
           {`Preparado ${linesPrepared.length}`}
         </span>
         <span
           className="carta-comanda-status-grid__cell carta-comanda-status-grid__cell--sent"
-          style={{
-            color: "#1e3a8a",
-            background: "rgba(59,130,246,0.14)",
-            border: "1px solid rgba(37, 99, 235, 0.25)",
-          }}
         >
           {`Enviado ${linesSent.length}`}
         </span>
         <span
           className="carta-comanda-status-grid__cell carta-comanda-status-grid__cell--served"
-          style={{
-            color: "#166534",
-            background: "rgba(34,197,94,0.14)",
-            border: "1px solid rgba(34, 197, 94, 0.25)",
-          }}
         >
           {`Servido ${linesServed.length}`}
         </span>
@@ -11990,23 +11975,50 @@ export function CartaPageContent({
 
 .carta-comanda-status-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px 4px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--hostly-op-gap-xs);
   width: 100%;
   min-width: 0;
 }
 
 .carta-comanda-status-grid__cell {
   display: block;
-  font-size: 9px;
-  font-weight: 600;
-  padding: 2px 4px;
-  border-radius: 4px;
-  line-height: 1.15;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 750;
+  padding: 5px 6px;
+  border-radius: var(--hostly-radius-sm);
+  line-height: 1.2;
   text-align: center;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
+}
+
+.carta-comanda-status-grid__cell--pending {
+  color: var(--hostly-ink-muted);
+  background: var(--hostly-surface-card-solid);
+  border: 1px solid var(--hostly-table-divider-soft);
+}
+
+.carta-comanda-status-grid__cell--prepared {
+  color: #9a3412;
+  background: var(--hostly-warning-soft);
+  border: 1px solid color-mix(in srgb, #f59e0b 28%, transparent);
+}
+
+.carta-comanda-status-grid__cell--sent {
+  color: #1d4ed8;
+  background: var(--hostly-info-soft);
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 24%, transparent);
+}
+
+.carta-comanda-status-grid__cell--served {
+  color: #166534;
+  background: var(--hostly-success-soft);
+  border: 1px solid color-mix(in srgb, #16a34a 24%, transparent);
 }
 
 .carta-comanda-pass-chips {
@@ -12218,11 +12230,15 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   align-items: center;
   gap: 6px;
   overflow: visible;
-  background: #f9fafb;
-  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: var(--hostly-surface-card-solid);
+  border: 1px solid var(--hostly-table-divider-soft);
+  box-shadow: var(--hostly-shadow-hairline);
 }
 
 .carta-comensales-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
@@ -12319,6 +12335,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   grid-column: 3;
   justify-self: end;
   min-width: 0;
+  margin-right: -4px;
 }
 
 .carta-comensales--head-band {
@@ -12361,7 +12378,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 .carta-comanda-head-compact-band .carta-tpv-to-map-btn--prominent {
   grid-column: 1;
   justify-self: start;
-  margin-left: 0;
+  margin-left: -4px;
   max-width: 100%;
 }
 
@@ -12406,6 +12423,15 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   background: transparent;
   border-top: none;
   box-shadow: none;
+}
+
+.carta-tpv-payment-dock > .carta-comanda-status-grid {
+  margin-bottom: var(--hostly-op-gap-sm);
+  padding: var(--hostly-op-gap-xs);
+  border: 1px solid var(--hostly-table-divider-soft);
+  border-radius: var(--hostly-radius-sm);
+  background: var(--hostly-surface-ice-bg);
+  box-shadow: var(--hostly-shadow-hairline);
 }
 
 .carta-tpv-payment-dock-stack {
@@ -12494,16 +12520,14 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   min-height: 34px;
   padding: 6px 12px;
   border-radius: 10px;
-  border: 1px solid rgba(14, 165, 233, 0.45);
-  background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%);
-  color: #0c4a6e;
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink-strong);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.01em;
   white-space: nowrap;
-  box-shadow:
-    0 1px 2px rgba(14, 165, 233, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  box-shadow: var(--hostly-shadow-hairline);
 }
 
 .carta-tpv-to-map-btn__icon {
@@ -12513,7 +12537,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   width: 18px;
   height: 18px;
   border-radius: 6px;
-  background: rgba(14, 165, 233, 0.16);
+  background: var(--hostly-accent-soft);
+  color: var(--hostly-accent);
   font-size: 13px;
   font-weight: 900;
   line-height: 1;
@@ -12524,15 +12549,15 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 }
 
 .carta-tpv-to-map-btn--prominent:hover {
-  background: linear-gradient(180deg, #ffffff 0%, #e0f2fe 100%);
-  border-color: rgba(2, 132, 199, 0.55);
-  color: #082f49;
-  box-shadow: 0 2px 10px rgba(14, 165, 233, 0.18);
+  background: var(--hostly-ice-50);
+  border-color: color-mix(in srgb, var(--hostly-accent) 34%, transparent);
+  color: var(--hostly-navy-deep);
+  box-shadow: var(--hostly-shadow-card);
 }
 
 .carta-tpv-to-map-btn--prominent:active {
   transform: translateY(0.5px);
-  background: #e0f2fe;
+  background: var(--hostly-accent-soft);
   box-shadow: none;
 }
 
@@ -14176,6 +14201,10 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 .carta-comanda-button {
   width: 100%;
   min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hostly-op-gap-sm);
   padding: 12px 14px;
   border-radius: 14px;
   font-size: 15px;
@@ -14287,45 +14316,34 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 }
 
 .carta-tpv-dock-pre-ticket {
-  border: 1px solid color-mix(in srgb, var(--hostly-accent) 18%, #cbd5e1);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: var(--hostly-surface-card-solid);
   color: var(--hostly-accent);
   font-size: 14px;
   font-weight: 800;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  box-shadow: var(--hostly-shadow-hairline);
 }
 
 .carta-tpv-dock-cobrar {
-  border: 1px solid color-mix(in srgb, var(--hostly-accent) 26%, #0ea5e9);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 44%),
-    linear-gradient(180deg, #38bdf8 0%, #0ea5e9 48%, #0284c7 100%);
+  border: 1px solid var(--hostly-navy-deep);
+  background: var(--hostly-navy-deep);
   color: #ffffff;
   font-size: 14px;
   font-weight: 900;
-  box-shadow:
-    0 10px 24px rgba(14, 165, 233, 0.24),
-    0 2px 6px rgba(15, 23, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  box-shadow: var(--hostly-shadow-card);
 }
 
 .carta-tpv-dock-cobrar:hover:not(:disabled) {
-  filter: brightness(1.045) saturate(1.05);
-  box-shadow:
-    0 12px 28px rgba(14, 165, 233, 0.3),
-    0 3px 8px rgba(15, 23, 42, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.26);
+  background: var(--hostly-navy-mid);
+  border-color: var(--hostly-navy-mid);
+  box-shadow: var(--hostly-shadow-elevated);
 }
 
 .carta-tpv-dock-pre-ticket:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--hostly-accent) 30%, #cbd5e1);
-  background: color-mix(in srgb, var(--hostly-accent-soft) 54%, #ffffff);
+  border-color: color-mix(in srgb, var(--hostly-accent) 30%, transparent);
+  background: var(--hostly-ice-50);
   color: var(--hostly-accent);
-  box-shadow:
-    0 4px 12px rgba(15, 23, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  box-shadow: var(--hostly-shadow-card);
 }
 
 .carta-tpv-dock-cobrar:active:not(:disabled),
@@ -16063,16 +16081,16 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
           className="carta-aside carta-comanda relative"
           style={{
             boxSizing: "border-box",
-            color: "#0f172a",
-            padding: 12,
+            color: "var(--hostly-ink-strong)",
+            padding: "var(--hostly-op-gap-md)",
             display: "flex",
             flexDirection: "column",
             alignSelf: "stretch",
             minHeight: 0,
             overflow: "hidden",
-            borderRadius: 18,
-            boxShadow:
-              "4px 0 24px rgba(2,6,23,0.06), inset 0 0 0 1px rgba(148,163,184,0.2)",
+            borderRadius: "var(--hostly-radius-lg)",
+            border: "1px solid var(--hostly-table-divider-soft)",
+            boxShadow: "var(--hostly-shadow-card)",
           }}
         >
         <div className="carta-top-shell">
@@ -16111,7 +16129,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                       onClick={handleBackToMap}
                     >
                       <span className="carta-tpv-to-map-btn__icon" aria-hidden>
-                        ←
+                        <ArrowLeft size={14} strokeWidth={2.4} />
                       </span>
                       <span className="carta-tpv-to-map-btn__label">
                         {t("cartaTpv.mapNavVisible")}
@@ -16163,7 +16181,10 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                   {viewMode === "normal" && selectedTableId ? (
                     <div className="carta-comanda-head-guests">
                       <div className="carta-comensales-compact carta-comensales--pill carta-comensales--head-band">
-                        <span className="carta-comensales-label">Comensales</span>
+                        <span className="carta-comensales-label">
+                          <UsersRound size={13} strokeWidth={2.2} aria-hidden="true" />
+                          <span>Comensales</span>
+                        </span>
                         <button
                           type="button"
                           onClick={() => void persistGuestCount(guestCount - 1)}
@@ -16240,10 +16261,11 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
           </div>
           {viewMode === "normal" && (
             <div className="carta-header-compact carta-comanda-header-compact">
-              <div className="carta-comanda-header-ops-wrap">
-                {tpvComandaEstadosGridEl}
-                {tpvComandaCourseSummaryEl}
-              </div>
+              {tpvComandaCourseSummaryEl ? (
+                <div className="carta-comanda-header-ops-wrap">
+                  {tpvComandaCourseSummaryEl}
+                </div>
+              ) : null}
             </div>
           )}
         </div>
@@ -16453,6 +16475,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
             ref={tpvBillScrollAnchorRef}
             className="carta-tpv-payment-dock"
           >
+            {order.length > 0 ? tpvComandaEstadosGridEl : null}
             <div className="carta-tpv-payment-dock-stack">
               <div
                 className="carta-tpv-payment-dock-grid"
@@ -16487,7 +16510,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                   }
                   aria-busy={isComandaSending || undefined}
                 >
-                  {enviarComandaActionLabel}
+                  <Send size={18} strokeWidth={2.3} aria-hidden="true" />
+                  <span>{enviarComandaActionLabel}</span>
                 </button>
                 <div
                   className="carta-tpv-dock-pre-ticket-wrap"
@@ -16498,7 +16522,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     onClick={handlePrintPreTicket}
                     className="carta-tpv-dock-pre-ticket"
                   >
-                    <span aria-hidden>🧾</span>
+                    <ReceiptText size={18} strokeWidth={2.1} aria-hidden="true" />
                     <span>Pre-ticket</span>
                   </button>
                 </div>
@@ -16567,7 +16591,11 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         "…"
                       ) : (
                         <>
-                          <span aria-hidden>💳</span>
+                          <CreditCard
+                            size={18}
+                            strokeWidth={2.2}
+                            aria-hidden="true"
+                          />
                           <span>Cobrar</span>
                         </>
                       )}

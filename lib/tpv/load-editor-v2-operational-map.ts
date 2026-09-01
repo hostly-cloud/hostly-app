@@ -1,5 +1,5 @@
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
-import { loadSalaEditorDraft } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
+import { loadSalaEditorDraftSource } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
 import { loadSalaEditorPublished } from "@/lib/sala-editor/persistence/sala-editor-published-store";
 
 export type TpvEditorV2OperationalMapSource =
@@ -15,13 +15,22 @@ export type TpvEditorV2OperationalMap = {
 
 type OperationalMapLoaders = {
   loadPublished: typeof loadSalaEditorPublished;
-  loadDraft: typeof loadSalaEditorDraft;
+  loadDraft: typeof loadSalaEditorDraftSource;
 };
 
 const defaultOperationalMapLoaders: OperationalMapLoaders = {
   loadPublished: loadSalaEditorPublished,
-  loadDraft: loadSalaEditorDraft,
+  loadDraft: loadSalaEditorDraftSource,
 };
+
+const OPERATIONAL_MAP_CACHE_TTL_MS = 30_000;
+type OperationalMapLoadResult = TpvEditorV2OperationalMap | null;
+type OperationalMapCacheEntry = {
+  expiresAt: number;
+  promise: Promise<OperationalMapLoadResult>;
+};
+
+const defaultOperationalMapCache = new Map<string, OperationalMapCacheEntry>();
 
 function stringOrEmpty(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -82,13 +91,18 @@ export function restorePublishedOperationalIdentityLinks(
  * draft remains the temporary migration fallback. Published read/validation
  * errors are deliberately not swallowed.
  */
-export async function loadTpvEditorV2OperationalMap(
+async function loadTpvEditorV2OperationalMapUncached(
   restaurantId: string,
-  loaders: OperationalMapLoaders = defaultOperationalMapLoaders,
+  loaders: OperationalMapLoaders,
 ): Promise<TpvEditorV2OperationalMap | null> {
+  const draftPending = loaders.loadDraft(restaurantId).then(
+    (value) => ({ status: "fulfilled" as const, value }),
+    (reason: unknown) => ({ status: "rejected" as const, reason }),
+  );
   const published = await loaders.loadPublished(restaurantId);
+  const draftResult = await draftPending;
   if (published) {
-    const draft = await loaders.loadDraft(restaurantId).catch(() => null);
+    const draft = draftResult.status === "fulfilled" ? draftResult.value : null;
     return {
       source: "published",
       document: restorePublishedOperationalIdentityLinks(
@@ -100,7 +114,11 @@ export async function loadTpvEditorV2OperationalMap(
     };
   }
 
-  const draft = await loaders.loadDraft(restaurantId);
+  if (draftResult.status === "rejected") {
+    throw draftResult.reason;
+  }
+
+  const draft = draftResult.value;
   if (!draft) return null;
 
   return {
@@ -109,4 +127,41 @@ export async function loadTpvEditorV2OperationalMap(
     publishedAt: null,
     sourceDraftUpdatedAt: draft.updatedAt,
   };
+}
+
+export function loadTpvEditorV2OperationalMap(
+  restaurantId: string,
+  loaders: OperationalMapLoaders = defaultOperationalMapLoaders,
+): Promise<TpvEditorV2OperationalMap | null> {
+  const rid = String(restaurantId ?? "").trim();
+  if (loaders !== defaultOperationalMapLoaders) {
+    return loadTpvEditorV2OperationalMapUncached(rid, loaders);
+  }
+
+  const now = Date.now();
+  const cached = defaultOperationalMapCache.get(rid);
+  if (cached && cached.expiresAt > now) {
+    return cached.promise;
+  }
+
+  const promise = loadTpvEditorV2OperationalMapUncached(rid, loaders).catch(
+    (error) => {
+      if (defaultOperationalMapCache.get(rid)?.promise === promise) {
+        defaultOperationalMapCache.delete(rid);
+      }
+      throw error;
+    },
+  );
+  defaultOperationalMapCache.set(rid, {
+    expiresAt: now + OPERATIONAL_MAP_CACHE_TTL_MS,
+    promise,
+  });
+  return promise;
+}
+
+/** Starts the read-only V2 map load before the operator gate opens the TPV. */
+export function preloadTpvEditorV2OperationalMap(
+  restaurantId: string,
+): Promise<TpvEditorV2OperationalMap | null> {
+  return loadTpvEditorV2OperationalMap(restaurantId);
 }

@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { ActiveOperatorProvider } from "@/components/tpv/active-operator-context";
 import { ActiveOperatorGate } from "@/components/tpv/active-operator-gate";
 import { useTableGroups } from "@/hooks/useTableGroups";
+import { preloadTpvEditorV2OperationalMap } from "@/lib/tpv/load-editor-v2-operational-map";
 import { OperacionModuleShell } from "../_components/operacion-module-shell";
 import { TpvEditorV2ReadyGate } from "./_components/tpv-editor-v2-ready-gate";
 import "./tpv-map-modern.css";
@@ -30,6 +31,18 @@ export default function OperacionTpvPage() {
   const { groupedTablesMapHandlers } = useTableGroups({
     restaurantId: restaurantIdTrimmed,
   });
+
+  useEffect(() => {
+    const rid = restaurantIdTrimmed?.trim() ?? "";
+    if (!rid) return;
+
+    void preloadTpvEditorV2OperationalMap(rid).catch((error) => {
+      console.warn("[TPV] preload del plano V2 no disponible", {
+        restaurantId: rid,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }, [restaurantIdTrimmed]);
 
   useEffect(() => {
     const handler = (e: any) => {
