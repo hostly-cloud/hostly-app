@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { generateImage, NoImageGeneratedError } from "ai";
 import {
   buildPendingAutomaticProductImageEnrichment,
   canAutomaticallyReplaceProductImage,
@@ -7,14 +8,13 @@ import {
 } from "@/lib/carta/product-image-enrichment";
 import { getHostlyStorageBucket } from "@/lib/firebase/admin";
 
-const OPENAI_IMAGE_TIMEOUT_MS = 90_000;
+const AI_IMAGE_TIMEOUT_MS = 90_000;
 const MAX_GENERATED_IMAGE_BYTES = 8 * 1024 * 1024;
 const GENERATION_LOCK_MS = 3 * 60 * 1000;
-const IMAGE_PROVIDER = "openai";
-const DEFAULT_IMAGE_MODEL = "gpt-image-2-2026-04-21";
+const IMAGE_PROVIDER = "vercel-ai-gateway";
+const DEFAULT_IMAGE_MODEL = "google/gemini-3.1-flash-lite-image";
 
 export type ProductImageGenerationSkipReason =
-  | "not_imported"
   | "not_food"
   | "branded_or_beverage"
   | "invalid_product_name"
@@ -74,6 +74,15 @@ function readString(data: Record<string, unknown>, key: string): string | undefi
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function normalizeDescription(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized ? normalized.slice(0, 500) : undefined;
+}
+
 function normalizeMatchText(value: string): string {
   return value
     .toLowerCase()
@@ -124,19 +133,15 @@ function readGenerationLock(value: unknown): ProductImageGenerationLock | null {
 }
 
 /**
- * Primera fase deliberadamente conservadora:
- * - solo productos nacidos de Menu Import;
+ * Generación deliberadamente conservadora:
  * - solo `tipoVenta: plato`;
  * - excluye bebidas/marcas aunque hayan sido clasificadas incorrectamente;
  * - nunca sustituye imágenes manuales, aprobadas o legacy protegidas.
  */
 export function evaluateImportedProductImageEligibility(
   data: Record<string, unknown>,
+  descriptionOverride?: string,
 ): ProductImageGenerationEligibility {
-  if (!readString(data, "importedFromMenuDraftId")) {
-    return { eligible: false, reason: "not_imported" };
-  }
-
   if (data.tipoVenta !== "plato" || data.productFamilyType === "drink") {
     return { eligible: false, reason: "not_food" };
   }
@@ -155,7 +160,10 @@ export function evaluateImportedProductImageEligibility(
     return { eligible: false, reason: "protected_existing_image" };
   }
 
-  const description = readString(data, "description");
+  const description =
+    normalizeDescription(descriptionOverride) ??
+    normalizeDescription(data.descripcion) ??
+    normalizeDescription(data.description);
   return {
     eligible: true,
     name: name.slice(0, 140),
@@ -181,81 +189,66 @@ export function buildImportedProductImagePrompt(input: {
   ].join("\n");
 }
 
-function readImageQuality(): "low" | "medium" | "high" | "auto" {
-  const raw = process.env.HOSTLY_OPENAI_IMAGE_QUALITY?.trim().toLowerCase();
-  if (raw === "medium" || raw === "high" || raw === "auto") return raw;
-  return "low";
+function readProviderStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object") return null;
+  const status = "statusCode" in error ? error.statusCode : null;
+  if (typeof status === "number" && Number.isFinite(status)) return status;
+  return "cause" in error ? readProviderStatus(error.cause) : null;
 }
 
-async function generateImageWithOpenAi(prompt: string): Promise<{
+function readGatewayCostUsd(value: unknown): number | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const gateway = (value as Record<string, unknown>).gateway;
+  if (!gateway || typeof gateway !== "object") return undefined;
+  const raw = gateway as Record<string, unknown>;
+  for (const key of ["cost", "gatewayCost"]) {
+    const parsed = Number(raw[key]);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return undefined;
+}
+
+async function generateImageWithAiGateway(
+  prompt: string,
+  userId: string,
+): Promise<{
   bytes: Buffer;
   model: string;
+  mediaType: "image/png" | "image/jpeg" | "image/webp";
+  costUsd?: number;
 }> {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
-    throw new GenerateImportedProductImageError(
-      "IMAGE_GENERATION_NOT_CONFIGURED",
-      "OPENAI_API_KEY no configurada",
-      503,
-    );
-  }
-
   const model =
-    process.env.HOSTLY_OPENAI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), OPENAI_IMAGE_TIMEOUT_MS);
+    process.env.HOSTLY_AI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
 
   try {
-    const response = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+    const result = await generateImage({
+      model,
+      prompt,
+      n: 1,
+      aspectRatio: "1:1",
+      maxRetries: 1,
+      abortSignal: AbortSignal.timeout(AI_IMAGE_TIMEOUT_MS),
+      providerOptions: {
+        gateway: {
+          user: userId,
+          tags: ["feature:product-image", "review:required"],
+          disallowPromptTraining: true,
+        },
       },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model,
-        prompt,
-        n: 1,
-        size: "1024x1024",
-        quality: readImageQuality(),
-        background: "opaque",
-        output_format: "webp",
-        moderation: "auto",
-      }),
     });
-
-    const bodyText = await response.text();
-    if (!response.ok) {
+    const mediaType = result.image.mediaType;
+    if (
+      mediaType !== "image/png" &&
+      mediaType !== "image/jpeg" &&
+      mediaType !== "image/webp"
+    ) {
       throw new GenerateImportedProductImageError(
-        "IMAGE_PROVIDER_FAILED",
-        `OpenAI image generation failed (${response.status})`,
+        "IMAGE_PROVIDER_INVALID_IMAGE",
+        "El proveedor devolvió un formato de imagen no permitido",
         502,
       );
     }
-
-    let body: unknown;
-    try {
-      body = JSON.parse(bodyText);
-    } catch {
-      throw new GenerateImportedProductImageError(
-        "IMAGE_PROVIDER_INVALID_RESPONSE",
-        "OpenAI devolvió una respuesta inválida",
-        502,
-      );
-    }
-
-    const base64 = (body as { data?: Array<{ b64_json?: unknown }> })?.data?.[0]
-      ?.b64_json;
-    if (typeof base64 !== "string" || !base64.trim()) {
-      throw new GenerateImportedProductImageError(
-        "IMAGE_PROVIDER_EMPTY_RESPONSE",
-        "OpenAI no devolvió imagen",
-        502,
-      );
-    }
-
-    const bytes = Buffer.from(base64, "base64");
+    const bytes = Buffer.from(result.image.uint8Array);
     if (bytes.length === 0 || bytes.length > MAX_GENERATED_IMAGE_BYTES) {
       throw new GenerateImportedProductImageError(
         "IMAGE_PROVIDER_INVALID_IMAGE",
@@ -264,10 +257,37 @@ async function generateImageWithOpenAi(prompt: string): Promise<{
       );
     }
 
-    return { bytes, model };
+    const costUsd = readGatewayCostUsd(result.providerMetadata);
+    return { bytes, model, mediaType, ...(costUsd != null ? { costUsd } : {}) };
   } catch (error) {
     if (error instanceof GenerateImportedProductImageError) throw error;
-    if (error instanceof Error && error.name === "AbortError") {
+    const status = readProviderStatus(error);
+    if (status === 401 || status === 403) {
+      throw new GenerateImportedProductImageError(
+        "IMAGE_GENERATION_NOT_CONFIGURED",
+        "AI Gateway no está disponible para este proyecto",
+        503,
+      );
+    }
+    if (status === 402) {
+      throw new GenerateImportedProductImageError(
+        "IMAGE_GENERATION_BUDGET_EXCEEDED",
+        "Se ha alcanzado el presupuesto de generación de imágenes",
+        503,
+      );
+    }
+    if (status === 429) {
+      throw new GenerateImportedProductImageError(
+        "IMAGE_PROVIDER_RATE_LIMITED",
+        "El proveedor ha limitado temporalmente las generaciones",
+        429,
+      );
+    }
+    if (
+      (error instanceof Error && error.name === "AbortError") ||
+      status === 408 ||
+      status === 504
+    ) {
       throw new GenerateImportedProductImageError(
         "IMAGE_PROVIDER_TIMEOUT",
         "La generación de imagen agotó el tiempo disponible",
@@ -275,12 +295,12 @@ async function generateImageWithOpenAi(prompt: string): Promise<{
       );
     }
     throw new GenerateImportedProductImageError(
-      "IMAGE_PROVIDER_FAILED",
+      NoImageGeneratedError.isInstance(error)
+        ? "IMAGE_PROVIDER_EMPTY_RESPONSE"
+        : "IMAGE_PROVIDER_FAILED",
       "No se pudo generar la imagen",
       502,
     );
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -325,6 +345,7 @@ async function saveGeneratedImage(
   restaurantId: string,
   productId: string,
   bytes: Buffer,
+  mediaType: "image/png" | "image/jpeg" | "image/webp",
 ): Promise<{ imagePath: string; imageUrl: string }> {
   const bucket = getHostlyStorageBucket();
   if (!bucket) {
@@ -336,17 +357,23 @@ async function saveGeneratedImage(
   }
 
   const token = randomUUID();
+  const extension =
+    mediaType === "image/png"
+      ? "png"
+      : mediaType === "image/jpeg"
+        ? "jpg"
+        : "webp";
   const imagePath = `${productImagePrefix(
     restaurantId,
     productId,
-  )}ai/${Date.now()}-${randomUUID()}.webp`;
+  )}ai/${Date.now()}-${randomUUID()}.${extension}`;
   const file = bucket.file(imagePath);
 
   try {
     await file.save(bytes, {
       resumable: false,
       metadata: {
-        contentType: "image/webp",
+        contentType: mediaType,
         cacheControl: "public,max-age=31536000,immutable",
         metadata: {
           firebaseStorageDownloadTokens: token,
@@ -399,6 +426,7 @@ export async function generateImportedProductImage(params: {
   restaurantId: string;
   productId: string;
   userId: string;
+  description?: string;
 }): Promise<GenerateImportedProductImageResult> {
   const restaurantId = assertSimpleId(params.restaurantId, "restaurantId");
   const productId = assertSimpleId(params.productId, "productId");
@@ -429,7 +457,10 @@ export async function generateImportedProductImage(params: {
     }
 
     const data = snap.data() as Record<string, unknown>;
-    const eligibility = evaluateImportedProductImageEligibility(data);
+    const eligibility = evaluateImportedProductImageEligibility(
+      data,
+      params.description,
+    );
     if (!eligibility.eligible) {
       return { acquired: false as const, reason: eligibility.reason };
     }
@@ -469,8 +500,13 @@ export async function generateImportedProductImage(params: {
 
   try {
     const prompt = buildImportedProductImagePrompt(acquisition.eligibility);
-    const generated = await generateImageWithOpenAi(prompt);
-    stored = await saveGeneratedImage(restaurantId, productId, generated.bytes);
+    const generated = await generateImageWithAiGateway(prompt, userId);
+    stored = await saveGeneratedImage(
+      restaurantId,
+      productId,
+      generated.bytes,
+      generated.mediaType,
+    );
 
     let replacedImagePath: string | undefined;
     const finalResult = await params.db.runTransaction(async (transaction) => {
@@ -513,6 +549,7 @@ export async function generateImportedProductImage(params: {
           provider: IMAGE_PROVIDER,
           externalReference: generated.model,
           generatedAt: now,
+          costUsd: generated.costUsd,
         }),
         imageGenerationInProgress: FieldValue.delete(),
         updatedAt: now,

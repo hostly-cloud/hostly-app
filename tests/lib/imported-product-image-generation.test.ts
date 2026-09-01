@@ -32,11 +32,42 @@ test("an imported generic dish without image is eligible", () => {
   });
 });
 
-test("products not created by Menu Import are excluded", () => {
+test("a manually created generic dish without image is eligible", () => {
   const result = evaluateImportedProductImageEligibility(
     importedDish({ importedFromMenuDraftId: undefined }),
   );
-  assert.deepEqual(result, { eligible: false, reason: "not_imported" });
+  assert.deepEqual(result, {
+    eligible: true,
+    name: "Lubina a la sal",
+    categoryName: "Pescados",
+  });
+});
+
+test("the saved Spanish description or current form draft feeds the prompt", () => {
+  assert.deepEqual(
+    evaluateImportedProductImageEligibility(
+      importedDish({ descripcion: "Con patata y verduras de temporada" }),
+    ),
+    {
+      eligible: true,
+      name: "Lubina a la sal",
+      categoryName: "Pescados",
+      description: "Con patata y verduras de temporada",
+    },
+  );
+
+  assert.deepEqual(
+    evaluateImportedProductImageEligibility(
+      importedDish({ descripcion: "Descripción guardada" }),
+      "  Descripción actual del formulario  ",
+    ),
+    {
+      eligible: true,
+      name: "Lubina a la sal",
+      categoryName: "Pescados",
+      description: "Descripción actual del formulario",
+    },
+  );
 });
 
 test("beverages and drink families are excluded", () => {

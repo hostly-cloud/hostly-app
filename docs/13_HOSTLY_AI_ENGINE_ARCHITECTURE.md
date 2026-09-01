@@ -556,6 +556,22 @@ Campos mínimos job: `restaurantId`, `createdBy`, `domain`, `status`, `pipelineV
 
 ---
 
+## 12.4 Enriquecimiento visual de productos
+
+La imagen generada es una **propuesta**, no una fuente operativa autónoma:
+
+- se genera en servidor mediante Vercel AI Gateway, con trazabilidad por usuario y función;
+- usa el nombre, la categoría y la descripción actual del formulario como contexto;
+- se limita a platos genéricos y excluye marcas, envases, vinos y bebidas comerciales;
+- se guarda inmediatamente en Firebase Storage bajo el tenant y queda `pending`;
+- requiere aprobación humana para quedar protegida y nunca sustituye una imagen manual o aprobada;
+- conserva modelo, proveedor, fecha y coste devuelto por el Gateway cuando está disponible.
+
+El modelo por defecto debe priorizar coste controlado y puede cambiarse mediante
+`HOSTLY_AI_IMAGE_MODEL`, siempre usando un identificador vigente del Gateway.
+
+---
+
 # 13. Riesgos
 
 ## 13.1 Riesgos técnicos

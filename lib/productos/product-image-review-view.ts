@@ -20,8 +20,6 @@ export function productImageGenerationReasonLabel(
   reason: ProductImageReviewResolvedState["generationReason"],
 ): string | null {
   switch (reason) {
-    case "not_imported":
-      return "Disponible para platos creados desde Importar carta.";
     case "not_food":
       return "Las imágenes generadas se limitan por ahora a platos de comida.";
     case "branded_or_beverage":

@@ -199,12 +199,19 @@ export function ProductFormCommercialInfoModal({
             </label>
             <textarea
               id="product-form-commercial-description"
+              aria-describedby="product-form-commercial-description-hint"
               className={`hostly-product-commercial-modal__textarea ${drawerInputClass}`}
               value={description}
               onChange={(e) => onDescriptionChange(e.target.value)}
               rows={5}
               disabled={disabled}
             />
+            <p
+              id="product-form-commercial-description-hint"
+              className="hostly-product-commercial-modal__hint"
+            >
+              Describe ingredientes y presentación. Hostly usará este texto junto al nombre para proponer una imagen más fiel.
+            </p>
           </div>
 
           {isCentralCatalog ? (
@@ -280,6 +287,7 @@ export function ProductFormCommercialInfoModal({
                   open={open}
                   productId={productId}
                   productName={productName}
+                  productDescription={description}
                   fallbackImageUrl={effectiveImagePreviewUrl}
                   imageDraftMode={imageDraftMode}
                   disabled={disabled}
