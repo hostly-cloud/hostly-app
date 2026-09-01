@@ -2394,6 +2394,7 @@ export function CartaPageContent({
     useState(1);
   const preAddQuantityRef = useRef(1);
   const preAddQuantityControlRef = useRef<HTMLDivElement | null>(null);
+  const preAddQuantityPadRef = useRef<HTMLDivElement | null>(null);
   const preAddQuantityTriggerRef = useRef<HTMLButtonElement | null>(null);
   const activeProductTimeoutRef = useRef<number | null>(null);
   const addingTimeoutsRef = useRef<Record<string, number>>({});
@@ -2476,9 +2477,16 @@ export function CartaPageContent({
 
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const control = preAddQuantityControlRef.current;
-      if (control && event.target instanceof Node && !control.contains(event.target)) {
-        setPreAddQuantityPadOpen(false);
+      const pad = preAddQuantityPadRef.current;
+      if (!(event.target instanceof Node)) return;
+      if (control?.contains(event.target) || pad?.contains(event.target)) return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest(".carta-product-card")
+      ) {
+        return;
       }
+      setPreAddQuantityPadOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -12690,30 +12698,42 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 }
 
 .carta-tpv-preqty__popover {
-  position: absolute;
-  z-index: 45;
-  top: calc(100% + 7px);
-  right: 0;
-  width: 190px;
-  padding: 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  margin-top: var(--hostly-op-gap-xs);
+  padding: var(--hostly-op-gap-sm);
+  gap: var(--hostly-op-gap-xs);
+  border-radius: var(--hostly-radius-sm);
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: var(--hostly-surface-ice-bg);
+  box-shadow: var(--hostly-shadow-hairline);
+  box-sizing: border-box;
 }
 
 .carta-tpv-preqty__popover-title {
-  margin: 0 0 8px;
-  color: #475569;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hostly-op-gap-sm);
+  margin: 0;
+  color: var(--hostly-ink-muted);
   font-size: 11px;
   font-weight: 800;
-  text-align: center;
+  line-height: 1.2;
+}
+
+.carta-tpv-preqty__popover-value {
+  color: var(--hostly-accent);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .carta-tpv-preqty__keys {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  gap: var(--hostly-op-gap-xs);
 }
 
 .carta-tpv-preqty__key {
@@ -12756,10 +12776,6 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 
 .carta-tpv-preqty__key--clear {
   color: var(--hostly-accent);
-}
-
-.carta-tpv-preqty__key--done {
-  color: #166534;
 }
 
 .carta-current-cat-title {
@@ -18949,7 +18965,6 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           ref={preAddQuantityTriggerRef}
                           type="button"
                           className="carta-tpv-preqty__trigger"
-                          aria-haspopup="dialog"
                           aria-controls="carta-tpv-quantity-pad"
                           aria-expanded={preAddQuantityPadOpen}
                           onClick={() => setPreAddQuantityPadOpen((open) => !open)}
@@ -18959,59 +18974,6 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                             x{preAddQuantity}
                           </span>
                         </button>
-                        {preAddQuantityPadOpen ? (
-                          <div
-                            id="carta-tpv-quantity-pad"
-                            className="carta-tpv-preqty__popover"
-                            role="dialog"
-                            aria-label="Cantidad previa para añadir producto"
-                          >
-                            <p className="carta-tpv-preqty__popover-title">
-                              Unidades del próximo producto
-                            </p>
-                            <div className="carta-tpv-preqty__keys">
-                              {([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((n) => (
-                                <button
-                                  key={n}
-                                  type="button"
-                                  className="carta-tpv-preqty__key"
-                                  onClick={() => appendPreAddQuantityDigit(n)}
-                                  aria-label={`Cantidad ${n}`}
-                                >
-                                  {n}
-                                </button>
-                              ))}
-                              <button
-                                type="button"
-                                className="carta-tpv-preqty__key carta-tpv-preqty__key--clear"
-                                onClick={clearPreAddQuantity}
-                                aria-label="Restablecer cantidad a una unidad"
-                              >
-                                x1
-                              </button>
-                              <button
-                                type="button"
-                                className="carta-tpv-preqty__key"
-                                onClick={() => appendPreAddQuantityDigit(0)}
-                                aria-label="Cantidad 0"
-                              >
-                                0
-                              </button>
-                              <button
-                                type="button"
-                                className="carta-tpv-preqty__key carta-tpv-preqty__key--done"
-                                onClick={() => {
-                                  setPreAddQuantityPadOpen(false);
-                                  window.requestAnimationFrame(() =>
-                                    preAddQuantityTriggerRef.current?.focus(),
-                                  );
-                                }}
-                              >
-                                Listo
-                              </button>
-                            </div>
-                          </div>
-                        ) : null}
                       </div>
                     </div>
                     </>
@@ -19025,6 +18987,54 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         />
                       ) : null}
                     </div>
+                  {preAddQuantityPadOpen ? (
+                    <div
+                      ref={preAddQuantityPadRef}
+                      id="carta-tpv-quantity-pad"
+                      className="carta-tpv-preqty__popover"
+                      role="group"
+                      aria-label="Cantidad previa para añadir producto"
+                    >
+                      <p className="carta-tpv-preqty__popover-title">
+                        <span>Toca un producto para añadirlo</span>
+                        <span
+                          className="carta-tpv-preqty__popover-value"
+                          aria-live="polite"
+                        >
+                          x{preAddQuantity}
+                        </span>
+                      </p>
+                      <div className="carta-tpv-preqty__keys">
+                        {([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            className="carta-tpv-preqty__key"
+                            onClick={() => appendPreAddQuantityDigit(n)}
+                            aria-label={`Cantidad ${n}`}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className="carta-tpv-preqty__key carta-tpv-preqty__key--clear"
+                          onClick={clearPreAddQuantity}
+                          aria-label="Restablecer cantidad a una unidad"
+                        >
+                          x1
+                        </button>
+                        <button
+                          type="button"
+                          className="carta-tpv-preqty__key"
+                          onClick={() => appendPreAddQuantityDigit(0)}
+                          aria-label="Cantidad 0"
+                        >
+                          0
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   {!showAuthSpinner &&
                   !showProductsSpinner &&
                   !catalogLoadError &&
