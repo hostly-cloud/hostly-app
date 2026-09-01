@@ -296,8 +296,12 @@ main:has(.hostly-productos-v3--operations)
 
 .hostly-productos-carta-header-inline-actions__btn--primary {
   border-radius: 11px !important;
-  background: linear-gradient(135deg, #173a50, #0d2738) !important;
-  box-shadow: 0 7px 16px rgba(14, 39, 56, 0.18) !important;
+  background: linear-gradient(
+    138deg,
+    var(--hostly-action-primary-hover),
+    var(--hostly-action-primary-deep)
+  ) !important;
+  box-shadow: var(--hostly-action-primary-shadow) !important;
 }
 
 .hostly-productos-carta-header-inline-actions__more {

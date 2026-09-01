@@ -1,0 +1,142 @@
+/*
+ * Hostly — lenguaje de acción principal.
+ *
+ * El navy del acceso al TPV identifica decisiones que hacen avanzar el trabajo.
+ * Los colores verde, ámbar, rojo y morado siguen reservados para estados reales.
+ */
+
+.hostly-touch-root {
+  --hostly-action-primary: #0f2744;
+  --hostly-action-primary-deep: #081d31;
+  --hostly-action-primary-hover: #173a55;
+  --hostly-action-primary-soft: rgba(15, 39, 68, 0.1);
+  --hostly-action-primary-border: rgba(111, 191, 226, 0.24);
+  --hostly-action-primary-shadow: 0 8px 20px rgba(7, 29, 49, 0.18);
+  --hostly-action-primary-shadow-hover: 0 12px 28px rgba(7, 29, 49, 0.24);
+}
+
+.hostly-touch-root .hostly-button-primary:not(.hostly-button-danger),
+.hostly-touch-root .hostly-analysis-detail-link,
+.hostly-touch-root .hostly-productos-carta-header-inline-actions__btn--primary {
+  border-color: var(--hostly-action-primary-border) !important;
+  background: linear-gradient(
+    138deg,
+    var(--hostly-action-primary-hover) 0%,
+    var(--hostly-action-primary) 58%,
+    var(--hostly-action-primary-deep) 100%
+  ) !important;
+  color: #fff !important;
+  box-shadow:
+    var(--hostly-action-primary-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.11) !important;
+}
+
+.hostly-touch-root .hostly-button-primary:not(.hostly-button-danger):hover:not(:disabled),
+.hostly-touch-root .hostly-analysis-detail-link:hover,
+.hostly-touch-root .hostly-productos-carta-header-inline-actions__btn--primary:hover:not(:disabled) {
+  border-color: rgba(139, 211, 241, 0.38) !important;
+  background: linear-gradient(
+    138deg,
+    #1e4864 0%,
+    var(--hostly-action-primary-hover) 56%,
+    var(--hostly-action-primary) 100%
+  ) !important;
+  box-shadow:
+    var(--hostly-action-primary-shadow-hover),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+.hostly-touch-root .hostly-button-primary:not(.hostly-button-danger):focus-visible,
+.hostly-touch-root .hostly-analysis-detail-link:focus-visible,
+.hostly-touch-root .hostly-productos-carta-header-inline-actions__btn--primary:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--hostly-focus-ring),
+    var(--hostly-action-primary-shadow) !important;
+}
+
+/* La acción principal conserva su identidad aunque viva dentro de una barra o drawer. */
+.hostly-touch-root .hostly-module-header-actions__primary .hostly-button-primary,
+.hostly-touch-root .hostly-product-form-drawer__footer-primary,
+.hostly-touch-root .hostly-printer-control__savebar .hostly-button-primary {
+  font-weight: 760;
+  letter-spacing: -0.022em;
+}
+
+/* Las selecciones usan el navy como señal, sin competir con el CTA principal. */
+.hostly-touch-root .hostly-tab[aria-selected="true"],
+.hostly-touch-root .hostly-tab[data-active="true"],
+.hostly-touch-root .hostly-mobile-segment[aria-selected="true"],
+.hostly-touch-root .hostly-mobile-segment[data-active="true"] {
+  border-color: color-mix(in srgb, var(--hostly-action-primary) 24%, var(--hostly-line-strong));
+  color: var(--hostly-action-primary);
+  box-shadow:
+    inset 0 -2px 0 color-mix(in srgb, var(--hostly-action-primary) 76%, transparent),
+    0 5px 14px var(--hostly-action-primary-soft);
+}
+
+/* Productos: una única categoría activa se reconoce al instante. */
+.hostly-productos-v3--operations
+  .hostly-productos-carta-category-rail--premium
+  .hostly-productos-carta-filter-chip--rail-premium.is-active {
+  border-color: var(--hostly-action-primary-border);
+  background: linear-gradient(
+    138deg,
+    var(--hostly-action-primary-hover),
+    var(--hostly-action-primary-deep)
+  );
+  color: #fff;
+  box-shadow:
+    0 6px 15px rgba(7, 29, 49, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Gestión del dashboard: misma firma navy en los accesos, manteniendo sus ilustraciones. */
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__icon {
+  border-color: rgba(139, 211, 241, 0.2);
+  background: linear-gradient(
+    145deg,
+    var(--hostly-action-primary-hover),
+    var(--hostly-action-primary-deep)
+  );
+  color: #eefaff;
+  box-shadow:
+    0 7px 16px rgba(7, 29, 49, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.11);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__arrow {
+  border-color: rgba(15, 39, 68, 0.1);
+  background: var(--hostly-action-primary-soft);
+  color: var(--hostly-action-primary);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item:hover
+  .hostly-dashboard-command-dock-item__arrow {
+  background: var(--hostly-action-primary);
+  color: #fff;
+}
+
+/* Empleados: activar es una acción; el verde queda para el estado ya activo. */
+.hostly-employees-access-btn[data-state="enable"] {
+  border-color: var(--hostly-action-primary-border);
+  background: linear-gradient(
+    138deg,
+    var(--hostly-action-primary-hover),
+    var(--hostly-action-primary-deep)
+  );
+  color: #fff;
+  box-shadow: 0 7px 16px rgba(7, 29, 49, 0.14);
+}
+
+.hostly-employees-access-btn[data-state="enable"]:hover:not(:disabled) {
+  background: linear-gradient(138deg, #1e4864, var(--hostly-action-primary));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hostly-touch-root .hostly-button-primary,
+  .hostly-touch-root .hostly-analysis-detail-link,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__arrow {
+    transition: none !important;
+  }
+}

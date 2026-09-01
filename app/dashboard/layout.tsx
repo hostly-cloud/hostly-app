@@ -25,6 +25,7 @@ import "./analysis-modern.css";
 import "./catalog-workbench-v4.css";
 import "./printer-control-center-v4.css";
 import "./integrations-hub-v4.css";
+import "./primary-action-language.css";
 
 /**
  * Todo el área /dashboard sigue reglas TPV táctil (data-hostly-touch → globals.css).

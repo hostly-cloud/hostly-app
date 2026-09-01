@@ -388,8 +388,12 @@ main.hostly-module-shell:has(.hostly-printer-control) {
 
 .hostly-printer-control__savebar .hostly-button-primary {
   min-width: 120px;
-  background: linear-gradient(135deg, #173a50, #0d2738);
-  box-shadow: 0 7px 16px rgba(14, 39, 56, 0.16);
+  background: linear-gradient(
+    138deg,
+    var(--hostly-action-primary-hover),
+    var(--hostly-action-primary-deep)
+  );
+  box-shadow: var(--hostly-action-primary-shadow);
 }
 
 @media (max-width: 980px) {
