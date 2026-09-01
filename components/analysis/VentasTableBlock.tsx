@@ -1,5 +1,6 @@
 import type { VentasSelectorsTable } from "@/components/analysis/hooks/useVentasSelectors";
 import { formatCurrency } from "@/components/analysis/utils";
+import { ReceiptText } from "lucide-react";
 
 export type VentasTableBlockProps = {
   data: VentasSelectorsTable;
@@ -11,17 +12,10 @@ export function VentasTableBlock({ data }: VentasTableBlockProps) {
   }
 
   return (
-    <div className="hostly-panel p-4">
-      <div
-        style={{
-          fontSize: 13,
-          fontWeight: 800,
-          color: "var(--hostly-ink-strong)",
-          letterSpacing: "-0.01em",
-          marginBottom: 10,
-        }}
-      >
-        Últimos cobros
+    <div className="hostly-panel hostly-analysis-table-card p-4">
+      <div className="hostly-analysis-card-title">
+        <ReceiptText size={17} aria-hidden="true" />
+        <span>Últimos cobros</span>
       </div>
       <table className="hostly-inv-native-table">
         <thead>

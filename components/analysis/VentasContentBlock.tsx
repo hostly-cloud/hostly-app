@@ -66,12 +66,7 @@ export function VentasContentBlock({
   }
 
   if (!hasOrders) {
-    return (
-      <div className="hostly-analytics-stack">
-        <VentasViewState hasOrders={false} ordersCount={ordersCount} />
-        <VentasEmptyState placeholder={placeholder} />
-      </div>
-    );
+    return <VentasEmptyState placeholder={placeholder} />;
   }
 
   return (

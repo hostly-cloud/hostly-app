@@ -1,0 +1,655 @@
+/* Análisis — panel de decisión Hostly. Solo presentación; no altera datos. */
+
+.hostly-analysis-modern {
+  --hostly-analysis-accent: var(--hostly-accent);
+  --hostly-analysis-navy: var(--hostly-navy-deep);
+  --hostly-analysis-line: color-mix(in srgb, var(--hostly-accent) 14%, var(--hostly-table-divider-soft));
+  --hostly-analysis-shadow: 0 12px 34px color-mix(in srgb, var(--hostly-navy-deep) 7%, transparent);
+  gap: 10px;
+}
+
+/* Navegación: tres decisiones, no tres botones genéricos. */
+.hostly-analysis-tabs {
+  width: 100%;
+  min-width: 0;
+}
+
+.hostly-analysis-tabs .hostly-segmented--unified {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  min-width: 0;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 18px;
+  border-color: var(--hostly-analysis-line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(236, 247, 255, 0.86)),
+    var(--hostly-ice-50);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 8px 24px rgba(15, 44, 68, 0.045);
+}
+
+.hostly-analysis-tab.hostly-tab--unified {
+  position: relative;
+  min-width: 0;
+  min-height: 58px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  color: var(--hostly-ink-muted);
+  overflow: hidden;
+}
+
+.hostly-analysis-tab > svg {
+  flex: 0 0 auto;
+  color: var(--hostly-ink-soft);
+  transition: color 140ms ease, transform 140ms ease;
+}
+
+.hostly-analysis-tab__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  line-height: 1.15;
+}
+
+.hostly-analysis-tab__copy strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+}
+
+.hostly-analysis-tab__copy small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--hostly-ink-soft);
+  font-size: 10px;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hostly-analysis-tab.hostly-tab--unified[aria-selected="true"] {
+  border-color: color-mix(in srgb, var(--hostly-accent) 22%, var(--hostly-table-divider-soft));
+  background:
+    radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--hostly-accent) 13%, transparent), transparent 54%),
+    rgba(255, 255, 255, 0.98);
+  color: var(--hostly-navy-deep);
+  box-shadow:
+    0 9px 22px rgba(15, 62, 92, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+
+.hostly-analysis-tab.hostly-tab--unified[aria-selected="true"] > svg {
+  color: var(--hostly-accent);
+  transform: translateY(-1px);
+}
+
+.hostly-analysis-tab.hostly-tab--unified:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+/* El informe se compone de superficies independientes y compactas. */
+.hostly-analysis-modern .hostly-analysis-tab-viewport {
+  padding: 0 1px max(16px, env(safe-area-inset-bottom));
+}
+
+.hostly-analysis-modern .hostly-analytics-panel {
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.hostly-analysis-modern .hostly-analytics-panel > .hostly-analytics-stack {
+  gap: 10px;
+}
+
+.hostly-analysis-header-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--hostly-analysis-line);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--hostly-accent) 9%, transparent), transparent 36%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(245, 251, 255, 0.96));
+  box-shadow: var(--hostly-analysis-shadow);
+}
+
+.hostly-analysis-section-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.hostly-analysis-section-head__identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.hostly-analysis-section-head__icon {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 18%, var(--hostly-table-divider-soft));
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.94), color-mix(in srgb, var(--hostly-accent-soft) 74%, white));
+  color: var(--hostly-navy-deep);
+  box-shadow: 0 7px 16px rgba(18, 71, 104, 0.08);
+}
+
+.hostly-analysis-section-head__copy {
+  min-width: 0;
+}
+
+.hostly-analysis-section-head__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--hostly-accent);
+  font-size: 9px;
+  font-weight: 820;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.hostly-analysis-section-head__title {
+  margin: 0;
+  color: var(--hostly-ink-strong);
+  font-size: clamp(17px, 2vw, 21px);
+  font-weight: 790;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.hostly-analysis-section-head__description {
+  margin: 4px 0 0;
+  color: var(--hostly-ink-soft);
+  font-size: 11px;
+  font-weight: 560;
+  line-height: 1.35;
+}
+
+.hostly-analysis-section-head__aside {
+  flex: 0 0 auto;
+}
+
+/* Filtros: etiqueta sobre el control y dos fechas en una única línea. */
+.hostly-analysis-filterbar {
+  display: flex;
+  min-width: 0;
+  align-items: end;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 10%, var(--hostly-table-divider-faint));
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--hostly-ice-50) 80%, white);
+}
+
+.hostly-analysis-filterbar--rentabilidad {
+  display: grid;
+  grid-template-columns: minmax(330px, 1.35fr) repeat(2, minmax(170px, 0.65fr));
+}
+
+.hostly-analytics-date-fields {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 360px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hostly-analysis-date-field,
+.hostly-analysis-select-field {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  margin: 0;
+}
+
+.hostly-analysis-date-field__label,
+.hostly-analysis-select-field > span {
+  color: var(--hostly-ink-muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.hostly-analysis-modern .hostly-input--toolbar-compact,
+.hostly-analysis-modern .hostly-select--toolbar-compact {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px !important;
+  padding: 8px 11px !important;
+  border-color: color-mix(in srgb, var(--hostly-accent) 13%, var(--hostly-table-divider-soft)) !important;
+  border-radius: 12px !important;
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  color: var(--hostly-ink-strong) !important;
+  font-size: 13px !important;
+  font-weight: 680 !important;
+  box-shadow: 0 5px 13px rgba(15, 56, 84, 0.04) !important;
+}
+
+.hostly-analysis-modern .hostly-input--toolbar-compact:focus,
+.hostly-analysis-modern .hostly-select--toolbar-compact:focus {
+  border-color: var(--hostly-accent) !important;
+  outline: none;
+  box-shadow: var(--hostly-focus-ring) !important;
+}
+
+.hostly-analysis-detail-link {
+  display: inline-flex;
+  min-height: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border: 1px solid var(--hostly-navy-deep);
+  border-radius: 12px;
+  background: var(--hostly-navy-deep);
+  color: white;
+  font-size: 12px;
+  font-weight: 740;
+  text-decoration: none;
+  box-shadow: 0 8px 18px rgba(9, 43, 70, 0.15);
+  transition: background-color 140ms ease, transform 120ms ease, box-shadow 140ms ease;
+}
+
+.hostly-analysis-detail-link:hover {
+  background: var(--hostly-navy-mid);
+  box-shadow: 0 10px 22px rgba(9, 43, 70, 0.19);
+}
+
+.hostly-analysis-detail-link:active {
+  transform: scale(0.985);
+}
+
+/* KPIs: lectura en dos segundos, con señal de color contenida. */
+.hostly-analysis-modern .hostly-kpi-grid-unified--analytics {
+  gap: 8px;
+}
+
+.hostly-analysis-modern .hostly-analysis-kpi {
+  --hostly-analysis-kpi-accent: var(--hostly-ink-soft);
+  position: relative;
+  min-height: 86px;
+  overflow: hidden;
+  padding: 11px 12px !important;
+  border-color: color-mix(in srgb, var(--hostly-analysis-kpi-accent) 16%, var(--hostly-table-divider-soft)) !important;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--hostly-analysis-kpi-accent) 10%, transparent), transparent 45%),
+    linear-gradient(155deg, rgba(255, 255, 255, 0.99), rgba(246, 251, 255, 0.96)) !important;
+  box-shadow: 0 8px 22px rgba(12, 45, 69, 0.055) !important;
+}
+
+.hostly-analysis-modern .hostly-analysis-kpi::before {
+  position: absolute;
+  top: 0;
+  left: 13px;
+  width: 34px;
+  height: 3px;
+  border-radius: 0 0 999px 999px;
+  background: var(--hostly-analysis-kpi-accent);
+  content: "";
+}
+
+.hostly-analysis-modern .hostly-analysis-kpi--primary {
+  --hostly-analysis-kpi-accent: var(--hostly-accent);
+}
+
+.hostly-analysis-modern .hostly-analysis-kpi--success {
+  --hostly-analysis-kpi-accent: #16a36a;
+}
+
+.hostly-analysis-modern .hostly-analysis-kpi--warning {
+  --hostly-analysis-kpi-accent: #d99a23;
+}
+
+.hostly-analysis-modern .hostly-analysis-kpi--danger {
+  --hostly-analysis-kpi-accent: #d05f64;
+}
+
+.hostly-analysis-modern .hostly-analysis-kpi .hostly-kpi-icon {
+  display: inline-flex;
+  width: 29px;
+  height: 29px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--hostly-analysis-kpi-accent) 10%, white);
+  color: var(--hostly-analysis-kpi-accent);
+}
+
+.hostly-analysis-modern .hostly-analysis-kpi .hostly-kpi-label {
+  color: var(--hostly-ink-muted);
+  font-size: 9px;
+  font-weight: 790;
+}
+
+.hostly-analysis-modern .hostly-analysis-kpi .hostly-kpi-value {
+  margin-top: 7px;
+  color: var(--hostly-ink-strong);
+  font-size: clamp(18px, 2.3vw, 24px);
+  font-weight: 810;
+  letter-spacing: -0.045em;
+}
+
+/* Estados sin datos: información útil, sin gráficas vacías ni paneles gigantes. */
+.hostly-analysis-empty {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 15px;
+  padding: 24px;
+  border: 1px solid var(--hostly-analysis-line);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--hostly-accent) 8%, transparent), transparent 37%),
+    rgba(255, 255, 255, 0.96);
+  box-shadow: var(--hostly-analysis-shadow);
+}
+
+.hostly-analysis-empty--compact {
+  padding: 18px 20px;
+}
+
+.hostly-analysis-empty__icon {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 17%, var(--hostly-table-divider-soft));
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--hostly-accent-soft) 78%, white);
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-analysis-empty__copy {
+  min-width: 0;
+}
+
+.hostly-analysis-empty h3 {
+  margin: 0;
+  color: var(--hostly-ink-strong);
+  font-size: 15px;
+  font-weight: 780;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.hostly-analysis-empty p {
+  margin: 5px 0 0;
+  max-width: 54rem;
+  color: var(--hostly-ink-muted);
+  font-size: 12px;
+  font-weight: 570;
+  line-height: 1.45;
+}
+
+.hostly-analysis-empty__copy > span {
+  display: block;
+  margin-top: 5px;
+  color: var(--hostly-ink-soft);
+  font-size: 10px;
+  font-weight: 620;
+  line-height: 1.4;
+}
+
+.hostly-analysis-zone-empty {
+  margin-top: 0;
+}
+
+/* Gráficas, tablas e insights comparten el mismo lenguaje de superficie. */
+.hostly-analysis-modern .hostly-analysis-tab-viewport .hostly-panel {
+  border-color: var(--hostly-analysis-line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 9px 26px rgba(12, 45, 69, 0.055);
+}
+
+.hostly-analysis-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hostly-analysis-chart-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.hostly-analysis-card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  color: var(--hostly-ink-strong);
+  font-size: 13px;
+  font-weight: 780;
+  letter-spacing: -0.018em;
+}
+
+.hostly-analysis-card-title > svg {
+  color: var(--hostly-accent);
+}
+
+.hostly-analysis-modern .hostly-inv-native-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.hostly-analysis-modern .hostly-inv-native-table thead th {
+  background: color-mix(in srgb, var(--hostly-ice-50) 76%, white);
+  color: var(--hostly-ink-muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.hostly-analysis-modern .hostly-inv-native-table tbody tr:hover {
+  background: color-mix(in srgb, var(--hostly-accent-soft) 35%, transparent);
+}
+
+@media (max-width: 900px) {
+  .hostly-analysis-filterbar--rentabilidad {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hostly-analysis-filterbar--rentabilidad .hostly-analytics-date-fields {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  .hostly-analysis-modern {
+    gap: 8px;
+  }
+
+  .hostly-analysis-tabs .hostly-segmented--unified {
+    gap: 3px;
+    padding: 3px;
+    border-radius: 16px;
+  }
+
+  [data-hostly-touch] .hostly-analysis-tab.hostly-tab--unified {
+    min-height: 60px !important;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 7px 4px !important;
+    border-radius: 13px;
+  }
+
+  .hostly-analysis-tab__copy {
+    align-items: center;
+  }
+
+  .hostly-analysis-tab__copy strong {
+    font-size: 11px;
+  }
+
+  .hostly-analysis-tab__copy small {
+    display: none;
+  }
+
+  .hostly-analysis-modern .hostly-analytics-panel,
+  .hostly-analysis-modern .hostly-analytics-panel > .hostly-analytics-stack {
+    gap: 8px;
+  }
+
+  .hostly-analysis-header-card {
+    gap: 9px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .hostly-analysis-section-head__identity {
+    gap: 10px;
+  }
+
+  .hostly-analysis-section-head__icon {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    border-radius: 13px;
+  }
+
+  .hostly-analysis-section-head__title {
+    font-size: 17px;
+  }
+
+  .hostly-analysis-section-head__description {
+    margin-top: 3px;
+    font-size: 10px;
+  }
+
+  .hostly-analysis-filterbar {
+    flex-wrap: wrap;
+    padding: 8px;
+    border-radius: 14px;
+  }
+
+  .hostly-analysis-filterbar--rentabilidad {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hostly-analysis-filterbar--rentabilidad .hostly-analytics-date-fields {
+    grid-column: 1 / -1;
+  }
+
+  .hostly-analysis-date-field__label,
+  .hostly-analysis-select-field > span {
+    font-size: 8px;
+  }
+
+  .hostly-analysis-modern .hostly-input--toolbar-compact,
+  .hostly-analysis-modern .hostly-select--toolbar-compact {
+    min-height: 43px !important;
+    padding: 7px 9px !important;
+    font-size: 12px !important;
+  }
+
+  .hostly-analysis-detail-link {
+    width: 100%;
+  }
+
+  .hostly-analysis-modern .hostly-analysis-kpi {
+    min-height: 82px;
+    padding: 10px !important;
+  }
+
+  .hostly-analysis-modern .hostly-analysis-kpi .hostly-kpi-icon {
+    width: 27px;
+    height: 27px;
+  }
+
+  .hostly-analysis-modern .hostly-analysis-kpi .hostly-kpi-value {
+    margin-top: 5px;
+    font-size: 19px;
+  }
+
+  .hostly-analysis-empty,
+  .hostly-analysis-empty--compact {
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .hostly-analysis-empty__icon {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    border-radius: 13px;
+  }
+
+  .hostly-analysis-empty h3 {
+    font-size: 13px;
+  }
+
+  .hostly-analysis-empty p {
+    font-size: 11px;
+  }
+
+  .hostly-analysis-chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .hostly-analysis-modern .hostly-analysis-tab-viewport .hostly-panel {
+    border-radius: 17px;
+  }
+
+  .hostly-touch-root:has(.hostly-analysis-modern) > [data-hostly-help-trigger] {
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    min-height: 48px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .hostly-touch-root:has(.hostly-analysis-modern) > [data-hostly-help-trigger] .hostly-help-trigger__label {
+    display: none;
+  }
+}
+
+@media (max-width: 430px) {
+  .hostly-analysis-filterbar--rentabilidad {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hostly-analysis-filterbar--rentabilidad .hostly-analytics-date-fields {
+    grid-column: 1;
+  }
+}

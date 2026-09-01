@@ -2,12 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { AnalyticsDateRangeFields } from "@/components/analysis/AnalyticsDateRangeFields";
-import { HostlyKpiCard, HostlySectionHeader } from "@/components/ui/hostly";
+import { AnalyticsEmptyState } from "@/components/analysis/AnalyticsEmptyState";
+import { AnalyticsSectionHeader } from "@/components/analysis/AnalyticsSectionHeader";
+import { HostlyKpiCard } from "@/components/ui/hostly";
 import {
   buildInventoryMarginAnalytics,
   normalizeInventoryMarginOrders,
   type InventoryMarginAggregateRow,
 } from "@/lib/analytics/inventory-margin-analytics";
+import { BadgeEuro, PackageSearch, Percent, TrendingUp, TriangleAlert } from "lucide-react";
 
 export type RentabilidadAnalyticsSectionProps = {
   orders?: Array<Record<string, unknown>> | null;
@@ -127,93 +130,110 @@ export function RentabilidadAnalyticsSection({
 
   const { summary, byProduct } = analytics;
   const hasCompleteData = summary.completeLineCount > 0;
+  const emptyDescription =
+    marginOrders.length === 0
+      ? "No hay ventas completamente cobradas en este periodo."
+      : "Todavía no hay líneas con un coste de inventario completo en este periodo.";
+  const coverageHint = [
+    summary.incompleteCostCount > 0
+      ? `${lineCountLabel(summary.incompleteCostCount)} con coste incompleto.`
+      : null,
+    summary.excludedNoCostCount > 0
+      ? `${lineCountLabel(summary.excludedNoCostCount)} sin historial de coste.`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className="hostly-analytics-panel">
       <div className="hostly-analytics-stack">
-      <HostlySectionHeader
-        title="Rentabilidad"
-        description={`Ventas cobradas con costes congelados al enviar · ${formatDateEs(dateFrom)} – ${formatDateEs(dateTo)}`}
-        titleVariant="section"
-        className="hostly-section-header--operational"
+      <AnalyticsSectionHeader
+        eyebrow="Margen y costes"
+        title="Rentabilidad real"
+        description={`${formatDateEs(dateFrom)} – ${formatDateEs(dateTo)} · Costes congelados al enviar`}
+        icon={<BadgeEuro size={21} strokeWidth={2.1} />}
       />
 
       {dataState === "loading" ? (
-        <div className="hostly-panel p-4" role="status" aria-live="polite">
-          <div style={{ fontSize: 14, color: "var(--hostly-ink-muted)" }}>
-            Cargando ventas cobradas y costes…
-          </div>
-        </div>
+        <AnalyticsEmptyState
+          compact
+          role="status"
+          icon={<TrendingUp size={22} strokeWidth={2.1} />}
+          title="Calculando la rentabilidad"
+          description="Estamos cruzando ventas cobradas y costes de inventario."
+        />
       ) : dataState === "error" ? (
-        <div className="hostly-panel p-4" role="alert">
-          <div style={{ fontSize: 14, color: "var(--hostly-ink-muted)", lineHeight: 1.5 }}>
-            No se pudo calcular la rentabilidad. Revisa tu conexión o tus permisos e inténtalo de nuevo.
-          </div>
-        </div>
+        <AnalyticsEmptyState
+          compact
+          role="alert"
+          icon={<TriangleAlert size={22} strokeWidth={2.1} />}
+          title="No pudimos calcular la rentabilidad"
+          description="Revisa tu conexión o tus permisos e inténtalo de nuevo."
+        />
       ) : (
         <>
 
-      <div className="hostly-analytics-toolbar">
-        <div className="hostly-analytics-toolbar__filters">
+      <div className="hostly-analysis-filterbar hostly-analysis-filterbar--rentabilidad">
           <AnalyticsDateRangeFields
             dateFrom={dateFrom}
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
           />
-          <select
-            value={familyFilter}
-            onChange={(e) => setFamilyFilter(e.target.value)}
-            className="hostly-select hostly-select--toolbar-compact"
-            aria-label="Filtrar por familia"
-          >
-            <option value="all">Todas las familias</option>
-            {baseAnalytics.filterOptions.families.map((family) => (
-              <option key={family} value={family}>
-                {family}
-              </option>
-            ))}
-          </select>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="hostly-select hostly-select--toolbar-compact"
-            aria-label="Filtrar por categoría"
-          >
-            <option value="all">Todas las categorías</option>
-            {baseAnalytics.filterOptions.categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-        </div>
+          <label className="hostly-analysis-select-field">
+            <span>Familia</span>
+            <select
+              value={familyFilter}
+              onChange={(e) => setFamilyFilter(e.target.value)}
+              className="hostly-select hostly-select--toolbar-compact"
+              aria-label="Filtrar por familia"
+            >
+              <option value="all">Todas las familias</option>
+              {baseAnalytics.filterOptions.families.map((family) => (
+                <option key={family} value={family}>
+                  {family}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="hostly-analysis-select-field">
+            <span>Categoría</span>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="hostly-select hostly-select--toolbar-compact"
+              aria-label="Filtrar por categoría"
+            >
+              <option value="all">Todas las categorías</option>
+              {baseAnalytics.filterOptions.categories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </label>
       </div>
 
       {!hasCompleteData ? (
-        <div className="hostly-panel p-4">
-          <div style={{ fontSize: 14, color: "var(--hostly-ink-muted)", lineHeight: 1.5 }}>
-            {marginOrders.length === 0
-              ? "No hay ventas completamente cobradas en este periodo."
-              : "No hay líneas con coste de inventario completo en este periodo."}
-            {summary.incompleteCostCount > 0
-              ? ` ${lineCountLabel(summary.incompleteCostCount)} con coste incompleto.`
-              : ""}
-            {summary.excludedNoCostCount > 0
-              ? ` ${lineCountLabel(summary.excludedNoCostCount)} sin historial de coste.`
-              : ""}
-          </div>
-        </div>
+        <AnalyticsEmptyState
+          icon={<TrendingUp size={22} strokeWidth={2.1} />}
+          title="Aún no hay margen calculable"
+          description={emptyDescription}
+          hint={coverageHint || "Cuando haya ventas con coste registrado, verás el margen real por producto."}
+        />
       ) : (
         <>
           <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics">
-            <HostlyKpiCard title="Ventas" value={formatEur(summary.salesTotal)} />
-            <HostlyKpiCard title="Coste inventario" value={formatEur(summary.costTotal)} />
-            <HostlyKpiCard title="Margen bruto" value={formatEur(summary.grossMargin)} />
+            <HostlyKpiCard title="Ventas" value={formatEur(summary.salesTotal)} icon={<BadgeEuro size={17} />} className="hostly-analysis-kpi hostly-analysis-kpi--primary" />
+            <HostlyKpiCard title="Coste inventario" value={formatEur(summary.costTotal)} icon={<PackageSearch size={17} />} className="hostly-analysis-kpi" />
+            <HostlyKpiCard title="Margen bruto" value={formatEur(summary.grossMargin)} icon={<TrendingUp size={17} />} className="hostly-analysis-kpi hostly-analysis-kpi--success" />
             <HostlyKpiCard
               title="Margen %"
               value={formatPercent(summary.grossMarginPercent)}
               helper={`${summary.completeLineCount} líneas con coste`}
+              icon={<Percent size={17} />}
+              className="hostly-analysis-kpi hostly-analysis-kpi--success"
             />
           </div>
 

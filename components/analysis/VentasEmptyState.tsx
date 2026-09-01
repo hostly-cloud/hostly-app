@@ -1,21 +1,5 @@
-import type { CSSProperties } from "react";
-
-const placeholderStyle: CSSProperties = {
-  flex: 1,
-  minHeight: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "40px 24px",
-  borderRadius: 14,
-  border: "1px solid var(--hostly-line)",
-  background: "var(--hostly-surface-card-solid)",
-  color: "var(--hostly-ink-muted)",
-  fontSize: 14,
-  fontWeight: 600,
-  textAlign: "center",
-  lineHeight: 1.5,
-};
+import { AnalyticsEmptyState } from "@/components/analysis/AnalyticsEmptyState";
+import { Clock3, ReceiptText, TriangleAlert } from "lucide-react";
 
 export type VentasEmptyStateProps = {
   placeholder?: string;
@@ -23,9 +7,28 @@ export type VentasEmptyStateProps = {
 };
 
 export function VentasEmptyState({ placeholder, role }: VentasEmptyStateProps) {
+  const isError = role === "alert";
+  const isLoading = role === "status";
+
   return (
-    <div style={placeholderStyle} role={role} aria-live={role === "status" ? "polite" : undefined}>
-      {placeholder}
-    </div>
+    <AnalyticsEmptyState
+      role={role}
+      icon={
+        isError ? (
+          <TriangleAlert size={22} strokeWidth={2.1} />
+        ) : isLoading ? (
+          <Clock3 size={22} strokeWidth={2.1} />
+        ) : (
+          <ReceiptText size={22} strokeWidth={2.1} />
+        )
+      }
+      title={isError ? "No pudimos cargar los cobros" : isLoading ? "Actualizando ventas" : "Aún no hay cobros"}
+      description={placeholder ?? "No hay cobros confirmados en este periodo."}
+      hint={
+        isError || isLoading
+          ? undefined
+          : "Cuando confirmes un cobro, aquí verás ingresos, ticket medio y evolución."
+      }
+    />
   );
 }

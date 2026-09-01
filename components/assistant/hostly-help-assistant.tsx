@@ -65,11 +65,12 @@ export function HostlyHelpAssistant() {
         type="button"
         aria-expanded={open}
         aria-controls="hostly-help-panel"
+        data-hostly-help-trigger
         onClick={() => setOpen((value) => !value)}
         className="fixed bottom-4 right-4 z-[70] inline-flex min-h-12 items-center gap-2 rounded-full border border-[var(--hostly-navy-deep)] bg-[var(--hostly-navy-deep)] px-4 text-sm font-semibold text-white shadow-[var(--hostly-shadow-card)] hover:bg-[var(--hostly-navy-mid)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--hostly-accent)] sm:bottom-6 sm:right-6"
       >
         <span aria-hidden className="text-base">✦</span>
-        Ayuda
+        <span className="hostly-help-trigger__label">Ayuda</span>
       </button>
 
       {open ? (

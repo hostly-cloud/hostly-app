@@ -28,13 +28,38 @@ import { computeReservationRangeMetrics } from "@/lib/reservas/reservation-metri
 import { buildSalesDetailHref } from "@/lib/analytics/analysis-navigation";
 import { Timestamp, collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
+import { BadgeEuro, ChartNoAxesCombined, UsersRound, type LucideIcon } from "lucide-react";
 
 type AnalisisTab = "ventas" | "rentabilidad" | "horas" | "productos" | "comensales";
 
-const TABS: { id: AnalisisTab; label: string; placeholder: string }[] = [
-  { id: "ventas", label: "Ventas", placeholder: "No hay cobros confirmados en este periodo." },
-  { id: "rentabilidad", label: "Rentabilidad", placeholder: "Margen histórico por snapshot de coste" },
-  { id: "comensales", label: "Comensales", placeholder: "Sin reservas en este periodo." },
+const TABS: {
+  id: AnalisisTab;
+  label: string;
+  caption: string;
+  placeholder: string;
+  icon: LucideIcon;
+}[] = [
+  {
+    id: "ventas",
+    label: "Ventas",
+    caption: "Ingresos y cobros",
+    placeholder: "No hay cobros confirmados en este periodo.",
+    icon: ChartNoAxesCombined,
+  },
+  {
+    id: "rentabilidad",
+    label: "Rentabilidad",
+    caption: "Margen y costes",
+    placeholder: "Margen histórico por snapshot de coste",
+    icon: BadgeEuro,
+  },
+  {
+    id: "comensales",
+    label: "Comensales",
+    caption: "Reservas y asistencia",
+    placeholder: "Sin reservas en este periodo.",
+    icon: UsersRound,
+  },
 ];
 
 function todayYmd(): string {
@@ -1027,7 +1052,7 @@ export default function AnalisisPage() {
       lockViewport
       shellSurface="configLight"
     >
-      <div className="hostly-analytics-stack">
+      <div className="hostly-analytics-stack hostly-analysis-modern">
         <AnalisisTabsBar active={tab} onChange={setTab} />
         <AnalysisTabContent {...analysisTabContentProps} />
       </div>
@@ -1043,19 +1068,33 @@ function AnalisisTabsBar({
   onChange: (t: AnalisisTab) => void;
 }) {
   return (
-    <HostlySegmentedControl aria-label="Secciones de análisis">
-      {TABS.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          role="tab"
-          aria-selected={active === t.id}
-          onClick={() => onChange(t.id)}
-          className={hostlySegmentTabClassName()}
-        >
-          {t.label}
-        </button>
-      ))}
+    <HostlySegmentedControl
+      aria-label="Secciones de análisis"
+      className="hostly-analysis-tabs"
+      scrollable={false}
+    >
+      {TABS.map((t) => {
+        const Icon = t.icon;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            id={`hostly-analysis-tab-${t.id}`}
+            aria-controls={`hostly-analysis-panel-${t.id}`}
+            aria-selected={active === t.id}
+            onClick={() => onChange(t.id)}
+            className={hostlySegmentTabClassName("hostly-analysis-tab")}
+            data-analysis-tab={t.id}
+          >
+            <Icon size={18} strokeWidth={2.1} aria-hidden="true" />
+            <span className="hostly-analysis-tab__copy">
+              <strong>{t.label}</strong>
+              <small>{t.caption}</small>
+            </span>
+          </button>
+        );
+      })}
     </HostlySegmentedControl>
   );
 }

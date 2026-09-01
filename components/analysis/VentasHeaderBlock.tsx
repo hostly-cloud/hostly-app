@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AnalyticsDateRangeFields } from "@/components/analysis/AnalyticsDateRangeFields";
-import { HostlySectionHeader } from "@/components/ui/hostly";
+import { AnalyticsSectionHeader } from "@/components/analysis/AnalyticsSectionHeader";
+import { ArrowUpRight, ReceiptText } from "lucide-react";
 
 export type VentasHeaderBlockProps = {
   dateFrom: string;
@@ -20,14 +21,14 @@ export function VentasHeaderBlock({
   detailHref,
 }: VentasHeaderBlockProps) {
   return (
-    <div className="hostly-analytics-toolbar">
-      <div className="hostly-analytics-toolbar__filters min-w-0 flex-1 flex-col items-stretch gap-[var(--hostly-op-gap-sm)] sm:flex-row sm:items-center">
-        <HostlySectionHeader
-          title="Ventas"
-          description={`Cobros confirmados · ${formatDateEs(dateFrom)} – ${formatDateEs(dateTo)}`}
-          titleVariant="section"
-          className="hostly-section-header--operational w-full min-w-0 flex-1"
-        />
+    <div className="hostly-analysis-header-card">
+      <AnalyticsSectionHeader
+        eyebrow="Rendimiento comercial"
+        title="Ventas y cobros"
+        description={`${formatDateEs(dateFrom)} – ${formatDateEs(dateTo)} · Solo cobros confirmados`}
+        icon={<ReceiptText size={21} strokeWidth={2.1} />}
+      />
+      <div className="hostly-analysis-filterbar">
         <AnalyticsDateRangeFields
           dateFrom={dateFrom}
           dateTo={dateTo}
@@ -36,9 +37,10 @@ export function VentasHeaderBlock({
         />
         <Link
           href={detailHref}
-          className="hostly-button-secondary inline-flex min-h-11 shrink-0 items-center justify-center px-4"
+          className="hostly-analysis-detail-link"
         >
-          Ver cobros
+          <span>Ver cobros</span>
+          <ArrowUpRight size={17} strokeWidth={2.2} aria-hidden="true" />
         </Link>
       </div>
     </div>

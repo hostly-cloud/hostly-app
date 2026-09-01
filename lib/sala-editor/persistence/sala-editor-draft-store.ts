@@ -249,6 +249,21 @@ export async function loadSalaEditorDraft(
     return publishedRuntimeDocument;
   }
 
+  return loadSalaEditorDraftSource(rid);
+}
+
+/**
+ * Reads the persisted draft directly, without the TPV runtime compatibility
+ * redirect to the published snapshot. Operational readers use this only to
+ * recover missing legacy identity links; published geometry remains canonical.
+ */
+export async function loadSalaEditorDraftSource(
+  restaurantId: string,
+): Promise<SalaEditorDraftDocument | null> {
+  if (!isFirebaseConfigured) return null;
+
+  const rid = assertRestaurantId(restaurantId);
+
   const snap = await getDoc(draftDocRef(rid));
   if (!snap.exists()) return null;
 

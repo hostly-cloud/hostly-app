@@ -9,6 +9,7 @@ import {
 import type { VentasSelectorsCharts } from "@/components/analysis/hooks/useVentasSelectors";
 import { formatCurrency } from "@/components/analysis/utils";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ChartColumnIncreasing } from "lucide-react";
 
 const formatEuroValue = (value: number): string => {
   return formatCurrency(value);
@@ -35,11 +36,10 @@ export function VentasChartsBlock({ data }: VentasChartsBlockProps) {
   }
 
   return (
-    <div className="hostly-panel p-4">
-      <div
-        className="mb-2.5 text-[13px] font-extrabold tracking-tight text-[var(--hostly-ink-strong)]"
-      >
-        Ventas por día
+    <div className="hostly-panel hostly-analysis-chart-card p-4">
+      <div className="hostly-analysis-card-title">
+        <ChartColumnIncreasing size={17} aria-hidden="true" />
+        <span>Ventas por día</span>
       </div>
       <div className="h-[220px] w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%" className="min-w-0 [&_.recharts-surface]:outline-none">
