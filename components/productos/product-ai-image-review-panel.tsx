@@ -31,6 +31,7 @@ export type ProductAiImageReviewPanelProps = {
   open: boolean;
   productId?: string | null;
   productName: string;
+  productDescription?: string;
   fallbackImageUrl: string | null;
   imageDraftMode: "synced" | "manual_pending" | "not_visible";
   disabled?: boolean;
@@ -64,6 +65,10 @@ function friendlyError(error: unknown): string {
     switch (error.code) {
       case "IMAGE_GENERATION_NOT_CONFIGURED":
         return "La generación de imágenes todavía no está configurada en este entorno.";
+      case "IMAGE_GENERATION_BUDGET_EXCEEDED":
+        return "Se ha alcanzado el presupuesto de imágenes con IA.";
+      case "IMAGE_PROVIDER_RATE_LIMITED":
+        return "Hay demasiadas generaciones en curso. Inténtalo de nuevo en unos minutos.";
       case "IMAGE_PROVIDER_TIMEOUT":
         return "La generación ha tardado demasiado. Puedes volver a intentarlo.";
       case "IMAGE_PROVIDER_FAILED":
@@ -91,8 +96,6 @@ function skippedGenerationMessage(reason: string): string {
       return "Este producto necesita una imagen real de catálogo, no una imagen generada.";
     case "not_food":
       return "La generación está limitada por ahora a platos de comida.";
-    case "not_imported":
-      return "La generación está habilitada por ahora para platos importados.";
     default:
       return "Hostly no ha generado una imagen para este producto.";
   }
@@ -225,6 +228,7 @@ export function ProductAiImageReviewPanel({
   open,
   productId = null,
   productName,
+  productDescription = "",
   fallbackImageUrl,
   imageDraftMode,
   disabled = false,
@@ -315,7 +319,10 @@ export function ProductAiImageReviewPanel({
     setMessage(null);
     setError(null);
     try {
-      const result = await generateProductImageForReview(resolved.productId);
+      const result = await generateProductImageForReview(
+        resolved.productId,
+        productDescription,
+      );
       if (result.outcome === "generated") {
         lastAutomaticAppliedUrlRef.current = result.imageUrl;
         onImageUrlChange(result.imageUrl);
@@ -329,7 +336,15 @@ export function ProductAiImageReviewPanel({
     } finally {
       setBusyAction(null);
     }
-  }, [resolved, disabled, busyAction, catalogAttachingReference, onImageUrlChange, refresh]);
+  }, [
+    resolved,
+    disabled,
+    busyAction,
+    catalogAttachingReference,
+    productDescription,
+    onImageUrlChange,
+    refresh,
+  ]);
 
   const runReview = useCallback(
     async (action: ProductImageReviewAction) => {

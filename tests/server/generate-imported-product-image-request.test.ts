@@ -118,11 +118,16 @@ test("generator receives the server-resolved tenant and authenticated user", asy
         restaurantId: string;
         productId: string;
         userId: string;
+        description?: string;
       }
     | undefined;
 
   const response = await handleGenerateImportedProductImageRequest(
-    request({ productId: " product-1 ", confirmGeneration: true }),
+    request({
+      productId: " product-1 ",
+      confirmGeneration: true,
+      description: "  Lubina con patata y verduras  ",
+    }),
     {
       authenticate: async () => authContext(),
       generate: async (params) => {
@@ -130,6 +135,7 @@ test("generator receives the server-resolved tenant and authenticated user", asy
           restaurantId: params.restaurantId,
           productId: params.productId,
           userId: params.userId,
+          description: params.description,
         };
         return {
           outcome: "generated",
@@ -148,6 +154,7 @@ test("generator receives the server-resolved tenant and authenticated user", asy
     restaurantId: "restaurant-server",
     productId: "product-1",
     userId: "owner-1",
+    description: "Lubina con patata y verduras",
   });
   const body = await json(response);
   assert.equal(body.ok, true);
@@ -165,7 +172,7 @@ test("structured provider errors preserve their code and status", async () => {
       generate: async () => {
         throw new GenerateImportedProductImageError(
           "IMAGE_GENERATION_NOT_CONFIGURED",
-          "OPENAI_API_KEY no configurada",
+          "AI Gateway no está disponible para este proyecto",
           503,
         );
       },
@@ -175,5 +182,31 @@ test("structured provider errors preserve their code and status", async () => {
   assert.equal(response.status, 503);
   const body = await json(response);
   assert.equal(body.error, "IMAGE_GENERATION_NOT_CONFIGURED");
-  assert.equal(body.details, "OPENAI_API_KEY no configurada");
+  assert.equal(body.details, "AI Gateway no está disponible para este proyecto");
+});
+
+test("invalid description types are rejected before generation", async () => {
+  let generated = false;
+  const response = await handleGenerateImportedProductImageRequest(
+    request({
+      productId: "product-1",
+      confirmGeneration: true,
+      description: { unsafe: true },
+    }),
+    {
+      authenticate: async () => authContext(),
+      generate: async () => {
+        generated = true;
+        return {
+          outcome: "skipped",
+          productId: "product-1",
+          reason: "not_food",
+        };
+      },
+    },
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal((await json(response)).error, "INVALID_PRODUCT_DESCRIPTION");
+  assert.equal(generated, false);
 });

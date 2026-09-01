@@ -19,6 +19,7 @@ type Generate = (params: {
   restaurantId: string;
   productId: string;
   userId: string;
+  description?: string;
 }) => Promise<GenerateImportedProductImageResult>;
 
 export type GenerateImportedProductImageRequestDependencies = {
@@ -51,6 +52,7 @@ export async function handleGenerateImportedProductImageRequest(
     productId?: unknown;
     confirmGeneration?: unknown;
     restaurantId?: unknown;
+    description?: unknown;
   } | null;
 
   if (!body || typeof body !== "object") {
@@ -69,6 +71,13 @@ export async function handleGenerateImportedProductImageRequest(
   if (!productId) {
     return jsonError(400, "MISSING_PRODUCT_ID");
   }
+  if (body.description != null && typeof body.description !== "string") {
+    return jsonError(400, "INVALID_PRODUCT_DESCRIPTION");
+  }
+  const description =
+    typeof body.description === "string"
+      ? body.description.replace(/\s+/g, " ").trim().slice(0, 500)
+      : "";
   if (body.confirmGeneration !== true) {
     return jsonError(
       400,
@@ -83,6 +92,7 @@ export async function handleGenerateImportedProductImageRequest(
     restaurantId: authCtx.restaurantId,
     productId,
     userId: authCtx.uid,
+    ...(description ? { description } : {}),
   });
 
   return NextResponse.json({ ok: true as const, result });

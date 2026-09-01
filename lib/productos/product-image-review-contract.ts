@@ -39,7 +39,6 @@ export type ProductImageReviewResolvedState = {
   canSearchCatalog: boolean;
   catalogProvenance: ProductImageCatalogProvenance | null;
   generationReason:
-    | "not_imported"
     | "not_food"
     | "branded_or_beverage"
     | "invalid_product_name"

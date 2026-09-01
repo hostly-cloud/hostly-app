@@ -34,6 +34,7 @@ export type ProductImageEnrichment = {
   provider?: string;
   externalReference?: string;
   generatedAt?: number;
+  costUsd?: number;
   matchedAt?: number;
   reviewedAt?: number;
   reviewedBy?: string;
@@ -106,6 +107,8 @@ export function readProductImageEnrichment(
   const provider = readOptionalString(raw.provider);
   const externalReference = readOptionalString(raw.externalReference);
   const generatedAt = readOptionalFiniteNumber(raw.generatedAt);
+  const costUsdRaw = readOptionalFiniteNumber(raw.costUsd);
+  const costUsd = costUsdRaw == null ? undefined : Math.max(0, costUsdRaw);
   const matchedAt = readOptionalFiniteNumber(raw.matchedAt);
   const reviewedAt = readOptionalFiniteNumber(raw.reviewedAt);
   const reviewedBy = readOptionalString(raw.reviewedBy);
@@ -126,6 +129,7 @@ export function readProductImageEnrichment(
     ...(provider ? { provider } : {}),
     ...(externalReference ? { externalReference } : {}),
     ...(generatedAt != null ? { generatedAt } : {}),
+    ...(costUsd != null ? { costUsd } : {}),
     ...(matchedAt != null ? { matchedAt } : {}),
     ...(reviewedAt != null ? { reviewedAt } : {}),
     ...(reviewedBy ? { reviewedBy } : {}),
@@ -161,6 +165,7 @@ export function buildPendingAutomaticProductImageEnrichment(args: {
   provider?: string;
   externalReference?: string;
   generatedAt?: number;
+  costUsd?: number;
   matchedAt?: number;
   sourceUrl?: string;
   imageSourceUrl?: string;
@@ -187,6 +192,9 @@ export function buildPendingAutomaticProductImageEnrichment(args: {
       ? { externalReference: args.externalReference.trim() }
       : {}),
     ...(args.generatedAt != null ? { generatedAt: args.generatedAt } : {}),
+    ...(typeof args.costUsd === "number" && Number.isFinite(args.costUsd)
+      ? { costUsd: Math.max(0, args.costUsd) }
+      : {}),
     ...(args.matchedAt != null ? { matchedAt: args.matchedAt } : {}),
     ...(args.sourceUrl?.trim() ? { sourceUrl: args.sourceUrl.trim() } : {}),
     ...(args.imageSourceUrl?.trim()

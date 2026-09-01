@@ -90,13 +90,18 @@ export type GenerateProductImageClientResult =
 
 export async function generateProductImageForReview(
   productId: string,
+  description?: string,
 ): Promise<GenerateProductImageClientResult> {
   const response = await authenticatedApiFetch(
     "/api/catalog/generate-product-image",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ productId, confirmGeneration: true }),
+      body: JSON.stringify({
+        productId,
+        confirmGeneration: true,
+        ...(description?.trim() ? { description: description.trim() } : {}),
+      }),
     },
   );
   const body = await readJson<{
