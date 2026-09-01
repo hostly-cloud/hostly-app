@@ -43,3 +43,15 @@ test("ventas declara pagos cobrados como fuente y no pedidos abiertos", () => {
   assert.doesNotMatch(table, /<th>Pedido<\/th>/);
   assert.doesNotMatch(insights, /Mejor rendimiento|Peor rendimiento|Recomendaciones/);
 });
+
+test("comensales distingue la falta de reservas de un error de lectura", () => {
+  const page = readFileSync("app/dashboard/analisis/page.tsx", "utf8");
+  const section = readFileSync("components/analysis/ComensalesAnalyticsSection.tsx", "utf8");
+  const reservations = readFileSync("lib/firestore/reservations.ts", "utf8");
+
+  assert.doesNotMatch(page, /Próximamente: análisis de comensales/);
+  assert.match(page, /reservationsState/);
+  assert.match(section, /Cargando reservas y comensales/);
+  assert.match(section, /No se pudieron cargar las reservas/);
+  assert.match(reservations, /onListenError\?\./);
+});

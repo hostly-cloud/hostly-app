@@ -15,6 +15,7 @@ import type { ZonasAnalyticsSectionProps } from "@/components/analysis/ZonasAnal
 export type { ComensalesDailyAttendanceRow, ComensalesDailyReservationsRow } from "@/components/analysis/hooks/useComensalesSelectors";
 
 export type ComensalesAnalyticsSectionProps = ZonasAnalyticsSectionProps & {
+  dataState?: "loading" | "ready" | "error";
   dateFrom: string;
   dateTo: string;
   setDateFrom: Dispatch<SetStateAction<string>>;
@@ -26,6 +27,7 @@ export type ComensalesAnalyticsSectionProps = ZonasAnalyticsSectionProps & {
 };
 
 export function ComensalesAnalyticsSection({
+  dataState = "ready",
   dateFrom,
   dateTo,
   setDateFrom,
@@ -61,15 +63,27 @@ export function ComensalesAnalyticsSection({
         formatDateEs={formatDateEs}
       />
 
-      <ComensalesContentBlock
-        compactViewZonas={comensalesViewState.compactViewZonas}
-        comensalesKpis={comensalesKpis}
-        comensalesCharts={comensalesCharts}
-        zonasSectionProps={{
-          compactViewZonas,
-          ...zonasSectionProps,
-        }}
-      />
+      {dataState === "loading" ? (
+        <div className="hostly-panel p-4" role="status" aria-live="polite">
+          <div className="hostly-muted text-sm">Cargando reservas y comensales…</div>
+        </div>
+      ) : dataState === "error" ? (
+        <div className="hostly-panel p-4" role="alert">
+          <div className="hostly-muted text-sm leading-relaxed">
+            No se pudieron cargar las reservas. Revisa tu conexión o tus permisos e inténtalo de nuevo.
+          </div>
+        </div>
+      ) : (
+        <ComensalesContentBlock
+          compactViewZonas={comensalesViewState.compactViewZonas}
+          comensalesKpis={comensalesKpis}
+          comensalesCharts={comensalesCharts}
+          zonasSectionProps={{
+            compactViewZonas,
+            ...zonasSectionProps,
+          }}
+        />
+      )}
     </div>
   );
 }

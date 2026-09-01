@@ -139,6 +139,7 @@ export function listenReservationsForRange(
   dateFrom: string,
   dateTo: string,
   onData: (items: Reservation[]) => void,
+  onListenError?: (error: unknown) => void,
 ): Unsubscribe {
   const rid = restaurantId.trim();
   const from = dateFrom.trim();
@@ -167,6 +168,7 @@ export function listenReservationsForRange(
     (err) => {
       console.error("listenReservationsForRange Firestore error", err);
       onData([]);
+      onListenError?.(err);
     },
   );
 }
@@ -279,4 +281,3 @@ export async function updateReservation(
     rethrowWithMessage(e);
   }
 }
-
