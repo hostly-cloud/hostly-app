@@ -25,10 +25,12 @@ import {
   ReservationFloorMapPicker,
   type ReservationFloorMapPickerConfirm,
 } from "@/components/reservas/reservation-floor-map-picker";
+import { ReservationDayToolbar } from "@/components/reservas/reservation-day-toolbar";
 import {
   HostlyStatusBadge,
   type HostlyStatusBadgeTone,
 } from "@/components/ui/hostly/data-table/HostlyStatusBadge";
+import { shiftReservationDay } from "@/lib/reservas/reservation-day";
 
 const upcomingRowStyle: CSSProperties = {
   display: "flex",
@@ -513,56 +515,24 @@ export default function ReservasView() {
                 <h1 className="hostly-mobile-title">Reservas</h1>
                 <p className="hostly-mobile-subtitle">Gestiona llegadas, ausencias y ocupación</p>
               </div>
-              <div className="hostly-mobile-header-actions">
-                <button
-                  type="button"
-                  className="hostly-button-primary hostly-button-compact"
-                  onClick={() => {
-                    setSaveError(null);
-                    setDraft((d) => ({ ...d, date: viewDate }));
-                    setCreating(true);
-                  }}
-                >
-                  Nueva reserva
-                </button>
-              </div>
             </div>
           </header>
 
-          <div className="hostly-mobile-section !hidden md:!flex md:justify-end md:!pb-2 md:!pt-3">
-            <button
-              type="button"
-              className="hostly-button-primary shrink-0"
-              onClick={() => {
+          <section className="hostly-mobile-section hostly-reservations-day-section !pt-2 !pb-0">
+            <ReservationDayToolbar
+              dayLabel={formatDayLabel(viewDate)}
+              isToday={viewDate === todayYmd()}
+              value={viewDate}
+              onChange={setViewDate}
+              onPrevious={() => setViewDate((current) => shiftReservationDay(current, -1))}
+              onToday={() => setViewDate(todayYmd())}
+              onNext={() => setViewDate((current) => shiftReservationDay(current, 1))}
+              onCreate={() => {
                 setSaveError(null);
-                setDraft((d) => ({ ...d, date: viewDate }));
+                setDraft((current) => ({ ...current, date: viewDate }));
                 setCreating(true);
               }}
-            >
-              Nueva reserva
-            </button>
-          </div>
-
-          <section className="hostly-mobile-section !pt-2 !pb-0">
-            <div className="hostly-mobile-filter-bar !border-0 !bg-transparent !px-0 !py-0">
-              <div className="hostly-mobile-card hostly-mobile-card--compact w-full min-w-0 shrink-0">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="hostly-mobile-text-caption">Día seleccionado</div>
-                    <div className="mt-0.5 text-base font-semibold capitalize text-[var(--hostly-navy-deep)]">
-                      {formatDayLabel(viewDate)}
-                    </div>
-                  </div>
-                  <input
-                    type="date"
-                    className="hostly-input max-w-[158px] !text-sm"
-                    value={viewDate}
-                    onChange={(e) => setViewDate(e.target.value)}
-                    aria-label="Cambiar fecha"
-                  />
-                </div>
-              </div>
-            </div>
+            />
           </section>
 
           <section className="hostly-mobile-section !py-2">

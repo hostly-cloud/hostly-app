@@ -243,6 +243,72 @@
 /* Reservas: fixed chrome + one flexible reservation list.                    */
 /* -------------------------------------------------------------------------- */
 
+.hostly-reservations-day-toolbar {
+  display: grid;
+  grid-template-areas:
+    "copy create"
+    "controls controls";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--hostly-op-gap-sm) var(--hostly-op-gap-md);
+  padding: var(--hostly-m-card-pad-compact);
+}
+
+.hostly-reservations-day-toolbar__copy {
+  grid-area: copy;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--hostly-op-gap-xs);
+}
+
+.hostly-reservations-day-toolbar__day {
+  overflow: hidden;
+  color: var(--hostly-navy-deep);
+  font-size: var(--hostly-op-module-title-size);
+  font-weight: 700;
+  line-height: 1.1;
+  text-transform: capitalize;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hostly-reservations-day-toolbar__controls {
+  grid-area: controls;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hostly-op-gap-sm);
+}
+
+.hostly-reservations-day-stepper {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--hostly-op-gap-xs);
+}
+
+.hostly-reservations-day-stepper .hostly-ds-button {
+  flex: 1 1 auto;
+}
+
+.hostly-reservations-day-stepper .hostly-ds-button[aria-pressed="true"] {
+  border-color: var(--hostly-navy-mid) !important;
+  background: var(--hostly-ice-100) !important;
+  color: var(--hostly-navy-deep) !important;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-reservations-day-toolbar__date {
+  flex: 1 1 auto;
+}
+
+.hostly-reservations-day-toolbar__create {
+  grid-area: create;
+}
+
 .hostly-operation-shell[data-operation-module="reservas"] .hostly-mobile-content {
   flex: 1 1 0;
   min-height: 0;
@@ -315,6 +381,9 @@
 /* long form on top of the list. The form already owns its internal scroll.   */
 .hostly-operation-shell[data-operation-module="reservas"]
   .hostly-mobile-stack:has(form)
+  > .hostly-reservations-day-section,
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-stack:has(form)
   > section:has(.hostly-mobile-filter-bar),
 .hostly-operation-shell[data-operation-module="reservas"]
   .hostly-mobile-stack:has(form)
@@ -355,6 +424,20 @@
 /* -------------------------------------------------------------------------- */
 
 @media (min-width: 768px) {
+  .hostly-reservations-day-toolbar {
+    grid-template-areas: "copy controls create";
+    grid-template-columns: minmax(min-content, 0.7fr) minmax(0, 1.8fr) auto;
+    padding: var(--hostly-op-gap-sm) var(--hostly-op-gap-md);
+  }
+
+  .hostly-reservations-day-toolbar__controls {
+    flex-wrap: nowrap;
+  }
+
+  .hostly-reservations-day-stepper .hostly-ds-button {
+    flex: 0 1 auto;
+  }
+
   .hostly-operation-shell[data-operation-module="reservas"]
     .hostly-mobile-kpi-grid--cols-4 {
     grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -392,6 +475,20 @@
     .hostly-mobile-kpi {
     flex: 0 0 112px;
     scroll-snap-align: start;
+  }
+
+  .hostly-reservations-day-toolbar {
+    align-items: stretch;
+  }
+
+  .hostly-reservations-day-toolbar__controls,
+  .hostly-reservations-day-stepper {
+    width: 100%;
+  }
+
+  .hostly-reservations-day-toolbar__date,
+  .hostly-reservations-day-toolbar__create {
+    width: 100%;
   }
 
   [data-hostly-config-shell]:not(.hostly-config-shell--hub) {
