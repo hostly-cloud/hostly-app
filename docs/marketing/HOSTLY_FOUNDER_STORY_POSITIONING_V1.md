@@ -14,6 +14,25 @@ La observación central es sencilla:
 
 Hostly nace para resolver esa distancia.
 
+## Diferencia de origen
+
+Hostly no parte de una lista de funcionalidades escrita desde fuera del restaurante. Parte de problemas vividos dentro del servicio.
+
+La idea no es "qué puede programarse", sino:
+
+- qué hace perder tiempo a un camarero;
+- qué confunde a cocina y barra;
+- qué obliga a un manager a revisar demasiadas pantallas;
+- qué se rompe cuando el restaurante entra en hora punta;
+- qué cuesta explicar a un empleado nuevo;
+- qué información llega tarde;
+- qué pasos se repiten sin aportar valor;
+- qué cosas un TPV obliga a hacer porque el software está diseñado así, aunque el restaurante no trabaje así.
+
+La propuesta de Hostly es convertir años de fricción operativa en decisiones de producto.
+
+No se trata de afirmar que los programadores no entienden hostelería. La diferencia es que en Hostly la dirección del producto nace de alguien que ha vivido el problema como camarero y como responsable de operación, y la tecnología se utiliza para resolverlo.
+
 ## Tesis de marca
 
 **La nueva generación de software de hostelería.**
@@ -23,6 +42,16 @@ Y la frase que explica el origen del producto:
 **No hemos actualizado el TPV de siempre. Hemos empezado otra vez.**
 
 No significa romper con todo lo que los profesionales ya conocen. Significa conservar los conceptos que funcionan —mesa, comanda, cocina, barra, cuenta, cobro, reservas— y rediseñar la experiencia alrededor de cómo espera usar software una persona en 2027.
+
+## Promesa de producto
+
+**Hecho desde el servicio, no desde una lista de funcionalidades.**
+
+Hostly debe transmitir que detrás de cada flujo hay una pregunta operativa:
+
+> "¿Cómo haría esto más fácil alguien que tiene que resolverlo en mitad de un servicio?"
+
+Eso convierte la experiencia previa del fundador en una ventaja de producto, no solo en una historia de marca.
 
 ## La promesa clave: moderno sin curva de aprendizaje absurda
 
@@ -65,26 +94,30 @@ Frases principales:
 
 - **La nueva generación de software de hostelería.**
 - **No hemos actualizado el TPV de siempre. Hemos empezado otra vez.**
+- **Hecho desde el servicio, no desde una lista de funcionalidades.**
+- **20 años viendo los problemas. Ahora los estamos convirtiendo en producto.**
 - **Nuevo por fuera. Familiar desde el primer servicio.**
 - **Moderno sin complicar lo que ya funciona.**
 - **Si sabes trabajar en un restaurante, sabes orientarte en Hostly.**
 - **La tecnología cambia. El servicio sigue teniendo que ser sencillo.**
-- **Diseñado por experiencia de hostelería, no desde un despacho.**
+- **Diseñado desde la experiencia de hostelería.**
 - **Todo lo que necesitas reconocer. Nada de la complejidad que no necesitas.**
 
 ## Founder-led story — versión corta
 
-> Llevo 20 años trabajando en hostelería. He trabajado con distintos TPV, he visto servicios buenos, servicios caóticos y muchas formas diferentes de gestionar un restaurante. Y durante años he tenido la misma sensación: el software que usamos no ha evolucionado al mismo ritmo que el resto de la tecnología. Hostly nace de esa experiencia. No para añadir otra capa al TPV de siempre, sino para empezar otra vez y construir cómo debería sentirse hoy el software de un restaurante.
+> Llevo 20 años trabajando en hostelería. He trabajado con distintos TPV, he visto servicios buenos, servicios caóticos y muchas formas diferentes de gestionar un restaurante. Durante años he ido detectando las mismas fricciones: pasos que sobran, pantallas que confunden, información que llega tarde y sistemas que obligan al restaurante a adaptarse al software. Hostly nace de esa experiencia. No para añadir otra capa al TPV de siempre, sino para convertir esos problemas reales en un producto nuevo, moderno y mucho más natural para quien trabaja en servicio.
 
 ## Founder-led story — versión anuncio / vídeo
 
 **Hook**
 
-"Llevo 20 años trabajando en hostelería y hay algo que nunca he entendido."
+"Llevo 20 años trabajando en hostelería y durante todo ese tiempo he ido apuntando mentalmente las mismas cosas."
 
 **Desarrollo**
 
-"Nuestros móviles, nuestros coches y casi todo el software que usamos ha cambiado muchísimo. Pero entras en muchos restaurantes y el TPV todavía parece de otra época. Y no porque le falten funciones. Muchas veces le sobra complejidad."
+"Pasos que sobran. Botones donde no deberían estar. Información que llega tarde. Pantallas que un camarero nuevo tarda demasiado en entender. Sistemas que funcionan, sí, pero que parecen pensados desde fuera del servicio."
+
+"Yo he estado al otro lado de esa pantalla. Como camarero y como responsable de restaurante."
 
 **Resolución**
 
@@ -92,7 +125,38 @@ Frases principales:
 
 **Cierre**
 
-"La nueva generación de software de hostelería. Moderna, visual y diseñada para que un equipo la entienda desde el primer servicio."
+"La nueva generación de software de hostelería. Construida desde problemas reales de servicio y diseñada para que un equipo la entienda desde el primer día."
+
+## Concepto de campaña fundador
+
+### Pieza 1 — "Yo he estado al otro lado"
+
+Hook:
+
+**"Este software no nació en una reunión sobre funcionalidades. Nació durante 20 años de servicio."**
+
+Desarrollo:
+
+Mostrar escenas o recreaciones de problemas reconocibles:
+- camarero buscando una acción;
+- cocina esperando una comanda;
+- manager cambiando entre herramientas;
+- nueva incorporación preguntando cómo hacer algo básico.
+
+Cierre:
+
+**"Yo he estado al otro lado de esa pantalla. Por eso hicimos Hostly."**
+
+### Pieza 2 — "Problema -> producto"
+
+Formato repetible para contenido orgánico:
+
+- "Durante años me molestó esto en un TPV..."
+- mostrar el problema;
+- "Así lo hemos resuelto en Hostly.";
+- enseñar la interacción real.
+
+Esta serie puede convertirse en una de las principales líneas de contenido del fundador porque demuestra experiencia sin necesidad de atacar competidores.
 
 ## Demostración visual que debe respaldar el mensaje
 
@@ -133,6 +197,7 @@ La promesa de marketing debe condicionar producto:
 - No presentar 2027 como una especificación técnica.
 - No usar futurismo visual que haga parecer Hostly experimental o poco fiable.
 - No insinuar que todos los TPV actuales son malos.
+- No decir que "los programadores no entienden hostelería"; la comparación debe ser entre origen del producto y problema vivido, no entre profesiones.
 - No atacar competidores.
 
 ## Concepto de campaña 2027
