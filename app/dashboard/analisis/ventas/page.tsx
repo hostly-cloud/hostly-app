@@ -11,12 +11,17 @@ import {
 } from "@/components/ui/hostly";
 import { AnalyticsDateRangeFields } from "@/components/analysis/AnalyticsDateRangeFields";
 import { useAuth } from "@/components/auth/auth-context";
+import {
+  countDistinctPaidSales,
+  paidSaleIdentity,
+} from "@/lib/analytics/sales-payment-analytics";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import { paymentSaleAmount } from "@/lib/payments/paymentSaleAmount";
 import { summarizePaymentsForCierre } from "@/lib/payments/summarizePaymentsForCierre";
 
 type PaymentDoc = {
   id: string;
+  orderId?: string;
   createdAt?: unknown;
   status?: string;
   restaurantId?: string;
@@ -31,8 +36,15 @@ type PaymentDoc = {
   finalTotal?: unknown;
   discountTotal?: unknown;
   tip?: unknown;
-  received?: unknown;
 };
+
+function paymentMethodLabel(method: string | undefined): string {
+  const normalized = (method ?? "").toLowerCase();
+  if (normalized === "cash") return "Efectivo";
+  if (normalized === "card") return "Tarjeta";
+  if (normalized === "voucher") return "Voucher";
+  return "Sin indicar";
+}
 
 function readTsMs(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -106,12 +118,6 @@ function ymdEndMs(ymd: string): number | null {
   return endOfDayMs(d);
 }
 
-function isCreatedToday(createdAt: unknown): boolean {
-  const ms = readTsMs(createdAt);
-  if (ms == null) return false;
-  return ms >= startOfTodayMs() && ms <= endOfTodayMs();
-}
-
 function n(v: unknown): number {
   const num = typeof v === "number" ? v : Number(v);
   return Number.isFinite(num) ? num : 0;
@@ -134,12 +140,14 @@ function formatNumberEU(value: unknown): string {
 export default function AnalisisVentasPage() {
   const { restaurantId, ready: authReady } = useAuth();
   const [payments, setPayments] = useState<PaymentDoc[]>([]);
+  const [paymentsState, setPaymentsState] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
   const [dateFilter, setDateFilter] = useState<"today" | "yesterday" | "range">(
     "today",
   );
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [isPrintReady, setIsPrintReady] = useState(false);
   const [shiftFilter, setShiftFilter] = useState<
     "all" | "morning" | "afternoon" | "night"
   >("all");
@@ -148,7 +156,16 @@ export default function AnalisisVentasPage() {
   >("all");
 
   useEffect(() => {
-    if (!authReady || !isFirebaseConfigured || !restaurantId) return;
+    if (!authReady) return;
+    if (!isFirebaseConfigured || !restaurantId) {
+      queueMicrotask(() => {
+        setPayments([]);
+        setPaymentsState("ready");
+      });
+      return;
+    }
+
+    queueMicrotask(() => setPaymentsState("loading"));
 
     const q = query(
       collection(db, "payments"),
@@ -157,39 +174,49 @@ export default function AnalisisVentasPage() {
     );
 
     let cancelled = false;
-    const unsub = onSnapshot(q, (snapshot) => {
-      if (cancelled) return;
-      const list = snapshot.docs
-        .map((d) => {
-          const data = d.data() as Record<string, unknown>;
-          return {
-            id: d.id,
-            createdAt: data.createdAt,
-            status: typeof data.status === "string" ? data.status : undefined,
-            restaurantId:
-              typeof data.restaurantId === "string" ? data.restaurantId : undefined,
-            waiterId: typeof data.waiterId === "string" ? data.waiterId : undefined,
-            waiterEmail:
-              typeof data.waiterEmail === "string" ? data.waiterEmail : undefined,
-            userId: typeof data.userId === "string" ? data.userId : undefined,
-            createdBy:
-              typeof data.createdBy === "string" ? data.createdBy : undefined,
-            paymentMethod:
-              typeof data.paymentMethod === "string" ? data.paymentMethod : undefined,
-            ticketNumber:
-              typeof data.ticketNumber === "string" ? data.ticketNumber : undefined,
-            voucherNumber:
-              typeof data.voucherNumber === "string" ? data.voucherNumber : undefined,
-            total: data.total,
-            finalTotal: data.finalTotal,
-            discountTotal: data.discountTotal,
-            tip: data.tip,
-            received: data.received,
-          } satisfies PaymentDoc;
-        })
-        .sort((a, b) => (readTsMs(b.createdAt) ?? 0) - (readTsMs(a.createdAt) ?? 0));
-      setPayments(list);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        if (cancelled) return;
+        const list = snapshot.docs
+          .map((d) => {
+            const data = d.data() as Record<string, unknown>;
+            return {
+              id: d.id,
+              orderId: typeof data.orderId === "string" ? data.orderId : undefined,
+              createdAt: data.createdAt,
+              status: typeof data.status === "string" ? data.status : undefined,
+              restaurantId:
+                typeof data.restaurantId === "string" ? data.restaurantId : undefined,
+              waiterId: typeof data.waiterId === "string" ? data.waiterId : undefined,
+              waiterEmail:
+                typeof data.waiterEmail === "string" ? data.waiterEmail : undefined,
+              userId: typeof data.userId === "string" ? data.userId : undefined,
+              createdBy:
+                typeof data.createdBy === "string" ? data.createdBy : undefined,
+              paymentMethod:
+                typeof data.paymentMethod === "string" ? data.paymentMethod : undefined,
+              ticketNumber:
+                typeof data.ticketNumber === "string" ? data.ticketNumber : undefined,
+              voucherNumber:
+                typeof data.voucherNumber === "string" ? data.voucherNumber : undefined,
+              total: data.total,
+              finalTotal: data.finalTotal,
+              discountTotal: data.discountTotal,
+              tip: data.tip,
+            } satisfies PaymentDoc;
+          })
+          .sort((a, b) => (readTsMs(b.createdAt) ?? 0) - (readTsMs(a.createdAt) ?? 0));
+        setPayments(list);
+        setPaymentsState("ready");
+      },
+      (error) => {
+        if (cancelled) return;
+        console.error("AnalisisVentasPage payments listener error", error);
+        setPayments([]);
+        setPaymentsState("error");
+      },
+    );
 
     return () => {
       cancelled = true;
@@ -240,12 +267,16 @@ export default function AnalisisVentasPage() {
     });
   }, [dateFilter, dateFrom, dateTo, payments, paymentFilter, shiftFilter]);
 
-  const { totals, byMethod, totalVoucher, paymentsCount } = useMemo(
+  const { totals, byMethod, totalVoucher } = useMemo(
     () => summarizePaymentsForCierre(filteredPayments),
     [filteredPayments],
   );
 
-  const avgTicket = paymentsCount > 0 ? totals.totalVentas / paymentsCount : 0;
+  const ticketsCount = useMemo(
+    () => countDistinctPaidSales(filteredPayments),
+    [filteredPayments],
+  );
+  const avgTicket = ticketsCount > 0 ? totals.totalVentas / ticketsCount : 0;
 
   const salesByHour = useMemo(() => {
     const out = Array.from({ length: 24 }, (_, h) => ({ hour: h, total: 0 }));
@@ -281,17 +312,22 @@ export default function AnalisisVentasPage() {
   const waiterEntries = useMemo(() => {
     const salesByWaiter: Record<
       string,
-      { total: number; tips: number; count: number; email: string | null }
+      { total: number; tips: number; ticketIds: Set<string>; email: string | null }
     > = {};
 
     for (const p of filteredPayments) {
       const waiterId = p.waiterId || p.userId || p.createdBy || "unknown";
       if (!salesByWaiter[waiterId]) {
-        salesByWaiter[waiterId] = { total: 0, tips: 0, count: 0, email: p.waiterEmail || null };
+        salesByWaiter[waiterId] = {
+          total: 0,
+          tips: 0,
+          ticketIds: new Set<string>(),
+          email: p.waiterEmail || null,
+        };
       }
       salesByWaiter[waiterId]!.total += paymentSaleAmount(p);
       salesByWaiter[waiterId]!.tips += n(p.tip);
-      salesByWaiter[waiterId]!.count += 1;
+      salesByWaiter[waiterId]!.ticketIds.add(paidSaleIdentity(p));
     }
 
     return Object.entries(salesByWaiter).sort((a, b) => b[1].total - a[1].total);
@@ -317,15 +353,11 @@ export default function AnalisisVentasPage() {
         p.ticketNumber || "",
         dateLabel,
         formatNumberEU(paymentSaleAmount(p)),
-        formatNumberEU(p.received),
+        formatNumberEU(paymentSaleAmount(p) + n(p.tip)),
         formatNumberEU(p.tip),
         formatNumberEU(p.discountTotal ?? 0),
-        (p.paymentMethod ?? "").toLowerCase() === "cash"
-          ? "Efectivo"
-          : (p.paymentMethod ?? "").toLowerCase() === "voucher"
-            ? "Voucher"
-            : "Tarjeta",
-        p.waiterEmail || p.waiterId || "",
+        paymentMethodLabel(p.paymentMethod),
+        p.waiterEmail || "Equipo",
         p.voucherNumber || "",
       ];
     });
@@ -495,8 +527,8 @@ export default function AnalisisVentasPage() {
           <div className="hostly-analytics-toolbar__actions">
             <button
               type="button"
+              disabled={paymentsState !== "ready"}
               onClick={() => {
-                setIsPrintReady(true);
                 window.requestAnimationFrame(() => window.print());
               }}
               className="hostly-button-secondary hostly-button-compact"
@@ -505,6 +537,7 @@ export default function AnalisisVentasPage() {
             </button>
             <button
               type="button"
+              disabled={paymentsState !== "ready"}
               onClick={handleExportCSV}
               className="hostly-button-secondary hostly-button-compact"
             >
@@ -513,12 +546,24 @@ export default function AnalisisVentasPage() {
           </div>
         </div>
 
+        {paymentsState === "loading" ? (
+          <div className="hostly-panel p-4" role="status" aria-live="polite">
+            <div className="hostly-muted text-sm">Cargando cobros confirmados…</div>
+          </div>
+        ) : paymentsState === "error" ? (
+          <div className="hostly-panel p-4" role="alert">
+            <div className="hostly-muted text-sm leading-relaxed">
+              No se pudieron cargar los cobros. Revisa tu conexión o tus permisos e inténtalo de nuevo.
+            </div>
+          </div>
+        ) : (
+          <>
         <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics hostly-kpi-grid-unified--5">
-          <HostlyKpiCard title="Ventas del día" value={formatEur(totals.totalVentas)} />
+          <HostlyKpiCard title="Ventas" value={formatEur(totals.totalVentas)} helper={dateLabel} />
           <HostlyKpiCard title="Propinas" value={formatEur(totals.totalPropinas)} />
           <HostlyKpiCard title="Total cobrado" value={formatEur(totals.totalCobrado)} />
           <HostlyKpiCard title="Ticket medio" value={`${avgTicket.toFixed(2)} €`} />
-          <HostlyKpiCard title="Tickets" value={paymentsCount} />
+          <HostlyKpiCard title="Tickets" value={ticketsCount} />
         </div>
 
         <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics hostly-kpi-grid-unified--5">
@@ -569,10 +614,10 @@ export default function AnalisisVentasPage() {
               >
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-[color:var(--hostly-ink-strong)]">
-                    {w.email ? w.email.split("@")[0] : id}
+                    {w.email ? w.email.split("@")[0] : "Equipo"}
                   </div>
                   <div className="hostly-muted text-xs">
-                    {w.email || "Sin email"} · {w.count} tickets
+                    {w.email ? `${w.email} · ` : ""}{w.ticketIds.size} tickets
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
@@ -592,14 +637,7 @@ export default function AnalisisVentasPage() {
             {filteredPayments.slice(0, 30).map((p) => {
               const ms = readTsMs(p.createdAt);
               const method = (p.paymentMethod ?? "").toLowerCase();
-              const methodLabel =
-                method === "cash"
-                  ? "Efectivo"
-                  : method === "card"
-                    ? "Tarjeta"
-                    : method === "voucher"
-                      ? "Voucher"
-                      : "—";
+              const methodLabel = paymentMethodLabel(p.paymentMethod);
               return (
                 <div
                   key={p.id}
@@ -629,10 +667,12 @@ export default function AnalisisVentasPage() {
             })}
 
             {filteredPayments.length === 0 ? (
-              <div className="hostly-muted text-sm">Sin pagos.</div>
+              <div className="hostly-muted text-sm">No hay cobros confirmados para estos filtros.</div>
             ) : null}
           </div>
         </HostlySurface>
+          </>
+        )}
       </div>
 
       <style jsx global>{`
@@ -677,7 +717,7 @@ export default function AnalisisVentasPage() {
             <div>Efectivo: {formatNumberEU(byMethod.cash)} €</div>
             <div>Tarjeta: {formatNumberEU(byMethod.card)} €</div>
             <div>Voucher: {formatNumberEU(totalVoucher)} €</div>
-            <div>Tickets: {paymentsCount}</div>
+            <div>Tickets: {ticketsCount}</div>
             <div>Ticket medio: {formatNumberEU(avgTicket)} €</div>
           </div>
         </div>
@@ -685,4 +725,3 @@ export default function AnalisisVentasPage() {
     </ModulePageShell>
   );
 }
-
