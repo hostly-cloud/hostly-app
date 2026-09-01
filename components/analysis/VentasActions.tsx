@@ -10,7 +10,7 @@ export type VentasActionsProps = {
   onExportJson?: () => void;
 };
 
-export function VentasActions({ data, onCopySummary, onCopyKpis, onExportJson }: VentasActionsProps) {
+export function VentasActions({ data, onCopySummary }: VentasActionsProps) {
   void data;
 
   return (
@@ -21,20 +21,6 @@ export function VentasActions({ data, onCopySummary, onCopyKpis, onExportJson }:
         onClick={onCopySummary}
       >
         Copiar resumen
-      </HostlyButton>
-      <HostlyButton
-        variant="tableAction"
-        disabled={!onCopyKpis}
-        onClick={onCopyKpis}
-      >
-        Copiar KPIs
-      </HostlyButton>
-      <HostlyButton
-        variant="tableAction"
-        disabled={!onExportJson}
-        onClick={onExportJson}
-      >
-        Exportar JSON
       </HostlyButton>
     </div>
   );

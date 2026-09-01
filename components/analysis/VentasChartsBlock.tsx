@@ -7,10 +7,11 @@ import {
   analysisRechartsTooltipProps,
 } from "@/components/analysis/analysis-recharts-surface";
 import type { VentasSelectorsCharts } from "@/components/analysis/hooks/useVentasSelectors";
+import { formatCurrency } from "@/components/analysis/utils";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const formatEuroValue = (value: number): string => {
-  return `${value.toFixed(2)} €`;
+  return formatCurrency(value);
 };
 
 const formatEuroAxisValue = (value: number): string => {

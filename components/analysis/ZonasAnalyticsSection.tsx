@@ -9,7 +9,6 @@ import {
   analysisRechartsTooltipProps,
 } from "@/components/analysis/analysis-recharts-surface";
 import { AnalysisSectionEnd } from "@/components/analysis/AnalysisSectionEnd";
-import { ZonasActions } from "@/components/analysis/ZonasActions";
 import { ZonasKpiBlock } from "@/components/analysis/ZonasKpiBlock";
 import { ZonasTable } from "@/components/analysis/ZonasTable";
 import { ZonasViewState } from "@/components/analysis/ZonasViewState";
@@ -65,16 +64,10 @@ export type ZonasAnalyticsSectionProps = {
   setLimitZonas: Dispatch<SetStateAction<number>>;
   columnasZonas: ColumnasZonasPrefs;
   setColumnasZonas: Dispatch<SetStateAction<ColumnasZonasPrefs>>;
-  usoAccionesZonas: number;
-  resetUsoAccionesZonasCount: number;
-  lastInteractionZonas: number | null;
-  sesionesZonas: number;
   reservationsCount: number;
   limpiarFiltrosVistaZonas: () => void;
   aplicarVistaDefaultZonas: () => void;
   resetZonasPrefs: () => void;
-  resetUsoAccionesZonas: () => void;
-  resetAnaliticaUsoZonas: () => void;
   exportarZonas: (zoneMetricsLimited: ZonaExportMetric[], columnasZonas?: ColumnasZonasPrefs | null) => void;
   exportarZonasJSON: (zoneMetricsLimited: ZonaExportMetric[]) => void;
   copiarCsvZonas: () => void;
@@ -90,7 +83,6 @@ export type ZonasAnalyticsSectionProps = {
   copiarResumenUltraZonas: () => void;
   exportarResumenZonas: () => void;
   copiarResumenZonas: () => void;
-  formatLastInteraction: (ts: number | null) => string;
 };
 
 export function ZonasAnalyticsSection({
@@ -98,7 +90,6 @@ export function ZonasAnalyticsSection({
   zonasKpis,
   zonasTableData,
   zonasInsights,
-  zonasExportsData,
   compactViewZonas,
   setCompactViewZonas,
   ordenZonas,
@@ -109,32 +100,12 @@ export function ZonasAnalyticsSection({
   setLimitZonas,
   columnasZonas,
   setColumnasZonas,
-  usoAccionesZonas,
-  resetUsoAccionesZonasCount,
-  lastInteractionZonas,
-  sesionesZonas,
   reservationsCount,
   limpiarFiltrosVistaZonas,
   aplicarVistaDefaultZonas,
   resetZonasPrefs,
-  resetUsoAccionesZonas,
-  resetAnaliticaUsoZonas,
   exportarZonas,
-  exportarZonasJSON,
-  copiarCsvZonas,
-  copiarJsonZonas,
-  copiarVistaActualZonas,
-  copiarKpisZonas,
-  copiarInsightZonas,
-  copiarTopScoreZonas,
-  copiarZonasCriticas,
-  copiarResumenEjecutivoZonas,
-  copiarEstadoVistaZonas,
-  copiarTodoZonas,
-  copiarResumenUltraZonas,
-  exportarResumenZonas,
   copiarResumenZonas,
-  formatLastInteraction,
 }: ZonasAnalyticsSectionProps) {
   const {
     zoneMetrics,
@@ -146,39 +117,11 @@ export function ZonasAnalyticsSection({
     columnasVisiblesZonas,
     filtrosActivosZonas,
     ordenActivoLabel,
-    resumenVistaZonas,
-    estadoFiltrosZonas,
-    accionesRapidasZonas,
-    exportacionesZonas,
-    controlesActivosZonas,
     vistaDefaultZonas,
-    modoVistaZonas,
-    densidadVistaZonas,
-    cargaVistaZonas,
-    nivelPersonalizacionZonas,
-    complejidadVistaZonas,
-    estadoExportacionZonas,
-    legibilidadVistaZonas,
-    recomendacionVistaZonas,
-    idoneidadVistaZonas,
-    interaccionTotalZonas,
-    interaccionesPorSesionZonas,
-    frecuenciaUsoZonas,
-    actividadRecienteZonas,
-    intensidadUsoZonas,
-    eficienciaUsoZonas,
-    madurezUsoZonas,
-    estadoModuloZonas,
-    saludModuloZonas,
-    resumenGlobalZonas,
     insightEvolucionZona,
     resumenEvolucionZona,
     balanceOperativoZonas,
-    zonasCriticas,
     prioridadOperativaZonas,
-    totalZonas,
-    mejorZona,
-    peorZona,
     zonasProblema,
     checklistZonas,
     titularZonas,
@@ -197,11 +140,25 @@ export function ZonasAnalyticsSection({
     insightEficienciaZona,
     resumenZonas,
     insightZona,
-    insightPrincipalZonas,
     tendenciaZonas,
     alertaConcentracionZona,
     zonaMayorPaxReserva,
   } = zonasAnalytics;
+
+  if (zoneMetrics.length === 0) {
+    return (
+      <div className="mt-6" style={placeholderStyle}>
+        <div>
+          <div style={{ color: "var(--hostly-ink-strong)", fontWeight: 750, marginBottom: 6 }}>
+            Sin datos por zona
+          </div>
+          <div>
+            Cuando las reservas tengan una zona asignada, aquí verás su ocupación y rendimiento.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -595,86 +552,6 @@ export function ZonasAnalyticsSection({
                   </button>
                   <button
                     type="button"
-                    onClick={() => exportarZonasJSON(zoneMetricsLimited)}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: 10,
-                      border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "var(--hostly-surface-card-solid)",
-                      color: "var(--hostly-ink-muted)",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      letterSpacing: "-0.02em",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Exportar JSON
-                  </button>
-                  <button
-                    type="button"
-                    onClick={copiarCsvZonas}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: 10,
-                      border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "var(--hostly-surface-card-solid)",
-                      color: "var(--hostly-ink-muted)",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      letterSpacing: "-0.02em",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Copiar CSV
-                  </button>
-                  <button
-                    type="button"
-                    onClick={copiarJsonZonas}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: 10,
-                      border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "var(--hostly-surface-card-solid)",
-                      color: "var(--hostly-ink-muted)",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      letterSpacing: "-0.02em",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Copiar JSON
-                  </button>
-                  <ZonasActions
-                    data={zonasExportsData}
-                    copiarVistaActualZonas={copiarVistaActualZonas}
-                    copiarKpisZonas={copiarKpisZonas}
-                    copiarInsightZonas={copiarInsightZonas}
-                    copiarTopScoreZonas={copiarTopScoreZonas}
-                    copiarZonasCriticas={copiarZonasCriticas}
-                    copiarResumenEjecutivoZonas={copiarResumenEjecutivoZonas}
-                    copiarEstadoVistaZonas={copiarEstadoVistaZonas}
-                    copiarTodoZonas={copiarTodoZonas}
-                    copiarResumenUltraZonas={copiarResumenUltraZonas}
-                  />
-                  <button
-                    type="button"
-                    onClick={exportarResumenZonas}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: 10,
-                      border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "var(--hostly-surface-card-solid)",
-                      color: "var(--hostly-ink-muted)",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      letterSpacing: "-0.02em",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Exportar resumen
-                  </button>
-                  <button
-                    type="button"
                     onClick={copiarResumenZonas}
                     style={{
                       padding: "8px 14px",
@@ -750,318 +627,7 @@ export function ZonasAnalyticsSection({
                 </p>
               ) : null}
 
-              <p
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "var(--hostly-ink-muted)",
-                  marginTop: 0,
-                  marginBottom: 8,
-                }}
-              >
-                Vista actual: {resumenVistaZonas}
-              </p>
-
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Estado: {estadoFiltrosZonas}
-                </p>
-              ) : null}
-
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Acciones rápidas: {accionesRapidasZonas}
-                </p>
-              ) : null}
-
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Modo de vista: {modoVistaZonas}
-                </p>
-              ) : null}
-
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Exportación y copia: {exportacionesZonas}
-                </p>
-              ) : null}
-
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Controles activos: {controlesActivosZonas}
-                </p>
-              ) : null}
-              {totalZonasBase > 0 ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    flexWrap: "wrap",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  <span>Uso acciones: {usoAccionesZonas}</span>
-                  {usoAccionesZonas > 0 ? (
-                    <button
-                      type="button"
-                      onClick={resetUsoAccionesZonas}
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: 999,
-                        border: "1px solid rgba(148, 163, 184, 0.18)",
-                        background: "var(--hostly-ice-50)",
-                        color: "var(--hostly-ink-muted)",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        letterSpacing: "-0.01em",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Reset uso
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Resets uso: {resetUsoAccionesZonasCount}
-                </p>
-              ) : null}
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Interacción total: {interaccionTotalZonas}
-                </p>
-              ) : null}
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Intensidad de uso: {intensidadUsoZonas}
-                </p>
-              ) : null}
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Eficiencia de uso: {eficienciaUsoZonas}
-                </p>
-              ) : null}
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Madurez de uso: {madurezUsoZonas}
-                </p>
-              ) : null}
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Estado del módulo: {estadoModuloZonas}
-                </p>
-              ) : null}
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Última interacción: {formatLastInteraction(lastInteractionZonas)}
-                </p>
-              ) : null}
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Sesiones: {sesionesZonas}
-                </p>
-              ) : null}
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Interacciones/sesión: {interaccionesPorSesionZonas.toFixed(1)}
-                </p>
-              ) : null}
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Frecuencia de uso: {frecuenciaUsoZonas}
-                </p>
-              ) : null}
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Actividad: {actividadRecienteZonas}
-                </p>
-              ) : null}
-              <p
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "var(--hostly-ink-muted)",
-                  marginTop: 0,
-                  marginBottom: 8,
-                }}
-              >
-                Salud del módulo: {totalZonasBase > 0 ? saludModuloZonas : "Sin uso"}
-              </p>
-              {totalZonasBase > 0 &&
-              (usoAccionesZonas > 0 ||
-                resetUsoAccionesZonasCount > 0 ||
-                lastInteractionZonas !== null ||
-                sesionesZonas > 0) ? (
-                <button
-                  type="button"
-                  onClick={resetAnaliticaUsoZonas}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: 999,
-                    border: "1px solid rgba(148, 163, 184, 0.18)",
-                    background: "rgba(248, 250, 252, 0.92)",
-                    color: "var(--hostly-ink-muted)",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    letterSpacing: "-0.01em",
-                    cursor: "pointer",
-                    marginTop: 2,
-                    marginBottom: 10,
-                  }}
-                >
-                  Reset analítica uso
-                </button>
-              ) : null}
-
-              {totalZonasBase > 0 ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    marginTop: 0,
-                    marginBottom: 8,
-                  }}
-                >
-                  Configuración: {vistaDefaultZonas}
-                </p>
-              ) : null}
-
-              <ZonasViewState data={zonasInsights} />
+             <ZonasViewState data={zonasInsights} />
 
               {zoneMetrics.length === 0 ? (
                 <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
@@ -2355,10 +1921,12 @@ export function ZonasAnalyticsSection({
             ) : null}
             <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(148, 163, 184, 0.14)" }}>
               <div style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)", letterSpacing: "-0.01em" }}>
-                Resumen global
+                Resumen de zonas
               </div>
               <div style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.4 }}>
-                {totalZonasBase > 0 ? resumenGlobalZonas : "Sin uso del módulo de zonas"}
+                {totalZonasBase > 0
+                  ? resumenZonas
+                  : "Cuando las reservas tengan una zona asignada, aquí aparecerá el resumen."}
               </div>
               <AnalysisSectionEnd label="zonas" />
             </div>

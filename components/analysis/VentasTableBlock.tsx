@@ -1,4 +1,5 @@
 import type { VentasSelectorsTable } from "@/components/analysis/hooks/useVentasSelectors";
+import { formatCurrency } from "@/components/analysis/utils";
 
 export type VentasTableBlockProps = {
   data: VentasSelectorsTable;
@@ -35,7 +36,7 @@ export function VentasTableBlock({ data }: VentasTableBlockProps) {
             <tr key={`${row.label}:${row.shortId ?? ""}:${i}`}>
               <td className="hostly-inv-td-muted">{row.label}</td>
               <td className="hostly-inv-td-primary">{row.shortId ?? "—"}</td>
-              <td className="hostly-inv-td-amount">{row.total.toFixed(2)} €</td>
+              <td className="hostly-inv-td-amount">{formatCurrency(row.total)}</td>
             </tr>
           ))}
         </tbody>

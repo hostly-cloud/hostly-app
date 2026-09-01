@@ -1,16 +1,14 @@
 "use client";
 
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ModulePageShell from "@/components/module-page-shell";
 import { HostlySegmentedControl, hostlySegmentTabClassName } from "@/components/ui/hostly";
 import {
   AnalysisTabContent,
-  type AnalysisTabContentProps,
   buildAnalysisTabContentProps,
   buildComensalesSectionProps,
   buildVentasOrdersAdapter,
   buildVentasSectionProps,
-  type ComensalesAnalyticsSectionProps,
   type ColumnasZonasPrefs,
   type HorasAnalyticsSectionProps,
   type ProductosAnalyticsSectionProps,
@@ -29,10 +27,8 @@ import { db } from "@/lib/firebase/client";
 type AnalisisTab = "ventas" | "rentabilidad" | "horas" | "productos" | "comensales";
 
 const TABS: { id: AnalisisTab; label: string; placeholder: string }[] = [
-  { id: "ventas", label: "Ventas", placeholder: "Próximamente: análisis de ventas" },
+  { id: "ventas", label: "Ventas", placeholder: "Todavía no hay ventas en este periodo." },
   { id: "rentabilidad", label: "Rentabilidad", placeholder: "Margen histórico por snapshot de coste" },
-  { id: "horas", label: "Horas", placeholder: "Próximamente: análisis por franjas horarias" },
-  { id: "productos", label: "Productos", placeholder: "Próximamente: análisis por producto" },
   { id: "comensales", label: "Comensales", placeholder: "Próximamente: análisis de comensales" },
 ];
 
@@ -167,7 +163,7 @@ function buildDailyAttendance(
 export default function AnalisisPage() {
   const [tab, setTab] = useState<AnalisisTab>("ventas");
 
-  const { restaurantId: profileRestaurantId, user, ready: authReady } = useAuth();
+  const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
   const restaurantId = profileRestaurantId ?? null;
   const today = useMemo(() => todayYmd(), []);
   const [dateTo, setDateTo] = useState<string>(today);
@@ -187,146 +183,53 @@ export default function AnalisisPage() {
     eficiencia: true,
     score: true,
   });
-  const [usoAccionesZonas, setUsoAccionesZonas] = useState(0);
-  const [resetUsoAccionesZonasCount, setResetUsoAccionesZonasCount] = useState(0);
-  const [lastInteractionZonas, setLastInteractionZonas] = useState<number | null>(null);
-  const [sesionesZonas, setSesionesZonas] = useState(0);
-
   const skipZonasPrefsSave = useRef(true);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("uso_acciones_zonas");
-      if (saved) setUsoAccionesZonas(parseInt(saved));
-    } catch {
-      /* ignore */
-    }
-  }, []);
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = localStorage.getItem("analisis_zonas_prefs");
+        if (!saved) return;
+        const parsed = JSON.parse(saved) as Record<string, unknown>;
+        if (!parsed || typeof parsed !== "object") return;
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("uso_acciones_zonas", usoAccionesZonas.toString());
-    } catch {
-      /* ignore */
-    }
-  }, [usoAccionesZonas]);
+        const orden = parsed.ordenZonas;
+        if (orden === "total" || orden === "ocupacion" || orden === "eficiencia" || orden === "score") {
+          setOrdenZonas(orden);
+        }
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("reset_uso_acciones_zonas");
-      if (saved) setResetUsoAccionesZonasCount(parseInt(saved));
-    } catch {
-      /* ignore */
-    }
-  }, []);
+        if (typeof parsed.searchZona === "string") {
+          setSearchZona(parsed.searchZona);
+        }
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("reset_uso_acciones_zonas", resetUsoAccionesZonasCount.toString());
-    } catch {
-      /* ignore */
-    }
-  }, [resetUsoAccionesZonasCount]);
+        const lim = Number(parsed.limitZonas);
+        if (lim === 0 || lim === 5 || lim === 10 || lim === 20) {
+          setLimitZonas(lim);
+        }
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("last_interaction_zonas");
-      if (saved) setLastInteractionZonas(parseInt(saved));
-    } catch {
-      /* ignore */
-    }
-  }, []);
+        if (typeof parsed.compactViewZonas === "boolean") {
+          setCompactViewZonas(parsed.compactViewZonas);
+        }
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("sesiones_zonas");
-      if (saved) setSesionesZonas(parseInt(saved));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      const lastSession = localStorage.getItem("last_session_zonas");
-      const now = Date.now();
-
-      const NUEVA_SESION_MS = 30 * 60 * 1000;
-
-      if (!lastSession || now - parseInt(lastSession) > NUEVA_SESION_MS) {
-        setSesionesZonas((prev) => prev + 1);
-        localStorage.setItem("last_session_zonas", now.toString());
+        const c = parsed.columnasZonas;
+        if (c && typeof c === "object" && c !== null && !Array.isArray(c)) {
+          const col = c as Record<string, unknown>;
+          setColumnasZonas({
+            reservas: typeof col.reservas === "boolean" ? col.reservas : true,
+            llegadas: typeof col.llegadas === "boolean" ? col.llegadas : true,
+            noShow: typeof col.noShow === "boolean" ? col.noShow : true,
+            pax: typeof col.pax === "boolean" ? col.pax : true,
+            ocupacion: typeof col.ocupacion === "boolean" ? col.ocupacion : true,
+            eficiencia: typeof col.eficiencia === "boolean" ? col.eficiencia : true,
+            score: typeof col.score === "boolean" ? col.score : true,
+          });
+        }
+      } catch {
+        /* ignore corrupt or missing prefs */
       }
-    } catch {
-      /* ignore */
-    }
-  }, []);
+    }, 0);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("sesiones_zonas", sesionesZonas.toString());
-    } catch {
-      /* ignore */
-    }
-  }, [sesionesZonas]);
-
-  useEffect(() => {
-    try {
-      if (lastInteractionZonas) {
-        localStorage.setItem("last_interaction_zonas", lastInteractionZonas.toString());
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [lastInteractionZonas]);
-
-  function formatLastInteraction(ts: number | null) {
-    if (!ts) return "Sin interacción";
-    const date = new Date(ts);
-    return date.toLocaleString();
-  }
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("analisis_zonas_prefs");
-      if (!saved) return;
-      const parsed = JSON.parse(saved) as Record<string, unknown>;
-      if (!parsed || typeof parsed !== "object") return;
-
-      const orden = parsed.ordenZonas;
-      if (orden === "total" || orden === "ocupacion" || orden === "eficiencia" || orden === "score") {
-        setOrdenZonas(orden);
-      }
-
-      if (typeof parsed.searchZona === "string") {
-        setSearchZona(parsed.searchZona);
-      }
-
-      const lim = Number(parsed.limitZonas);
-      if (lim === 0 || lim === 5 || lim === 10 || lim === 20) {
-        setLimitZonas(lim);
-      }
-
-      if (typeof parsed.compactViewZonas === "boolean") {
-        setCompactViewZonas(parsed.compactViewZonas);
-      }
-
-      const c = parsed.columnasZonas;
-      if (c && typeof c === "object" && c !== null && !Array.isArray(c)) {
-        const col = c as Record<string, unknown>;
-        setColumnasZonas({
-          reservas: typeof col.reservas === "boolean" ? col.reservas : true,
-          llegadas: typeof col.llegadas === "boolean" ? col.llegadas : true,
-          noShow: typeof col.noShow === "boolean" ? col.noShow : true,
-          pax: typeof col.pax === "boolean" ? col.pax : true,
-          ocupacion: typeof col.ocupacion === "boolean" ? col.ocupacion : true,
-          eficiencia: typeof col.eficiencia === "boolean" ? col.eficiencia : true,
-          score: typeof col.score === "boolean" ? col.score : true,
-        });
-      }
-    } catch {
-      /* ignore corrupt or missing prefs */
-    }
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -387,28 +290,10 @@ export default function AnalisisPage() {
     });
   }
 
-  function resetUsoAccionesZonas() {
-    setUsoAccionesZonas(0);
-    setResetUsoAccionesZonasCount((prev) => prev + 1);
-    localStorage.removeItem("uso_acciones_zonas");
-  }
-
-  function resetAnaliticaUsoZonas() {
-    setUsoAccionesZonas(0);
-    setResetUsoAccionesZonasCount(0);
-    setLastInteractionZonas(null);
-    setSesionesZonas(0);
-
-    localStorage.removeItem("uso_acciones_zonas");
-    localStorage.removeItem("reset_uso_acciones_zonas");
-    localStorage.removeItem("last_interaction_zonas");
-    localStorage.removeItem("sesiones_zonas");
-    localStorage.removeItem("last_session_zonas");
-  }
 
   useEffect(() => {
     if (!authReady || !restaurantId || !isFirebaseConfigured || !dateFrom || !dateTo) {
-      setReservations([]);
+      queueMicrotask(() => setReservations([]));
       return;
     }
     const from = dateFrom <= dateTo ? dateFrom : dateTo;
@@ -424,7 +309,7 @@ export default function AnalisisPage() {
 
   useEffect(() => {
     if (!authReady || !restaurantId || !isFirebaseConfigured) {
-      setOrdersDocs([]);
+      queueMicrotask(() => setOrdersDocs([]));
       return;
     }
 
@@ -444,8 +329,10 @@ export default function AnalisisPage() {
   useEffect(() => {
     if (!dateFrom || !dateTo) return;
     if (dateFrom <= dateTo) return;
-    setDateFrom(dateTo);
-    setDateTo(dateFrom);
+    queueMicrotask(() => {
+      setDateFrom(dateTo);
+      setDateTo(dateFrom);
+    });
   }, [dateFrom, dateTo]);
 
   const metrics = useMemo(() => computeReservationRangeMetrics(reservations, dateFrom, dateTo), [
@@ -487,27 +374,21 @@ export default function AnalisisPage() {
     limitZonas,
     columnasZonas,
     compactViewZonas,
-    usoAccionesZonas,
-    resetUsoAccionesZonasCount,
-    sesionesZonas,
-    lastInteractionZonas,
+    usoAccionesZonas: 0,
+    resetUsoAccionesZonasCount: 0,
+    sesionesZonas: 0,
+    lastInteractionZonas: null,
   });
 
   const {
     zoneMetrics,
     zoneMetricsLimited,
     totalZonasBase,
-    totalZonasFiltradas,
     totalZonasVisibles,
     totalColumnasZonas,
     columnasVisiblesZonas,
-    filtrosActivosZonas,
     ordenActivoLabel,
-    resumenVistaZonas,
     estadoFiltrosZonas,
-    accionesRapidasZonas,
-    exportacionesZonas,
-    controlesActivosZonas,
     vistaDefaultZonas,
     modoVistaZonas,
     densidadVistaZonas,
@@ -518,52 +399,22 @@ export default function AnalisisPage() {
     legibilidadVistaZonas,
     recomendacionVistaZonas,
     idoneidadVistaZonas,
-    interaccionTotalZonas,
-    interaccionesPorSesionZonas,
-    frecuenciaUsoZonas,
-    actividadRecienteZonas,
-    intensidadUsoZonas,
-    eficienciaUsoZonas,
-    madurezUsoZonas,
-    estadoModuloZonas,
-    saludModuloZonas,
-    resumenGlobalZonas,
-    insightEvolucionZona,
-    resumenEvolucionZona,
     balanceOperativoZonas,
     zonasCriticas,
-    prioridadOperativaZonas,
     totalZonas,
     mejorZona,
     peorZona,
-    zonasProblema,
-    checklistZonas,
-    titularZonas,
     confianzaZonas,
-    estadoGeneralZonas,
-    topZonas,
-    bottomZonas,
-    topEficienciaZonas,
-    bottomEficienciaZonas,
     topScoreZonas,
-    bottomScoreZonas,
-    insightScoreZona,
     conclusionesZonas,
     oportunidadesZonas,
     recomendacionesZonas,
-    insightEficienciaZona,
     resumenZonas,
-    insightZona,
     insightPrincipalZonas,
-    tendenciaZonas,
-    alertaConcentracionZona,
-    zonaMayorPaxReserva,
   } = zonasAnalytics;
 
 
   function exportarZonas(zoneMetricsLimited: ZonaExportMetric[], columnasZonas?: ColumnasZonasPrefs | null) {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zoneMetricsLimited.length) return;
 
     const cols = columnasZonas || {
@@ -605,8 +456,6 @@ export default function AnalisisPage() {
   }
 
   function exportarZonasJSON(zoneMetricsLimited: ZonaExportMetric[]) {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zoneMetricsLimited.length) return;
 
     const data = zoneMetricsLimited.map((z: ZonaExportMetric) => ({
@@ -645,8 +494,6 @@ export default function AnalisisPage() {
 
 
   function copiarCsvZonas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zoneMetricsLimited.length) return;
 
     const cols = columnasZonas || {
@@ -683,8 +530,6 @@ export default function AnalisisPage() {
   }
 
   function copiarJsonZonas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zoneMetricsLimited.length) return;
 
     const data = zoneMetricsLimited.map((z: ZonaExportMetric) => ({
@@ -712,8 +557,6 @@ export default function AnalisisPage() {
   }
 
   function copiarVistaActualZonas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zoneMetricsLimited.length) return;
 
     const lineas = [
@@ -737,8 +580,6 @@ export default function AnalisisPage() {
   }
 
   function copiarKpisZonas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zoneMetrics.length) return;
 
     const texto = [
@@ -762,8 +603,6 @@ export default function AnalisisPage() {
 
 
   function exportarResumenZonas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zoneMetrics.length) return;
 
     const lineas = [
@@ -801,8 +640,6 @@ export default function AnalisisPage() {
   }
 
   function copiarResumenZonas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zoneMetrics.length) return;
 
     const texto = [
@@ -826,16 +663,12 @@ export default function AnalisisPage() {
 
 
   function copiarInsightZonas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (zoneMetrics.length === 0) return;
     if (!insightPrincipalZonas) return;
     navigator.clipboard.writeText(insightPrincipalZonas);
   }
 
   function copiarTopScoreZonas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zoneMetrics.length || !topScoreZonas.length) return;
 
     const texto = [
@@ -851,8 +684,6 @@ export default function AnalisisPage() {
   }
 
   function copiarZonasCriticas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zonasCriticas.length) return;
 
     const texto = [
@@ -868,8 +699,6 @@ export default function AnalisisPage() {
   }
 
   function copiarResumenEjecutivoZonas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zoneMetrics.length) return;
 
     const texto = [
@@ -893,8 +722,6 @@ export default function AnalisisPage() {
   }
 
   function copiarEstadoVistaZonas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (totalZonasBase === 0) return;
 
     const texto = [
@@ -920,8 +747,6 @@ export default function AnalisisPage() {
   }
 
   function copiarTodoZonas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zoneMetricsLimited.length) return;
 
     const header = [
@@ -967,8 +792,6 @@ export default function AnalisisPage() {
   }
 
   function copiarResumenUltraZonas() {
-    setUsoAccionesZonas((prev) => prev + 1);
-    setLastInteractionZonas(Date.now());
     if (!zoneMetrics.length) return;
 
     const top = topScoreZonas[0];
@@ -991,10 +814,6 @@ export default function AnalisisPage() {
     navigator.clipboard.writeText(texto);
   }
 
-
-  if (!zoneMetrics || !Array.isArray(zoneMetrics)) {
-    return null;
-  }
 
   const comensalesSectionProps = buildComensalesSectionProps({
     dateFrom,
@@ -1020,16 +839,10 @@ export default function AnalisisPage() {
     setLimitZonas,
     columnasZonas,
     setColumnasZonas,
-    usoAccionesZonas,
-    resetUsoAccionesZonasCount,
-    lastInteractionZonas,
-    sesionesZonas,
     reservationsCount: reservations.length,
     limpiarFiltrosVistaZonas,
     aplicarVistaDefaultZonas,
     resetZonasPrefs,
-    resetUsoAccionesZonas,
-    resetAnaliticaUsoZonas,
     exportarZonas,
     exportarZonasJSON,
     copiarCsvZonas,
@@ -1045,7 +858,6 @@ export default function AnalisisPage() {
     copiarResumenUltraZonas,
     exportarResumenZonas,
     copiarResumenZonas,
-    formatLastInteraction,
   });
 
   // Fuente real (Firestore): colección `orders`. Se adapta a Ventas vía `buildVentasOrdersAdapter`.

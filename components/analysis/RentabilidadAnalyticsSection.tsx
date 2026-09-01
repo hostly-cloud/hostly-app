@@ -7,7 +7,6 @@ import {
   buildInventoryMarginAnalytics,
   normalizeInventoryMarginOrders,
   type InventoryMarginAggregateRow,
-  type InventoryMarginOrderInput,
 } from "@/lib/analytics/inventory-margin-analytics";
 
 export type RentabilidadAnalyticsSectionProps = {
@@ -26,6 +25,10 @@ function formatEur(value: number): string {
 function formatPercent(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return `${value.toFixed(1).replace(".", ",")} %`;
+}
+
+function lineCountLabel(count: number): string {
+  return `${count} ${count === 1 ? "línea" : "líneas"}`;
 }
 
 function MarginProductsTable({
@@ -175,10 +178,10 @@ export function RentabilidadAnalyticsSection({
           <div style={{ fontSize: 14, color: "var(--hostly-ink-muted)", lineHeight: 1.5 }}>
             No hay líneas con coste de inventario completo en este periodo.
             {summary.incompleteCostCount > 0
-              ? ` ${summary.incompleteCostCount} línea(s) con coste incompleto.`
+              ? ` ${lineCountLabel(summary.incompleteCostCount)} con coste incompleto.`
               : ""}
             {summary.excludedNoCostCount > 0
-              ? ` ${summary.excludedNoCostCount} línea(s) sin snapshot histórico.`
+              ? ` ${lineCountLabel(summary.excludedNoCostCount)} sin historial de coste.`
               : ""}
           </div>
         </div>
@@ -204,10 +207,10 @@ export function RentabilidadAnalyticsSection({
               }}
             >
               {summary.incompleteCostCount > 0
-                ? `${summary.incompleteCostCount} línea(s) con coste incompleto excluidas del margen. `
+                ? `${lineCountLabel(summary.incompleteCostCount)} con coste incompleto excluidas del margen. `
                 : ""}
               {summary.excludedNoCostCount > 0
-                ? `${summary.excludedNoCostCount} línea(s) antiguas sin snapshot excluidas.`
+                ? `${lineCountLabel(summary.excludedNoCostCount)} antiguas sin historial de coste excluidas.`
                 : ""}
             </div>
           )}

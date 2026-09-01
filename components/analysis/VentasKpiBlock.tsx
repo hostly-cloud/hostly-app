@@ -3,6 +3,7 @@ import type {
   VentasZonaMasVentas,
 } from "@/components/analysis/hooks/useVentasSelectors";
 import { HostlyKpiCard } from "@/components/ui/hostly";
+import { formatCurrency } from "@/components/analysis/utils";
 
 export type VentasKpiBlockData = VentasSelectorsKpis & {
   zonaMasVentas?: VentasZonaMasVentas;
@@ -17,13 +18,13 @@ export function VentasKpiBlock({ data }: VentasKpiBlockProps) {
 
   return (
     <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics">
-      <HostlyKpiCard title="Ventas totales" value={`${totalVentas.toFixed(2)} €`} />
+      <HostlyKpiCard title="Ventas totales" value={formatCurrency(totalVentas)} />
       <HostlyKpiCard title="Total tickets" value={totalTickets} />
-      <HostlyKpiCard title="Ticket medio" value={`${ticketMedio.toFixed(2)} €`} />
+      <HostlyKpiCard title="Ticket medio" value={formatCurrency(ticketMedio)} />
       <HostlyKpiCard
         title="Zona top"
         value={zonaMasVentas?.zoneName ?? "—"}
-        helper={zonaMasVentas ? `${zonaMasVentas.total.toFixed(2)} €` : "Sin datos"}
+        helper={zonaMasVentas ? formatCurrency(zonaMasVentas.total) : "Sin datos"}
       />
     </div>
   );
