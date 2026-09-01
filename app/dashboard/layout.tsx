@@ -21,6 +21,7 @@ import "./mobile-horizontal-hardening.css";
 import "./dashboard-visual-overrides-v2.css";
 import "./dashboard-viewport-fit.css";
 import "./dashboard-viewport-fit-secondary.css";
+import "./analysis-modern.css";
 import "./catalog-workbench-v4.css";
 import "./printer-control-center-v4.css";
 import "./integrations-hub-v4.css";

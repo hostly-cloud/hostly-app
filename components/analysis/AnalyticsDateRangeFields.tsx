@@ -17,28 +17,28 @@ export function AnalyticsDateRangeFields({
 }: AnalyticsDateRangeFieldsProps) {
   return (
     <div className={hostlyCx("hostly-analytics-date-fields", className)}>
-      <label className="hostly-form-label mb-0" htmlFor="hostly-analytics-date-from">
-        Desde
+      <label className="hostly-analysis-date-field" htmlFor="hostly-analytics-date-from">
+        <span className="hostly-analysis-date-field__label">Desde</span>
+        <HostlyInput
+          id="hostly-analytics-date-from"
+          type="date"
+          value={dateFrom}
+          onChange={(e) => onDateFromChange(e.target.value)}
+          className="hostly-input--toolbar-compact"
+          aria-label="Desde"
+        />
       </label>
-      <HostlyInput
-        id="hostly-analytics-date-from"
-        type="date"
-        value={dateFrom}
-        onChange={(e) => onDateFromChange(e.target.value)}
-        className="hostly-input--toolbar-compact"
-        aria-label="Desde"
-      />
-      <label className="hostly-form-label mb-0" htmlFor="hostly-analytics-date-to">
-        Hasta
+      <label className="hostly-analysis-date-field" htmlFor="hostly-analytics-date-to">
+        <span className="hostly-analysis-date-field__label">Hasta</span>
+        <HostlyInput
+          id="hostly-analytics-date-to"
+          type="date"
+          value={dateTo}
+          onChange={(e) => onDateToChange(e.target.value)}
+          className="hostly-input--toolbar-compact"
+          aria-label="Hasta"
+        />
       </label>
-      <HostlyInput
-        id="hostly-analytics-date-to"
-        type="date"
-        value={dateTo}
-        onChange={(e) => onDateToChange(e.target.value)}
-        className="hostly-input--toolbar-compact"
-        aria-label="Hasta"
-      />
     </div>
   );
 }

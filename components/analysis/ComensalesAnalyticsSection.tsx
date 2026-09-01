@@ -4,6 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { ReservationDayMetrics } from "@/lib/reservas/reservation-metrics";
 import { ComensalesContentBlock } from "@/components/analysis/ComensalesContentBlock";
 import { ComensalesHeaderBlock } from "@/components/analysis/ComensalesHeaderBlock";
+import { AnalyticsEmptyState } from "@/components/analysis/AnalyticsEmptyState";
 import {
   useComensalesSelectors,
   type ComensalesDailyAttendanceRow,
@@ -11,6 +12,7 @@ import {
   type UseComensalesSelectorsResult,
 } from "@/components/analysis/hooks/useComensalesSelectors";
 import type { ZonasAnalyticsSectionProps } from "@/components/analysis/ZonasAnalyticsSection";
+import { Clock3, TriangleAlert } from "lucide-react";
 
 export type { ComensalesDailyAttendanceRow, ComensalesDailyReservationsRow } from "@/components/analysis/hooks/useComensalesSelectors";
 
@@ -64,15 +66,21 @@ export function ComensalesAnalyticsSection({
       />
 
       {dataState === "loading" ? (
-        <div className="hostly-panel p-4" role="status" aria-live="polite">
-          <div className="hostly-muted text-sm">Cargando reservas y comensales…</div>
-        </div>
+        <AnalyticsEmptyState
+          compact
+          role="status"
+          icon={<Clock3 size={22} strokeWidth={2.1} />}
+          title="Cargando reservas y comensales"
+          description="Estamos cargando las reservas y la asistencia del periodo."
+        />
       ) : dataState === "error" ? (
-        <div className="hostly-panel p-4" role="alert">
-          <div className="hostly-muted text-sm leading-relaxed">
-            No se pudieron cargar las reservas. Revisa tu conexión o tus permisos e inténtalo de nuevo.
-          </div>
-        </div>
+        <AnalyticsEmptyState
+          compact
+          role="alert"
+          icon={<TriangleAlert size={22} strokeWidth={2.1} />}
+          title="No se pudieron cargar las reservas"
+          description="Revisa tu conexión o tus permisos e inténtalo de nuevo."
+        />
       ) : (
         <ComensalesContentBlock
           compactViewZonas={comensalesViewState.compactViewZonas}

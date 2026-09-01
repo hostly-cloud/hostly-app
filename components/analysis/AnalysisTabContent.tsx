@@ -43,5 +43,14 @@ export function AnalysisTabContent({
     content = <ProductosAnalyticsSection {...productosSectionProps} />;
   }
 
-  return <div className="hostly-analysis-tab-viewport">{content}</div>;
+  return (
+    <div
+      id={`hostly-analysis-panel-${tab}`}
+      className="hostly-analysis-tab-viewport"
+      role="tabpanel"
+      aria-labelledby={`hostly-analysis-tab-${tab}`}
+    >
+      {content}
+    </div>
+  );
 }

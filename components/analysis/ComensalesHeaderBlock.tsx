@@ -1,5 +1,6 @@
 import { AnalyticsDateRangeFields } from "@/components/analysis/AnalyticsDateRangeFields";
-import { HostlySectionHeader } from "@/components/ui/hostly";
+import { AnalyticsSectionHeader } from "@/components/analysis/AnalyticsSectionHeader";
+import { CalendarCheck2 } from "lucide-react";
 
 export type ComensalesHeaderBlockProps = {
   dateFrom: string;
@@ -17,14 +18,14 @@ export function ComensalesHeaderBlock({
   formatDateEs,
 }: ComensalesHeaderBlockProps) {
   return (
-    <div className="hostly-analytics-toolbar">
-      <div className="hostly-analytics-toolbar__filters min-w-0 flex-1 flex-col items-stretch gap-[var(--hostly-op-gap-sm)] sm:flex-row sm:items-center">
-        <HostlySectionHeader
-          title="Comensales"
-          description={`Del ${formatDateEs(dateFrom)} al ${formatDateEs(dateTo)}`}
-          titleVariant="section"
-          className="hostly-section-header--operational w-full min-w-0 flex-1"
-        />
+    <div className="hostly-analysis-header-card">
+      <AnalyticsSectionHeader
+        eyebrow="Reservas y asistencia"
+        title="Comensales"
+        description={`${formatDateEs(dateFrom)} – ${formatDateEs(dateTo)} · Previsión y asistencia real`}
+        icon={<CalendarCheck2 size={21} strokeWidth={2.1} />}
+      />
+      <div className="hostly-analysis-filterbar">
         <AnalyticsDateRangeFields
           dateFrom={dateFrom}
           dateTo={dateTo}

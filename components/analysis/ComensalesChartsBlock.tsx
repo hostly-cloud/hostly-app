@@ -10,6 +10,8 @@ import {
 import type {
   ComensalesSelectorsCharts,
 } from "@/components/analysis/hooks/useComensalesSelectors";
+import { AnalyticsEmptyState } from "@/components/analysis/AnalyticsEmptyState";
+import { CalendarDays, ChartColumnIncreasing, UsersRound } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export type { ComensalesDailyAttendanceRow, ComensalesDailyReservationsRow } from "@/components/analysis/hooks/useComensalesSelectors";
@@ -28,12 +30,28 @@ function formatDateEs(ymd: string): string {
 
 export function ComensalesChartsBlock({ data }: ComensalesChartsBlockProps) {
   const { dailyReservations, dailyAttendance } = data;
+  const hasActivity =
+    dailyReservations.some((row) => row.total > 0) ||
+    dailyAttendance.some((row) => row.llegadas > 0 || row.noShow > 0);
+
+  if (!hasActivity) {
+    return (
+      <AnalyticsEmptyState
+        compact
+        icon={<ChartColumnIncreasing size={22} strokeWidth={2.1} />}
+        title="Las tendencias aparecerán con las primeras reservas"
+        description="Este periodo todavía no tiene actividad de reservas, llegadas ni ausencias."
+        hint="Prueba otro intervalo de fechas o vuelve cuando haya servicio registrado."
+      />
+    );
+  }
 
   return (
-    <>
-      <div className="hostly-panel p-4">
-        <div className="mb-2.5 text-[13px] font-extrabold tracking-tight text-[var(--hostly-ink-strong)]">
-          Reservas por día
+    <div className="hostly-analysis-chart-grid">
+      <div className="hostly-panel hostly-analysis-chart-card p-4">
+        <div className="hostly-analysis-card-title">
+          <CalendarDays size={17} aria-hidden="true" />
+          <span>Reservas por día</span>
         </div>
         <ResponsiveContainer width="100%" height={ANALYSIS_CHART_HEIGHT} className="min-w-0 [&_.recharts-surface]:outline-none">
           <BarChart
@@ -58,9 +76,10 @@ export function ComensalesChartsBlock({ data }: ComensalesChartsBlockProps) {
         </ResponsiveContainer>
       </div>
 
-      <div className="hostly-panel p-4">
-        <div className="mb-2.5 text-[13px] font-extrabold tracking-tight text-[var(--hostly-ink-strong)]">
-          Llegadas y ausencias
+      <div className="hostly-panel hostly-analysis-chart-card p-4">
+        <div className="hostly-analysis-card-title">
+          <UsersRound size={17} aria-hidden="true" />
+          <span>Llegadas y ausencias</span>
         </div>
         <ResponsiveContainer width="100%" height={ANALYSIS_CHART_HEIGHT} className="min-w-0 [&_.recharts-surface]:outline-none">
           <BarChart
@@ -84,6 +103,6 @@ export function ComensalesChartsBlock({ data }: ComensalesChartsBlockProps) {
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </>
+    </div>
   );
 }

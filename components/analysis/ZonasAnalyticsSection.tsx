@@ -9,6 +9,7 @@ import {
   analysisRechartsTooltipProps,
 } from "@/components/analysis/analysis-recharts-surface";
 import { AnalysisSectionEnd } from "@/components/analysis/AnalysisSectionEnd";
+import { AnalyticsEmptyState } from "@/components/analysis/AnalyticsEmptyState";
 import { ZonasKpiBlock } from "@/components/analysis/ZonasKpiBlock";
 import { ZonasTable } from "@/components/analysis/ZonasTable";
 import { ZonasViewState } from "@/components/analysis/ZonasViewState";
@@ -23,6 +24,7 @@ import type {
   ZonasSelectorsTable,
 } from "@/components/analysis/hooks/useZonasSelectors";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { MapPinned } from "lucide-react";
 
 type ZonasAnalyticsSnapshot = ReturnType<
   typeof import("@/components/analysis/hooks/useZonasAnalytics").useZonasAnalytics
@@ -147,15 +149,14 @@ export function ZonasAnalyticsSection({
 
   if (zoneMetrics.length === 0) {
     return (
-      <div className="mt-6" style={placeholderStyle}>
-        <div>
-          <div style={{ color: "var(--hostly-ink-strong)", fontWeight: 750, marginBottom: 6 }}>
-            Sin datos por zona
-          </div>
-          <div>
-            Cuando las reservas tengan una zona asignada, aquí verás su ocupación y rendimiento.
-          </div>
-        </div>
+      <div className="hostly-analysis-zone-empty">
+        <AnalyticsEmptyState
+          compact
+          icon={<MapPinned size={22} strokeWidth={2.1} />}
+          title="Todavía no hay actividad por zonas"
+          description="Cuando una reserva tenga mesa o zona asignada, podrás comparar ocupación y rendimiento."
+          hint="No necesitas configurar nada adicional."
+        />
       </div>
     );
   }
