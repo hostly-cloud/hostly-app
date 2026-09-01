@@ -6,7 +6,7 @@ import type { VentasOrder } from "@/components/analysis/types/ventas";
 export type VentasOrderInput = {
   total?: VentasOrder["total"] | null;
   createdAt?: unknown;
-  id?: string | null;
+  ticketNumber?: string | null;
   zoneName?: string | null;
 };
 

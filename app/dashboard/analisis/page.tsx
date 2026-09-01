@@ -7,7 +7,6 @@ import {
   AnalysisTabContent,
   buildAnalysisTabContentProps,
   buildComensalesSectionProps,
-  buildVentasOrdersAdapter,
   buildVentasSectionProps,
   type ColumnasZonasPrefs,
   type HorasAnalyticsSectionProps,
@@ -17,6 +16,10 @@ import {
   useZonasData,
   useZonasSelectors,
 } from "@/components/analysis";
+import {
+  buildPaidVentasSource,
+  buildVentasOrdersAdapter,
+} from "@/components/analysis/utils/ventas";
 import { useAuth } from "@/components/auth/auth-context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { listenReservationsForRange, type Reservation } from "@/lib/firestore/reservations";
@@ -27,7 +30,7 @@ import { db } from "@/lib/firebase/client";
 type AnalisisTab = "ventas" | "rentabilidad" | "horas" | "productos" | "comensales";
 
 const TABS: { id: AnalisisTab; label: string; placeholder: string }[] = [
-  { id: "ventas", label: "Ventas", placeholder: "Todavía no hay ventas en este periodo." },
+  { id: "ventas", label: "Ventas", placeholder: "No hay cobros confirmados en este periodo." },
   { id: "rentabilidad", label: "Rentabilidad", placeholder: "Margen histórico por snapshot de coste" },
   { id: "comensales", label: "Comensales", placeholder: "Próximamente: análisis de comensales" },
 ];
@@ -170,6 +173,8 @@ export default function AnalisisPage() {
   const [dateFrom, setDateFrom] = useState<string>(() => addDaysYmd(today, -6));
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [ordersDocs, setOrdersDocs] = useState<Array<Record<string, unknown>>>([]);
+  const [paymentsDocs, setPaymentsDocs] = useState<Array<Record<string, unknown>>>([]);
+  const [paymentsState, setPaymentsState] = useState<"loading" | "ready" | "error">("loading");
   const [compactViewZonas, setCompactViewZonas] = useState(false);
   const [ordenZonas, setOrdenZonas] = useState<"total" | "ocupacion" | "eficiencia" | "score">("total");
   const [searchZona, setSearchZona] = useState("");
@@ -317,8 +322,49 @@ export default function AnalisisPage() {
     let cancelled = false;
     const unsub = onSnapshot(q, (snapshot) => {
       if (cancelled) return;
-      setOrdersDocs(snapshot.docs.map((d) => d.data() as Record<string, unknown>));
+      setOrdersDocs(
+        snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) })),
+      );
     });
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [authReady, restaurantId]);
+
+  useEffect(() => {
+    if (!authReady) return;
+    if (!restaurantId || !isFirebaseConfigured) {
+      queueMicrotask(() => {
+        setPaymentsDocs([]);
+        setPaymentsState("ready");
+      });
+      return;
+    }
+
+    queueMicrotask(() => setPaymentsState("loading"));
+    const q = query(
+      collection(db, "payments"),
+      where("restaurantId", "==", restaurantId),
+      where("status", "==", "paid"),
+    );
+    let cancelled = false;
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        if (cancelled) return;
+        setPaymentsDocs(
+          snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) })),
+        );
+        setPaymentsState("ready");
+      },
+      () => {
+        if (cancelled) return;
+        setPaymentsDocs([]);
+        setPaymentsState("error");
+      },
+    );
 
     return () => {
       cancelled = true;
@@ -860,28 +906,42 @@ export default function AnalisisPage() {
     copiarResumenZonas,
   });
 
-  // Fuente real (Firestore): colección `orders`. Se adapta a Ventas vía `buildVentasOrdersAdapter`.
+  // El dinero cobrado procede de `payments`; `orders` solo aporta la zona del servicio.
   const ventasOrdersSource: Array<Record<string, unknown>> | null = useMemo(() => {
-    if (!Array.isArray(ordersDocs) || ordersDocs.length === 0) return [];
+    const paidPayments = buildPaidVentasSource(paymentsDocs, ordersDocs);
+    if (paidPayments.length === 0) return [];
     const fromMs = startOfDayMs(new Date(dateFrom));
     const toMs = endOfDayMs(new Date(dateTo));
-    return ordersDocs.filter((o) => {
-      const createdAtMs = readFirestoreTsMs(o.createdAt);
+    return paidPayments.filter((payment) => {
+      const createdAtMs = readFirestoreTsMs(payment.createdAt);
+      if (createdAtMs == null) return false;
+      return createdAtMs >= fromMs && createdAtMs <= toMs;
+    });
+  }, [paymentsDocs, ordersDocs, dateFrom, dateTo]);
+  const ventasOrders: VentasOrderInput[] = buildVentasOrdersAdapter(ventasOrdersSource);
+
+  const marginOrdersSource: Array<Record<string, unknown>> | null = useMemo(() => {
+    if (ordersDocs.length === 0) return [];
+    const fromMs = startOfDayMs(new Date(dateFrom));
+    const toMs = endOfDayMs(new Date(dateTo));
+    return ordersDocs.filter((order) => {
+      const createdAtMs = readFirestoreTsMs(order.createdAt);
       if (createdAtMs == null) return false;
       return createdAtMs >= fromMs && createdAtMs <= toMs;
     });
   }, [ordersDocs, dateFrom, dateTo]);
-  const ventasOrders: VentasOrderInput[] = buildVentasOrdersAdapter(ventasOrdersSource);
-
-  const marginOrdersSource: Array<Record<string, unknown>> | null = ventasOrdersSource;
 
   const ventasSectionProps = {
     ...buildVentasSectionProps({
       placeholder: TABS[0].placeholder,
       restaurantId: restaurantId ?? undefined,
       orders: ventasOrders,
+      dataState: paymentsState,
+      errorMessage:
+        paymentsState === "error"
+          ? "No se pudieron cargar los cobros. Revisa tu conexión o tus permisos e inténtalo de nuevo."
+          : undefined,
     }),
-    zonasAnalytics,
   };
 
   const horasSectionProps: HorasAnalyticsSectionProps = {

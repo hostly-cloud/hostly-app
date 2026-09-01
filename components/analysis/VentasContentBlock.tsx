@@ -4,8 +4,6 @@ import { VentasChartsBlock } from "@/components/analysis/VentasChartsBlock";
 import { VentasEmptyState } from "@/components/analysis/VentasEmptyState";
 import {
   VentasInsightsBlock,
-  type VentasZonaVentasAlerta,
-  type VentasZonasVentasInsights,
 } from "@/components/analysis/VentasInsightsBlock";
 import { VentasKpiBlock } from "@/components/analysis/VentasKpiBlock";
 import { VentasTableBlock } from "@/components/analysis/VentasTableBlock";
@@ -20,6 +18,8 @@ import type {
 } from "@/components/analysis/hooks/useVentasSelectors";
 
 export type VentasContentBlockProps = {
+  dataState?: "loading" | "ready" | "error";
+  errorMessage?: string;
   hasOrders: boolean;
   placeholder?: string;
   kpis: VentasSelectorsKpis;
@@ -30,15 +30,14 @@ export type VentasContentBlockProps = {
   actionsData: VentasActionsData;
   zonaMasVentas?: VentasZonaMasVentas;
   topZonasVentas?: VentasTopZona[];
-  zonasVentasInsights?: VentasZonasVentasInsights;
-  zonasVentasAlertas?: VentasZonaVentasAlerta[];
-  zonasVentasRecomendaciones?: string[];
   onCopySummary?: () => void;
   onCopyKpis?: () => void;
   onExportJson?: () => void;
 };
 
 export function VentasContentBlock({
+  dataState = "ready",
+  errorMessage,
   hasOrders,
   placeholder,
   kpis,
@@ -49,13 +48,23 @@ export function VentasContentBlock({
   actionsData,
   zonaMasVentas,
   topZonasVentas,
-  zonasVentasInsights,
-  zonasVentasAlertas,
-  zonasVentasRecomendaciones,
   onCopySummary,
   onCopyKpis,
   onExportJson,
 }: VentasContentBlockProps) {
+  if (dataState === "loading") {
+    return <VentasEmptyState placeholder="Cargando cobros confirmados…" role="status" />;
+  }
+
+  if (dataState === "error") {
+    return (
+      <VentasEmptyState
+        placeholder={errorMessage ?? "No se pudieron cargar los cobros. Inténtalo de nuevo."}
+        role="alert"
+      />
+    );
+  }
+
   if (!hasOrders) {
     return (
       <div className="hostly-analytics-stack">
@@ -82,9 +91,6 @@ export function VentasContentBlock({
       <VentasInsightsBlock
         data={insights}
         topZonasVentas={topZonasVentas}
-        zonasVentasInsights={zonasVentasInsights}
-        zonasVentasAlertas={zonasVentasAlertas}
-        zonasVentasRecomendaciones={zonasVentasRecomendaciones}
       />
     </div>
   );

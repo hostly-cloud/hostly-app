@@ -19,8 +19,13 @@ const placeholderStyle: CSSProperties = {
 
 export type VentasEmptyStateProps = {
   placeholder?: string;
+  role?: "status" | "alert";
 };
 
-export function VentasEmptyState({ placeholder }: VentasEmptyStateProps) {
-  return <div style={placeholderStyle}>{placeholder}</div>;
+export function VentasEmptyState({ placeholder, role }: VentasEmptyStateProps) {
+  return (
+    <div style={placeholderStyle} role={role} aria-live={role === "status" ? "polite" : undefined}>
+      {placeholder}
+    </div>
+  );
 }

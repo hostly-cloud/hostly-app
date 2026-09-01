@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { VentasContentBlock } from "@/components/analysis/VentasContentBlock";
 import { VentasHeaderBlock } from "@/components/analysis/VentasHeaderBlock";
 import {
@@ -13,32 +12,20 @@ import {
 } from "@/components/analysis/hooks/useVentasSelectors";
 import { formatCurrency } from "@/components/analysis/utils";
 
-/** Slice mínimo de analítica de zonas para el cruce ventas vs ocupación (sin acoplar al hook completo). */
-export type VentasZonasAnalyticsBridge = {
-  zoneMetrics?: ReadonlyArray<{
-    zoneName?: string | null;
-    ocupacion?: number | null;
-  }> | null;
-};
-
-export type VentasZonaVentasVsOcupacionRow = {
-  zoneName: string;
-  ocupacion: number;
-  ventas: number;
-};
-
 export type VentasAnalyticsSectionProps = {
   placeholder?: string;
   orders?: VentasOrderInput[] | null;
   restaurantId?: string;
-  zonasAnalytics?: VentasZonasAnalyticsBridge | null;
+  dataState?: "loading" | "ready" | "error";
+  errorMessage?: string;
 };
 
 export function VentasAnalyticsSection({
   placeholder,
   orders,
   restaurantId,
-  zonasAnalytics,
+  dataState = "ready",
+  errorMessage,
 }: VentasAnalyticsSectionProps) {
   const { orders: ventasOrders } = useVentasData({
     orders,
@@ -51,111 +38,6 @@ export function VentasAnalyticsSection({
   const { kpis, charts, table, insights, actionsData, zonaMasVentas, topZonasVentas } =
     ventasAnalytics;
 
-  const zonasVentasVsOcupacion = useMemo(() => {
-    const zoneMetrics = zonasAnalytics?.zoneMetrics ?? [];
-    const ventasMap = ventasAnalytics?.ventasPorZona ?? new Map();
-
-    return zoneMetrics.map((z) => {
-      const zoneName =
-        typeof z?.zoneName === "string" && z.zoneName.trim().length > 0
-          ? z.zoneName.trim()
-          : "Sin zona";
-
-      const ocupacion =
-        typeof z?.ocupacion === "number" && !Number.isNaN(z.ocupacion)
-          ? z.ocupacion
-          : 0;
-
-      const ventas = ventasMap.get(zoneName) ?? 0;
-
-      return {
-        zoneName,
-        ocupacion,
-        ventas,
-      };
-    });
-  }, [zonasAnalytics, ventasAnalytics]);
-
-  const zonasVentasInsights = useMemo(() => {
-    if (!Array.isArray(zonasVentasVsOcupacion) || zonasVentasVsOcupacion.length === 0) {
-      return {
-        mejorRendimiento: null,
-        peorRendimiento: null,
-      };
-    }
-
-    const withRatio = zonasVentasVsOcupacion
-      .map((z) => {
-        const ratio = z.ocupacion > 0 ? z.ventas / z.ocupacion : 0;
-
-        return {
-          ...z,
-          ratio,
-        };
-      })
-      .filter((z) => z.ocupacion > 0);
-
-    if (withRatio.length === 0) {
-      return {
-        mejorRendimiento: null,
-        peorRendimiento: null,
-      };
-    }
-
-    let max = withRatio[0];
-    let min = withRatio[0];
-
-    withRatio.forEach((z) => {
-      if (z.ratio > max.ratio) max = z;
-      if (z.ratio < min.ratio) min = z;
-    });
-
-    return {
-      mejorRendimiento: max,
-      peorRendimiento: min,
-    };
-  }, [zonasVentasVsOcupacion]);
-
-  const zonasVentasAlertas = useMemo(() => {
-    if (!Array.isArray(zonasVentasVsOcupacion)) return [];
-
-    return zonasVentasVsOcupacion
-      .filter((z) => z.ocupacion > 0)
-      .map((z) => {
-        const ratio = z.ventas / z.ocupacion;
-        return { ...z, ratio };
-      })
-      .filter((z) => z.ocupacion >= 0.6 && z.ratio < 1);
-  }, [zonasVentasVsOcupacion]);
-
-  const zonasVentasRecomendaciones = useMemo(() => {
-    if (!Array.isArray(zonasVentasAlertas) || zonasVentasAlertas.length === 0) {
-      return [];
-    }
-
-    return zonasVentasAlertas
-      .map((z) => {
-        const impacto = z.ocupacion > 0 ? z.ocupacion - z.ratio : 0;
-
-        let texto = "";
-
-        if (z.ratio < 0.5) {
-          texto = `Revisar precios o carta en ${z.zoneName}`;
-        } else if (z.ratio < 0.8) {
-          texto = `Optimizar rotación en ${z.zoneName}`;
-        } else {
-          texto = `Mejorar conversión en ${z.zoneName}`;
-        }
-
-        return {
-          texto,
-          impacto,
-        };
-      })
-      .sort((a, b) => b.impacto - a.impacto)
-      .map((r) => r.texto);
-  }, [zonasVentasAlertas]);
-
   const handleCopyVentasSummary = async () => {
     const lines: string[] = [];
 
@@ -163,8 +45,8 @@ export function VentasAnalyticsSection({
     lines.push("");
 
     lines.push(`Ventas totales: ${formatCurrency(actionsData.kpis.totalVentas)}`);
-    lines.push(`Total tickets: ${actionsData.kpis.totalTickets}`);
-    lines.push(`Ticket medio: ${formatCurrency(actionsData.kpis.ticketMedio)}`);
+    lines.push(`Cobros confirmados: ${actionsData.kpis.totalTickets}`);
+    lines.push(`Cobro medio: ${formatCurrency(actionsData.kpis.ticketMedio)}`);
 
     if (actionsData.insights.summaryLines.length > 0) {
       lines.push("");
@@ -186,8 +68,8 @@ export function VentasAnalyticsSection({
       "KPIS DE VENTAS",
       "",
       `Ventas totales: ${formatCurrency(actionsData.kpis.totalVentas)}`,
-      `Total tickets: ${actionsData.kpis.totalTickets}`,
-      `Ticket medio: ${formatCurrency(actionsData.kpis.ticketMedio)}`,
+      `Cobros confirmados: ${actionsData.kpis.totalTickets}`,
+      `Cobro medio: ${formatCurrency(actionsData.kpis.ticketMedio)}`,
     ];
 
     const text = lines.join("\n");
@@ -230,8 +112,10 @@ export function VentasAnalyticsSection({
   if (!hasOrders) {
     return (
       <div className="hostly-analytics-panel">
-        <VentasHeaderBlock title="Ventas" />
+        <VentasHeaderBlock title="Ventas" subtitle="Importes procedentes de cobros confirmados" />
         <VentasContentBlock
+          dataState={dataState}
+          errorMessage={errorMessage}
           hasOrders={hasOrders}
           placeholder={placeholder}
           kpis={kpis}
@@ -242,9 +126,6 @@ export function VentasAnalyticsSection({
           actionsData={actionsData}
           zonaMasVentas={zonaMasVentas}
           topZonasVentas={topZonasVentas}
-          zonasVentasInsights={zonasVentasInsights}
-          zonasVentasAlertas={zonasVentasAlertas}
-          zonasVentasRecomendaciones={zonasVentasRecomendaciones}
           onCopySummary={handleCopyVentasSummary}
           onCopyKpis={handleCopyVentasKpis}
           onExportJson={handleExportVentasJson}
@@ -255,8 +136,10 @@ export function VentasAnalyticsSection({
 
   return (
     <div className="hostly-analytics-panel">
-      <VentasHeaderBlock title="Ventas" />
+      <VentasHeaderBlock title="Ventas" subtitle="Importes procedentes de cobros confirmados" />
       <VentasContentBlock
+        dataState={dataState}
+        errorMessage={errorMessage}
         hasOrders={hasOrders}
         placeholder={placeholder}
         kpis={kpis}
@@ -267,9 +150,6 @@ export function VentasAnalyticsSection({
         actionsData={actionsData}
         zonaMasVentas={zonaMasVentas}
         topZonasVentas={topZonasVentas}
-        zonasVentasInsights={zonasVentasInsights}
-        zonasVentasAlertas={zonasVentasAlertas}
-        zonasVentasRecomendaciones={zonasVentasRecomendaciones}
         onCopySummary={handleCopyVentasSummary}
         onCopyKpis={handleCopyVentasKpis}
         onExportJson={handleExportVentasJson}
