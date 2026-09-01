@@ -12,7 +12,14 @@ import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
 import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlyOperationalEmptyState, HostlySectionHeader } from "@/components/ui/hostly";
+import {
+  HostlyAlert,
+  HostlyButton,
+  HostlyLoadingState,
+  HostlyOperationalEmptyState,
+  HostlyPermissionState,
+  HostlySectionHeader,
+} from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   listenPurchaseOrderById,
@@ -93,6 +100,13 @@ const primaryButtonStyle: CSSProperties = {
 
 type FormLine = SupplierInvoiceLineInput & { key: string };
 
+type InvoiceSourceState = "loading" | "ready" | "error";
+
+type InvoiceSourceSnapshot = {
+  state: InvoiceSourceState;
+  restaurantId: string | null;
+};
+
 function toFormLines(inputs: SupplierInvoiceLineInput[]): FormLine[] {
   return inputs.map((line, index) => ({
     ...line,
@@ -115,7 +129,11 @@ export default function FacturasProveedorPage() {
   const [invoices, setInvoices] = useState<SupplierInvoiceDocument[]>([]);
   const [linkedOutOfWindowInvoice, setLinkedOutOfWindowInvoice] =
     useState<SupplierInvoiceDocument | null>(null);
-  const [invoicesListenerReady, setInvoicesListenerReady] = useState(false);
+  const [invoiceSourceSnapshot, setInvoiceSourceSnapshot] = useState<InvoiceSourceSnapshot>({
+    state: "loading",
+    restaurantId: null,
+  });
+  const [invoiceRetryKey, setInvoiceRetryKey] = useState(0);
   const [sourceOrder, setSourceOrder] = useState<PurchaseOrderDocument | null>(null);
   const [supplierName, setSupplierName] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
@@ -130,26 +148,34 @@ export default function FacturasProveedorPage() {
   const [formReady, setFormReady] = useState(false);
 
   useEffect(() => {
-    if (!authReady || !isFirebaseConfigured || !restaurantId) {
-      setInvoices([]);
-      setInvoicesListenerReady(false);
-      return;
-    }
-    setInvoicesListenerReady(false);
+    if (!authReady || !isFirebaseConfigured || !restaurantId) return;
+    let sourceFailed = false;
     return listenSupplierInvoices(
       restaurantId,
       (items) => {
+        if (sourceFailed) return;
         setInvoices(items);
-        setInvoicesListenerReady(true);
+        setInvoiceSourceSnapshot({ state: "ready", restaurantId });
       },
       {
         onError: () => {
-          setLoadError("No se pudieron cargar las facturas.");
-          setInvoicesListenerReady(true);
+          sourceFailed = true;
+          setInvoices([]);
+          setInvoiceSourceSnapshot({ state: "error", restaurantId });
         },
       },
     );
-  }, [authReady, restaurantId]);
+  }, [authReady, invoiceRetryKey, restaurantId]);
+
+  const invoicesSourceState: InvoiceSourceState | "missing-restaurant" = !authReady
+    ? "loading"
+    : !isFirebaseConfigured
+      ? "error"
+      : !restaurantId
+        ? "missing-restaurant"
+        : invoiceSourceSnapshot.restaurantId !== restaurantId
+          ? "loading"
+          : invoiceSourceSnapshot.state;
 
   const displayInvoices = useMemo(() => {
     if (!linkedOutOfWindowInvoice) return invoices;
@@ -180,7 +206,7 @@ export default function FacturasProveedorPage() {
       setLinkedOutOfWindowInvoice(null);
       return;
     }
-    if (!invoicesListenerReady) return;
+    if (invoicesSourceState !== "ready") return;
 
     if (invoices.some((invoice) => invoice.id === highlightInvoiceId)) {
       setLinkedOutOfWindowInvoice(null);
@@ -200,7 +226,7 @@ export default function FacturasProveedorPage() {
     return () => {
       cancelled = true;
     };
-  }, [authReady, highlightInvoiceId, invoices, invoicesListenerReady, restaurantId]);
+  }, [authReady, highlightInvoiceId, invoices, invoicesSourceState, restaurantId]);
 
   useEffect(() => {
     if (!authReady || !isFirebaseConfigured || !restaurantId || !purchaseOrderIdParam) {
@@ -498,37 +524,70 @@ export default function FacturasProveedorPage() {
         ) : null}
 
         <div className="hostly-panel p-3 hostly-procurement-form">
-          {linkedOutOfWindowInvoice ? <DeepLinkOutOfWindowNotice /> : null}
-          {displayInvoices.length > 0 ? (
-            <div className="hostly-procurement-draft-panel__title">
-              Facturas registradas ({displayInvoices.length})
-            </div>
+          {invoicesSourceState === "loading" ? (
+            <HostlyLoadingState embedded label="Cargando facturas registradas…" />
           ) : null}
-          <FacturasProveedorListDataView
-            rows={invoiceListRows}
-            emptyContent={
-              <HostlyOperationalEmptyState
-                title="Sin facturas registradas"
-                text="Registra una factura desde un pedido recibido o sube una factura con OCR para actualizar costes reales."
-                actions={
-                  <CapabilityGuard capability="supplier_invoices.manage">
-                    <Link
-                      href="/dashboard/inventario/facturas-proveedor/nueva"
-                      className="hostly-button-primary hostly-button-compact hostly-operational-empty__action"
-                      prefetch
-                    >
-                      Nueva factura (OCR)
-                    </Link>
-                  </CapabilityGuard>
+
+          {invoicesSourceState === "missing-restaurant" ? (
+            <HostlyPermissionState embedded title="Selecciona un restaurante">
+              Las facturas se muestran únicamente para el restaurante activo.
+            </HostlyPermissionState>
+          ) : null}
+
+          {invoicesSourceState === "error" ? (
+            <HostlyAlert tone="danger" title="No se han podido cargar las facturas">
+              <p>No mostramos una lista vacía porque la fuente de datos no está disponible.</p>
+              <HostlyButton
+                variant="secondary"
+                className="hostly-button-compact mt-3"
+                onClick={() => {
+                  setInvoiceSourceSnapshot({
+                    state: "loading",
+                    restaurantId: restaurantId ?? null,
+                  });
+                  setInvoiceRetryKey((value) => value + 1);
+                }}
+              >
+                Reintentar
+              </HostlyButton>
+            </HostlyAlert>
+          ) : null}
+
+          {invoicesSourceState === "ready" ? (
+            <>
+              {linkedOutOfWindowInvoice ? <DeepLinkOutOfWindowNotice /> : null}
+              {displayInvoices.length > 0 ? (
+                <div className="hostly-procurement-draft-panel__title">
+                  Facturas registradas ({displayInvoices.length})
+                </div>
+              ) : null}
+              <FacturasProveedorListDataView
+                rows={invoiceListRows}
+                emptyContent={
+                  <HostlyOperationalEmptyState
+                    title="Sin facturas registradas"
+                    text="Registra una factura desde un pedido recibido o sube una factura con OCR para actualizar costes reales."
+                    actions={
+                      <CapabilityGuard capability="supplier_invoices.manage">
+                        <Link
+                          href="/dashboard/inventario/facturas-proveedor/nueva"
+                          className="hostly-button-primary hostly-button-compact hostly-operational-empty__action"
+                          prefetch
+                        >
+                          Nueva factura (OCR)
+                        </Link>
+                      </CapabilityGuard>
+                    }
+                    hints={[
+                      "Coste real por producto",
+                      "Histórico de ventas protegido",
+                      "Reconocimiento automático de productos",
+                    ]}
+                  />
                 }
-                hints={[
-                  "Coste real por producto",
-                  "Histórico de ventas protegido",
-                  "Reconocimiento automático de productos",
-                ]}
               />
-            }
-          />
+            </>
+          ) : null}
         </div>
       </div>
     </ModulePageShell>
