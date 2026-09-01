@@ -151,6 +151,101 @@
 .hostly-employees-access-btn[data-state="enable"] { background: var(--hostly-success-soft); }
 .hostly-employees-access-btn:disabled,.hostly-employees-role-select:disabled { opacity: .52; cursor: not-allowed; }
 .hostly-employees-action-cell { display: flex; justify-content: flex-end; }
+.hostly-employees-toolbar-actions {
+  display: flex; align-items: center; justify-content: flex-end; gap: var(--hostly-op-gap-sm); flex-shrink: 0;
+}
+.hostly-employees-invite-link {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--hostly-op-gap-xs);
+  min-height: var(--hostly-op-button-compact-min-h); text-decoration: none; white-space: nowrap;
+}
+.hostly-employees-state--empty {
+  flex-direction: column; gap: var(--hostly-op-gap-sm);
+}
+.hostly-employees-state--empty strong { color: var(--hostly-ink-strong); font-size: 15px; }
+.hostly-employees-state--empty span { max-width: 460px; }
+
+/* Equipo: invitaciones dentro del mismo lenguaje de Configuración V3. */
+.hostly-invites-page {
+  min-width: 0; color: var(--hostly-ink);
+}
+.hostly-invites-gate-state {
+  display: grid; min-height: 140px; place-items: center; padding: var(--hostly-mobile-panel-pad);
+  color: var(--hostly-ink-muted); font-size: 13px; font-weight: 700;
+}
+.hostly-invites-context-strip {
+  display: flex; align-items: center; gap: var(--hostly-op-gap-md); padding: 10px 12px;
+  border: 1px solid var(--hostly-table-divider-soft); border-radius: var(--hostly-radius-sm);
+  background: color-mix(in srgb, var(--hostly-ice-50) 84%, white); box-shadow: var(--hostly-shadow-hairline);
+}
+.hostly-invites-context-icon {
+  display: inline-flex; width: 38px; height: 38px; flex: 0 0 38px; align-items: center; justify-content: center;
+  border-radius: var(--hostly-radius-sm); background: var(--hostly-action-primary); color: #fff;
+  font-size: 23px; font-weight: 650; line-height: 1;
+}
+.hostly-invites-context-strip div { display: grid; gap: 2px; min-width: 0; }
+.hostly-invites-context-strip strong { color: var(--hostly-ink-strong); font-size: 13px; }
+.hostly-invites-context-strip span:not(.hostly-invites-context-icon) { color: var(--hostly-ink-muted); font-size: 11px; font-weight: 600; }
+.hostly-invites-workspace {
+  display: grid; grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); gap: var(--hostly-op-gap-md); align-items: start;
+}
+.hostly-invites-compose-card,.hostly-invites-pending-card {
+  min-width: 0; padding: var(--hostly-mobile-panel-pad); border-radius: var(--hostly-radius-lg);
+  box-shadow: var(--hostly-shadow-card);
+}
+.hostly-invites-compose-card { display: grid; gap: var(--hostly-op-gap-md); }
+.hostly-invites-form { display: grid; gap: var(--hostly-op-gap-md); }
+.hostly-invites-form .hostly-ds-field { min-width: 0; }
+.hostly-invites-form .hostly-input,.hostly-invites-form .hostly-select { width: 100%; min-height: var(--hostly-mobile-input-min-h); }
+.hostly-invites-submit { width: fit-content; min-height: var(--hostly-mobile-cta-min-h); padding-inline: 22px; }
+.hostly-invites-created { display: grid; gap: var(--hostly-op-gap-sm); }
+.hostly-invites-created p,.hostly-invites-manual-copy p { margin: 0; }
+.hostly-invites-created-actions { display: flex; flex-wrap: wrap; gap: var(--hostly-op-gap-sm); }
+.hostly-invites-created-actions .hostly-ds-button { min-height: var(--hostly-m-touch-target); }
+.hostly-invites-manual-copy { display: grid; gap: var(--hostly-op-gap-xs); }
+.hostly-invites-manual-copy .hostly-input { width: 100%; }
+.hostly-invites-pending-card { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.hostly-invites-pending-header {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--hostly-op-gap-md);
+  padding: 14px var(--hostly-mobile-panel-pad); border-bottom: 1px solid var(--hostly-table-divider-soft);
+  background: color-mix(in srgb, var(--hostly-ice-50) 72%, white);
+}
+.hostly-invites-pending-count {
+  display: inline-flex; width: 42px; height: 42px; flex: 0 0 42px; align-items: center; justify-content: center;
+  border: 1px solid var(--hostly-table-divider-soft); border-radius: var(--hostly-radius-sm);
+  background: var(--hostly-surface-card-solid); color: var(--hostly-navy-deep); font-size: 17px; font-weight: 850;
+}
+.hostly-invites-pending-body { padding: var(--hostly-mobile-panel-pad); }
+.hostly-invites-loading { margin: 0; color: var(--hostly-ink-muted); font-size: 13px; font-weight: 650; }
+.hostly-invites-empty { min-height: 170px; border: 0; background: transparent; box-shadow: none; }
+.hostly-invites-list {
+  overflow: hidden; border: 1px solid var(--hostly-table-divider-soft); border-radius: var(--hostly-radius-sm);
+  background: var(--hostly-surface-card-solid);
+}
+.hostly-invites-list-head,.hostly-invites-row {
+  display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(120px, .55fr) minmax(104px, auto);
+  gap: var(--hostly-op-gap-md); align-items: center;
+}
+.hostly-invites-list-head {
+  padding: 9px 12px; border-bottom: 1px solid var(--hostly-table-divider-soft);
+  background: var(--hostly-table-head-surface); color: var(--hostly-ink-faint);
+  font-size: 9px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase;
+}
+.hostly-invites-list-head span:last-child { text-align: right; }
+.hostly-invites-row { min-height: 62px; padding: 9px 12px; border-bottom: 1px solid var(--hostly-table-divider-faint); }
+.hostly-invites-row:last-child { border-bottom: 0; }
+.hostly-invites-row-person { display: flex; align-items: center; gap: var(--hostly-op-gap-sm); min-width: 0; }
+.hostly-invites-row-avatar {
+  display: inline-flex; width: 34px; height: 34px; flex: 0 0 34px; align-items: center; justify-content: center;
+  border-radius: var(--hostly-radius-sm); background: var(--hostly-ice-100); color: var(--hostly-navy-deep);
+  font-size: 13px; font-weight: 850;
+}
+.hostly-invites-row-person strong { overflow: hidden; color: var(--hostly-ink-strong); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.hostly-invites-role-badge {
+  width: fit-content; min-height: 24px; display: inline-flex; align-items: center; padding: 3px 8px;
+  border-radius: 999px; background: var(--hostly-ice-100); color: var(--hostly-ink-muted); font-size: 10px; font-weight: 750;
+}
+.hostly-invites-revoke { justify-self: end; min-height: var(--hostly-op-button-compact-min-h); }
+.hostly-invites-pending-note { margin: var(--hostly-op-gap-sm) 0 0; color: var(--hostly-ink-muted); font-size: 11px; line-height: 1.4; }
 
 @media (max-width: 767px) {
   .hostly-module-shell--mobile:has(.hostly-inventory-workbench),
@@ -167,7 +262,9 @@
   .hostly-mesas-viewport .hostly-mesa-card { min-height: 88px; }
   .hostly-employees-page { gap: 6px; }
   .hostly-employees-toolbar { padding: 8px 9px; }
+  .hostly-employees-toolbar-actions { gap: var(--hostly-op-gap-xs); }
   .hostly-employees-count { width: 40px; height: 40px; flex-basis: 40px; }
+  .hostly-employees-invite-link { min-height: 44px; padding-inline: 12px; font-size: 12px; }
   .hostly-employees-row { grid-template-columns: minmax(0,1fr); gap: 8px; padding: 10px; }
   .hostly-employees-mobile-email,.hostly-employees-mobile-label { display: block; }
   .hostly-employees-mobile-email { margin-top: 2px; max-width: calc(100vw - 100px); font-size: 11px; }
@@ -177,6 +274,14 @@
   }
   .hostly-employees-action-cell { display: block; }
   .hostly-employees-role-select,.hostly-employees-access-btn { min-height: 44px; }
+  .hostly-invites-context-strip { align-items: flex-start; }
+  .hostly-invites-workspace { grid-template-columns: minmax(0, 1fr); }
+  .hostly-invites-compose-card,.hostly-invites-pending-body { padding: 14px; }
+  .hostly-invites-submit { width: 100%; }
+  .hostly-invites-list-head { display: none; }
+  .hostly-invites-row { grid-template-columns: minmax(0, 1fr) auto; gap: var(--hostly-op-gap-sm); padding: 12px; }
+  .hostly-invites-row-person { grid-column: 1 / -1; }
+  .hostly-invites-revoke { min-height: var(--hostly-m-touch-target); }
 }
 
 @media (pointer: coarse) {

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -142,12 +143,21 @@ export default function EmpleadosPageContent({
               Gestiona el rol y el acceso de cada persona sin salir de esta pantalla.
             </p>
           </div>
-          <span
-            className="hostly-employees-count"
-            aria-label={`${rows.length} ${rows.length === 1 ? "empleado" : "empleados"}`}
-          >
-            {rows.length}
-          </span>
+          <div className="hostly-employees-toolbar-actions">
+            <span
+              className="hostly-employees-count"
+              aria-label={`${rows.length} ${rows.length === 1 ? "empleado" : "empleados"}`}
+            >
+              {rows.length}
+            </span>
+            <Link
+              href="/dashboard/invitaciones"
+              className="hostly-button-primary hostly-button-compact hostly-employees-invite-link"
+            >
+              <span aria-hidden>＋</span>
+              Invitar empleado
+            </Link>
+          </div>
         </header>
 
         {!isFirebaseConfigured ? (
@@ -161,7 +171,16 @@ export default function EmpleadosPageContent({
         ) : loading ? (
           <div className="hostly-employees-state">Cargando empleados…</div>
         ) : rows.length === 0 ? (
-          <div className="hostly-employees-state">Todavía no hay empleados en este restaurante.</div>
+          <div className="hostly-employees-state hostly-employees-state--empty">
+            <strong>Tu equipo todavía está vacío</strong>
+            <span>Invita a la primera persona y asígnale su rol antes de empezar.</span>
+            <Link
+              href="/dashboard/invitaciones"
+              className="hostly-button-primary hostly-button-compact"
+            >
+              Invitar empleado
+            </Link>
+          </div>
         ) : (
           <div className="hostly-employees-list-shell">
             <div className="hostly-employees-list-head" aria-hidden>
