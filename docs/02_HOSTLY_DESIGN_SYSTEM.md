@@ -91,7 +91,8 @@ Reglas específicas:
 - Los buscadores de Configuración usan `hostly-config-canonical-search` o una
   clase equivalente mapeada al mismo patrón.
 - Los KPIs son secundarios: compactos, discretos y nunca más protagonistas que
-  el trabajo principal.
+  el trabajo principal. Si además filtran, usan `HostlyFilterCard`; el color
+  semántico se limita al marcador, borde y valor.
 - Las tarjetas usan `ConfigCard` / `HostlyCard` con radios, sombras y padding de
   Configuración; no se crean escalas locales.
 - Los formularios de creación son compactos salvo que el módulo sea
@@ -110,7 +111,7 @@ Reglas específicas:
 ## 2. Principios inmutables
 
 1. **Tokens primero** — Si no existe token o clase `hostly-*`, no se inventa en JSX.
-2. **Componentes antes que CSS local** — Reutilizar `HostlySurface`, `HostlyKpiCard`, `HostlySegmentedControl`, etc.
+2. **Componentes antes que CSS local** — Reutilizar `HostlySurface`, `HostlyKpiCard`, `HostlyFilterCard`, `HostlySegmentedControl`, etc.
 3. **Un cambio global por fase** — Migraciones visuales incrementales; no mezclar con refactors de datos.
 4. **Táctil sin marketing** — Densidad operacional (Toast / Square / Linear), no cards tipo landing.
 5. **Sin glassmorphism ni gradientes decorativos** en dashboard operacional (salvo tokens ya definidos como `--hostly-surface-ice-bg`).
@@ -244,6 +245,7 @@ fallbacks compatibles. No declarar familias locales en shells o componentes.
 - Filtros inventario: `.hostly-inventory-filters-stack` (grupos verticales + chips wrap).
 - Tabs: `--hostly-op-tab-min-h-touch`, scroll horizontal en tablists.
 - KPI: grid `.hostly-kpi-grid-unified` (2 columnas).
+- Filtros métricos: `.hostly-filter-card-grid--metrics` (3 columnas, sin recortar etiquetas).
 - Launcher: altura `--hostly-op-launcher-height-mobile`, grid 2 columnas.
 - Inputs: mínimo `--hostly-mobile-input-min-h`.
 
@@ -304,6 +306,7 @@ fallbacks compatibles. No declarar familias locales en shells o componentes.
 | Panel genérico | `HostlySurface` `variant="flat\|soft\|ice\|elevated"` |
 | Card legacy | `.hostly-card`, `.hostly-panel` (no en pantallas nuevas) |
 | KPI | `HostlyKpiCard` + `.hostly-kpi-card` |
+| Métrica u opción que filtra | `HostlyFilterCard` + `.hostly-filter-card-grid` |
 | Launcher operación | `.hostly-op-launcher-card` |
 | Mobile card | `.hostly-mobile-card`, `--compact`, `--comfortable` |
 | Layout columna | `HostlySection` `stack="sm\|md\|lg"` |
@@ -322,6 +325,15 @@ fallbacks compatibles. No declarar familias locales en shells o componentes.
 - **Estado:** `aria-selected="true"` o `data-active="true"` (ambos soportados en CSS).
 - **Hub inventario:** `InventarioRouteTabs` (patrón referencia).
 - **Prohibido:** `<div className="hostly-segmented">` suelto sin `--unified` en código nuevo.
+
+#### 5.5.1 Filtros métricos y de estado
+
+- **Componente:** `HostlyFilterCard`; no recrear cápsulas de colores por ruta.
+- **Grid:** `--metrics` para label + valor y `--choices` para opciones de texto.
+- **Selección:** fondo hielo y rail azul Hostly; nunca llenar toda la superficie con color.
+- **Semántica:** `success`, `warning` y `danger` solo modifican marcador, borde y valor.
+- **Responsive:** seis columnas métricas en desktop, tres en móvil; opciones en dos columnas móviles.
+- **Texto:** puede envolver; no usar `truncate` ni anchos fijos que oculten estados.
 
 ### 5.6 Formularios
 
@@ -399,6 +411,7 @@ Clases operacionales unificadas (post-[L]):
 | `HostlySection` | `components/ui/hostly/HostlySection.tsx` | Layout columna + stack gap |
 | `HostlySectionHeader` | `components/ui/hostly/HostlySectionHeader.tsx` | Título sección + acciones |
 | `HostlyKpiCard` | `components/ui/hostly/HostlyKpiCard.tsx` | Métricas compactas |
+| `HostlyFilterCard` | `components/ui/hostly/HostlyFilterCard.tsx` | Filtros métricos y opciones de estado táctiles |
 | `HostlySegmentedControl` | `components/ui/hostly/HostlySegmentedControl.tsx` | Tabs/filtros unificados |
 | `hostlySegmentTabClassName` | export en `index.ts` | Clase tab hijo |
 | `hostlySegmentPillClassName` | export en `index.ts` | Clase pill hijo |
@@ -448,6 +461,8 @@ Clases operacionales unificadas (post-[L]):
 
 - Tabs hechas a mano con botones + padding inline.
 - KPI cards custom con estructura paralela a `HostlyKpiCard`.
+- Filtros métricos o de estado custom paralelos a `HostlyFilterCard`.
+- Cápsulas completamente coloreadas para filtros; reservar el color fuerte para estados puntuales.
 - Tercera variante de botón “compacto” local.
 - Copiar/pegar bloques `hostly-segmented` sin `HostlySegmentedControl`.
 
@@ -517,6 +532,7 @@ Validar: npm run build.
 | **v2.11** | Compras / Recepciones / Facturas proveedor → HostlyDataTable + densidad ERP ligero | ✅ `--compras` / `--recepciones` / `--facturas-proveedor` + data views procurement |
 | **v2.12** | Mobile Operational Layout — header/tabs/KPI/toolbars compactos hub inventario | ✅ `.hostly-mobile-operational-*` + `.hostly-mobile-op-*` |
 | **v2.13** | Reservas — banda de agenda diaria compacta y táctil | ✅ `.hostly-reservations-day-toolbar*` + `ReservationDayToolbar` |
+| **v2.14** | Filtros métricos y de estado unificados | ✅ `HostlyFilterCard` en Productos y Cola de impresión |
 
 ---
 
@@ -529,4 +545,4 @@ Validar: npm run build.
 
 ---
 
-*Última actualización: Hostly Visual System v2 — fase 2.12 (Mobile Operational Layout hub inventario/compras).*
+*Última actualización: Hostly Visual System v2 — fase 2.14 (filtros métricos y de estado unificados).*

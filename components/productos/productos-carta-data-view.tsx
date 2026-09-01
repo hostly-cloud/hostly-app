@@ -15,6 +15,10 @@ import {
   HostlyMobileListItem,
   HostlyStatusBadge,
 } from "@/components/ui/hostly/data-table";
+import {
+  HostlyFilterCard,
+  type HostlyFilterCardTone,
+} from "@/components/ui/hostly";
 import type { Locale, TranslateFn } from "@/lib/i18n";
 import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
 import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
@@ -219,8 +223,6 @@ export type ProductosCartaDataViewProps = {
   inlineEdit?: ProductosTableInlineEditConfig;
 };
 
-type ResolverParitySummaryPillTone = "neutral" | "ok" | "warn" | "danger";
-
 function ResolverParitySummaryPill({
   label,
   value,
@@ -231,29 +233,20 @@ function ResolverParitySummaryPill({
 }: {
   label: string;
   value: number;
-  tone?: ResolverParitySummaryPillTone;
+  tone?: HostlyFilterCardTone;
   filterId: ResolverParityFilterId;
   activeFilter: ResolverParityFilterId;
   onFilterChange: (filter: ResolverParityFilterId) => void;
 }) {
   const isActive = activeFilter === filterId;
   return (
-    <button
-      type="button"
-      className={[
-        "hostly-productos-resolver-parity-pill",
-        "hostly-productos-resolver-parity-pill--clickable",
-        tone !== "neutral" ? `hostly-productos-resolver-parity-pill--${tone}` : "",
-        isActive ? "hostly-productos-resolver-parity-pill--active" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      aria-pressed={isActive}
+    <HostlyFilterCard
+      label={label}
+      value={value}
+      tone={tone}
+      active={isActive}
       onClick={() => onFilterChange(filterId)}
-    >
-      <span className="hostly-productos-resolver-parity-pill__label">{label}</span>
-      <span className="hostly-productos-resolver-parity-pill__value">{value}</span>
-    </button>
+    />
   );
 }
 
@@ -296,8 +289,8 @@ export function ProductosResolverParitySummaryStrip({
 }) {
   if (loading) {
     return (
-      <div className="hostly-productos-resolver-parity-strip" role="status">
-        <span className="hostly-productos-resolver-parity-strip__loading">
+      <div className="hostly-filter-card-panel" role="status">
+        <span className="hostly-filter-card-panel__loading">
           {t("productos.resolverParitySummaryLoading")}
         </span>
       </div>
@@ -311,11 +304,11 @@ export function ProductosResolverParitySummaryStrip({
 
   return (
     <div
-      className="hostly-productos-resolver-parity-strip"
+      className="hostly-filter-card-panel hostly-filter-card-grid hostly-filter-card-grid--metrics"
       role="region"
       aria-label={t("productos.resolverParitySummaryAria")}
     >
-      <span className="hostly-productos-resolver-parity-strip__title">
+      <span className="hostly-filter-card-panel__title">
         {t("productos.resolverParitySummaryTitle")}
       </span>
       <ResolverParitySummaryPill
@@ -328,7 +321,7 @@ export function ProductosResolverParitySummaryStrip({
       <ResolverParitySummaryPill
         label={t("productos.resolverParitySummaryOk")}
         value={summary.ok}
-        tone="ok"
+        tone="success"
         filterId="ok"
         activeFilter={activeFilter}
         onFilterChange={onFilterChange}
@@ -344,7 +337,7 @@ export function ProductosResolverParitySummaryStrip({
       <ResolverParitySummaryPill
         label={t("productos.resolverParitySummaryMissingStation")}
         value={missingStation}
-        tone={missingStation > 0 ? "warn" : "neutral"}
+        tone={missingStation > 0 ? "warning" : "neutral"}
         filterId="missingStation"
         activeFilter={activeFilter}
         onFilterChange={onFilterChange}
@@ -352,7 +345,7 @@ export function ProductosResolverParitySummaryStrip({
       <ResolverParitySummaryPill
         label={t("productos.resolverParitySummaryHeuristic")}
         value={heuristic}
-        tone={heuristic > 0 ? "warn" : "neutral"}
+        tone={heuristic > 0 ? "warning" : "neutral"}
         filterId="heuristic"
         activeFilter={activeFilter}
         onFilterChange={onFilterChange}
@@ -360,13 +353,13 @@ export function ProductosResolverParitySummaryStrip({
       <ResolverParitySummaryPill
         label={t("productos.resolverParitySummaryNoOpStation")}
         value={noOpStation}
-        tone={noOpStation > 0 ? "warn" : "neutral"}
+        tone={noOpStation > 0 ? "warning" : "neutral"}
         filterId="missingOperationStation"
         activeFilter={activeFilter}
         onFilterChange={onFilterChange}
       />
       {statusKey ? (
-        <span className="hostly-productos-resolver-parity-strip__status" role="status">
+        <span className="hostly-filter-card-panel__status" role="status">
           {t(statusKey, { count: filteredCount })}
         </span>
       ) : null}

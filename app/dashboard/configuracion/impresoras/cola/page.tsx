@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import {
   HostlyAlert,
   HostlyButton,
+  HostlyFilterCard,
   HostlyLoadingState,
   HostlyPermissionState,
   HostlySectionHeader,
@@ -402,29 +403,28 @@ export default function ConfigImpresorasColaPage() {
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 Estado
               </p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div
+                className="mt-2 hostly-filter-card-grid hostly-filter-card-grid--choices"
+                role="group"
+                aria-label="Filtrar por estado"
+              >
                 {(
                   [
-                    ["all", "Todos"],
-                    ["pending", "Pendientes"],
-                    ["stale_pending", `Antiguos (>${STALE_PENDING_MINUTES}m)`],
-                    ["failed", "Fallidos"],
-                    ["printed", "Impresos"],
-                    ["cancelled", "Cancelados"],
+                    ["all", "Todos", "neutral"],
+                    ["pending", "Pendientes", "warning"],
+                    ["stale_pending", `Antiguos (>${STALE_PENDING_MINUTES}m)`, "danger"],
+                    ["failed", "Fallidos", "danger"],
+                    ["printed", "Impresos", "success"],
+                    ["cancelled", "Cancelados", "neutral"],
                   ] as const
-                ).map(([value, label]) => (
-                  <button
+                ).map(([value, label, tone]) => (
+                  <HostlyFilterCard
                     key={value}
-                    type="button"
+                    label={label}
+                    tone={tone}
+                    active={statusFilter === value}
                     onClick={() => setStatusFilter(value)}
-                    className={`rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
-                      statusFilter === value
-                        ? "bg-sky-600 text-white ring-sky-600"
-                        : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    {label}
-                  </button>
+                  />
                 ))}
               </div>
             </div>
@@ -432,31 +432,23 @@ export default function ConfigImpresorasColaPage() {
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 Destino general
               </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button
-                  type="button"
+              <div
+                className="mt-2 hostly-filter-card-grid hostly-filter-card-grid--choices"
+                role="group"
+                aria-label="Filtrar por destino general"
+              >
+                <HostlyFilterCard
+                  label="Todos"
+                  active={stationFilter === "all"}
                   onClick={() => setStationFilter("all")}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
-                    stationFilter === "all"
-                      ? "bg-sky-600 text-white ring-sky-600"
-                      : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  Todos
-                </button>
+                />
                 {PRINTER_STATION_KEYS.map((key) => (
-                  <button
+                  <HostlyFilterCard
                     key={key}
-                    type="button"
+                    label={PRINTER_CONFIG_DEFAULT_DISPLAY_NAMES[key]}
+                    active={stationFilter === key}
                     onClick={() => setStationFilter(key)}
-                    className={`rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
-                      stationFilter === key
-                        ? "bg-sky-600 text-white ring-sky-600"
-                        : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    {PRINTER_CONFIG_DEFAULT_DISPLAY_NAMES[key]}
-                  </button>
+                  />
                 ))}
               </div>
             </div>
@@ -465,43 +457,29 @@ export default function ConfigImpresorasColaPage() {
                 Estación operativa
               </p>
               <div
-                className="mt-2 flex flex-wrap gap-2 overflow-x-auto pb-0.5"
+                className="mt-2 hostly-filter-card-grid hostly-filter-card-grid--choices"
                 role="group"
                 aria-label="Filtrar por estación operativa"
               >
-                <button
-                  type="button"
+                <HostlyFilterCard
+                  label="Todas las estaciones"
+                  active={
+                    operationStationFilter === KDS_OPERATION_STATION_FILTER_ALL
+                  }
                   onClick={() =>
                     setOperationStationFilter(KDS_OPERATION_STATION_FILTER_ALL)
                   }
-                  aria-pressed={
-                    operationStationFilter === KDS_OPERATION_STATION_FILTER_ALL
-                  }
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
-                    operationStationFilter === KDS_OPERATION_STATION_FILTER_ALL
-                      ? "bg-[#3d7a9a] text-white ring-[#3d7a9a]"
-                      : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  Todas las estaciones
-                </button>
+                />
                 {activeOperationStations.map((station) => {
                   const active = operationStationFilter === station.id;
                   return (
-                    <button
+                    <HostlyFilterCard
                       key={station.id}
-                      type="button"
+                      label={station.name}
                       title={station.name}
-                      aria-pressed={active}
+                      active={active}
                       onClick={() => setOperationStationFilter(station.id)}
-                      className={`max-w-[min(200px,42vw)] shrink-0 truncate rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
-                        active
-                          ? "bg-[#3d7a9a] text-white ring-[#3d7a9a]"
-                          : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      {station.name}
-                    </button>
+                    />
                   );
                 })}
               </div>

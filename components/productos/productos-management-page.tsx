@@ -44,7 +44,7 @@ import {
 } from "@/components/productos/productos-bulk-initial-values";
 import { ProductosSelectionBar } from "@/components/productos/productos-selection-bar";
 import { useProductosSelection } from "@/components/productos/use-productos-selection";
-import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface, hostlySegmentTabClassName, HostlySegmentedControl } from "@/components/ui/hostly";
+import { HostlyFilterCard, HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface, hostlySegmentTabClassName, HostlySegmentedControl } from "@/components/ui/hostly";
 import { fetchCartaCategorias, fetchCartaFamilias, createCartaCategoriaApi } from "@/lib/carta-categorias/api-client";
 import { buildCartaGroupedSections } from "@/lib/carta-categorias/grouping";
 import { comparePlatoCarta } from "@/lib/carta/product-sort-order";
@@ -258,173 +258,6 @@ const productosTableInteractionStyles = `
   .hostly-productos-row-icon-btn {
     transition: none;
   }
-}
-.hostly-productos-resolver-parity-strip {
-  display: grid !important;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 7px;
-  margin-bottom: 10px;
-  padding: 10px;
-  border: 1px solid color-mix(in srgb, var(--hostly-ice-200, #e2e8f0) 78%, #cbd5e1);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--hostly-ice-50, #f8fafc) 62%, #ffffff);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--hostly-navy-deep, #0f2942) 5%, transparent);
-  min-width: 0;
-  box-sizing: border-box;
-}
-.hostly-productos-resolver-parity-strip__title {
-  grid-column: 1 / -1;
-  display: block;
-  padding: 0 2px 1px;
-  font-size: 10px;
-  font-weight: 780;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  line-height: 1.15;
-  color: var(--hostly-ink-muted, #64748b);
-}
-.hostly-productos-resolver-parity-strip__loading {
-  grid-column: 1 / -1;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.2;
-  color: #94a3b8;
-}
-.hostly-productos-resolver-parity-pill {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-  min-height: 40px;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--hostly-ice-200, #e2e8f0) 82%, #cbd5e1);
-  border-radius: 10px;
-  background: #ffffff;
-  box-sizing: border-box;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-}
-.hostly-productos-resolver-parity-pill--clickable {
-  cursor: pointer;
-  transition:
-    border-color 0.14s ease,
-    background-color 0.14s ease,
-    box-shadow 0.14s ease,
-    transform 0.14s ease;
-}
-.hostly-productos-resolver-parity-pill--clickable:hover {
-  border-color: color-mix(in srgb, var(--hostly-action-primary, #153a5b) 30%, #cbd5e1);
-  background: color-mix(in srgb, var(--hostly-ice-50, #f8fafc) 72%, #ffffff);
-  transform: translateY(-1px);
-}
-.hostly-productos-resolver-parity-pill--clickable:focus-visible {
-  outline: none;
-  border-color: var(--hostly-action-primary, #153a5b);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hostly-action-primary, #153a5b) 14%, transparent);
-}
-.hostly-productos-resolver-parity-pill--active {
-  border-color: color-mix(in srgb, var(--hostly-action-primary, #153a5b) 52%, #cbd5e1) !important;
-  background: color-mix(in srgb, var(--hostly-accent-soft, #e0f2fe) 42%, #ffffff) !important;
-  box-shadow: inset 3px 0 0 var(--hostly-action-primary, #153a5b);
-}
-.hostly-productos-resolver-parity-strip__status {
-  grid-column: 1 / -1;
-  min-width: 0;
-  padding: 2px 2px 0;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.25;
-  color: var(--hostly-action-primary, #153a5b);
-}
-.hostly-productos-resolver-parity-pill__label {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  font-size: 9px;
-  font-weight: 740;
-  letter-spacing: 0.075em;
-  text-transform: uppercase;
-  line-height: 1.2;
-  color: var(--hostly-ink-muted, #64748b);
-}
-.hostly-productos-resolver-parity-pill__label::before {
-  content: "";
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: #94a3b8;
-}
-.hostly-productos-resolver-parity-pill__value {
-  font-size: 16px;
-  font-weight: 790;
-  line-height: 1;
-  color: var(--hostly-ink-strong, #0f172a);
-  font-variant-numeric: tabular-nums;
-}
-.hostly-productos-resolver-parity-pill--ok {
-  border-color: color-mix(in srgb, #16a34a 18%, var(--hostly-ice-200, #e2e8f0));
-  background: #ffffff;
-}
-.hostly-productos-resolver-parity-pill--ok .hostly-productos-resolver-parity-pill__label::before {
-  background: #22c55e;
-}
-.hostly-productos-resolver-parity-pill--ok .hostly-productos-resolver-parity-pill__value {
-  color: #166534;
-}
-.hostly-productos-resolver-parity-pill--warn {
-  border-color: color-mix(in srgb, #d97706 22%, var(--hostly-ice-200, #e2e8f0));
-  background: #ffffff;
-}
-.hostly-productos-resolver-parity-pill--warn .hostly-productos-resolver-parity-pill__label::before {
-  background: #f59e0b;
-}
-.hostly-productos-resolver-parity-pill--warn .hostly-productos-resolver-parity-pill__value {
-  color: #92400e;
-}
-.hostly-productos-resolver-parity-pill--danger {
-  border-color: color-mix(in srgb, #dc2626 20%, var(--hostly-ice-200, #e2e8f0));
-  background: #ffffff;
-}
-.hostly-productos-resolver-parity-pill--danger .hostly-productos-resolver-parity-pill__label::before {
-  background: #ef4444;
-}
-.hostly-productos-resolver-parity-pill--danger .hostly-productos-resolver-parity-pill__value {
-  color: #991b1b;
-}
-@media (max-width: 640px) {
-  .hostly-productos-resolver-parity-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-    margin-bottom: 8px;
-    padding: 9px;
-  }
-  .hostly-productos-resolver-parity-strip__title {
-    padding-bottom: 2px;
-  }
-  .hostly-productos-resolver-parity-pill {
-    grid-template-columns: minmax(0, 1fr);
-    align-content: center;
-    gap: 5px;
-    min-height: 56px;
-    padding: 8px 9px;
-  }
-  .hostly-productos-resolver-parity-pill__label {
-    align-items: flex-start;
-    white-space: normal;
-  }
-  .hostly-productos-resolver-parity-pill__value {
-    font-size: 18px;
-  }
-}
-[data-hostly-touch] .hostly-productos-resolver-parity-pill {
-  min-height: 56px !important;
 }
 .hostly-productos-routing-correct-btn {
   display: inline-flex;
@@ -4603,7 +4436,7 @@ export default function ProductosManagementPage({
   function renderCompactResolverParityCards(): ReactNode {
     if (!parityCatalogsLoaded) {
       return (
-        <span className="hostly-productos-v3__kpi-loading" role="status">
+        <span className="hostly-filter-card-panel__loading" role="status">
           {t("productos.resolverParitySummaryLoading")}
         </span>
       );
@@ -4616,7 +4449,7 @@ export default function ProductosManagementPage({
       label: string;
       value: number;
       filterId: ResolverParityFilterId;
-      tone?: "ok" | "warn" | "danger";
+      tone?: "success" | "warning" | "danger";
     }> = [
       {
         label: t("productos.resolverParitySummaryTotal"),
@@ -4627,7 +4460,7 @@ export default function ProductosManagementPage({
         label: t("productos.resolverParitySummaryOk"),
         value: resolverParitySummaryForTab.ok,
         filterId: "ok",
-        tone: "ok",
+        tone: "success",
       },
       {
         label: t("productos.resolverParitySummaryDivergence"),
@@ -4639,41 +4472,33 @@ export default function ProductosManagementPage({
         label: t("productos.resolverParitySummaryMissingStation"),
         value: missingStation,
         filterId: "missingStation",
-        tone: missingStation > 0 ? "warn" : undefined,
+        tone: missingStation > 0 ? "warning" : undefined,
       },
       {
         label: t("productos.resolverParitySummaryHeuristic"),
         value: heuristic,
         filterId: "heuristic",
-        tone: heuristic > 0 ? "warn" : undefined,
+        tone: heuristic > 0 ? "warning" : undefined,
       },
       {
         label: t("productos.resolverParitySummaryNoOpStation"),
         value: noOpStation,
         filterId: "missingOperationStation",
-        tone: noOpStation > 0 ? "warn" : undefined,
+        tone: noOpStation > 0 ? "warning" : undefined,
       },
     ];
 
     return cards.map((card) => {
       const active = resolverParityFilter === card.filterId;
       return (
-        <button
+        <HostlyFilterCard
           key={card.filterId}
-          type="button"
-          className={[
-            "hostly-productos-v3__kpi-card",
-            active ? "is-active" : "",
-            card.tone ? `is-${card.tone}` : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          aria-pressed={active}
+          label={card.label}
+          value={card.value}
+          tone={card.tone}
+          active={active}
           onClick={() => handleResolverParityFilterChange(card.filterId)}
-        >
-          <span className="hostly-productos-v3__kpi-value">{card.value}</span>
-          <span className="hostly-productos-v3__kpi-label">{card.label}</span>
-        </button>
+        />
       );
     });
   }
@@ -5777,7 +5602,11 @@ export default function ProductosManagementPage({
               {items.length > 0 ? (
               <div className="hostly-productos-v3__advanced-group hostly-productos-v3__advanced-group--kpis">
               <span className="hostly-productos-v3__advanced-label">KPIs</span>
-              <div className="hostly-productos-v3__kpi-grid" aria-label={t("productos.resolverParitySummaryAria")}>
+              <div
+                className="hostly-filter-card-grid hostly-filter-card-grid--metrics"
+                role="group"
+                aria-label={t("productos.resolverParitySummaryAria")}
+              >
               {renderCompactResolverParityCards()}
               </div>
               </div>

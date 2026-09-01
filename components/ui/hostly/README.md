@@ -8,6 +8,7 @@ desde ahora el contrato de producto es **Hostly Design System v1**.
 
 - Botones: `HostlyButton` (`primary`, `secondary`, `ghost`, `destructive`, `icon`, `tableAction`, `drawerAction`).
 - Cards: `HostlyCard` (`operation`, `configuration`, `kpi`, `action`).
+- Filtros métricos: `HostlyFilterCard` (selección neutra y tonos semánticos discretos).
 - Formularios: `HostlyField`, `HostlyInput`, `HostlySelect`, `HostlyTextarea` y `HostlyFormToggle`.
 - Estados: `HostlyAlert`, `HostlyLoadingState`, `HostlyPermissionState`, `HostlyOperationalEmptyState`.
 - Overlays: `HostlyDrawer`, siempre con header, body desplazable y footer estable.
@@ -63,6 +64,7 @@ Declarative building blocks wired to **`app/globals.css`** tokens (`--hostly-*`)
 | Panel / tarjeta con borde y sombra canónicos | `HostlySurface` (`variant`) |
 | Título + subtítulo meta + slots de acciones | `HostlySectionHeader` |
 | Métricas compactas con acento opcional | `HostlyKpiCard` |
+| Métrica u opción que además filtra | `HostlyFilterCard` + `.hostly-filter-card-grid` |
 
 ## Superficies
 
