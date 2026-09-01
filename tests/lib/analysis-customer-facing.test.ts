@@ -18,7 +18,16 @@ test("la navegación no ofrece secciones todavía vacías", () => {
 test("las acciones principales evitan formatos técnicos y redundantes", () => {
   const salesActions = readFileSync("components/analysis/VentasActions.tsx", "utf8");
   const zones = readFileSync("components/analysis/ZonasAnalyticsSection.tsx", "utf8");
+  const analysisPage = readFileSync("app/dashboard/analisis/page.tsx", "utf8");
   assert.doesNotMatch(salesActions, /Exportar JSON|Copiar KPIs/);
   assert.doesNotMatch(zones, />\s*(?:Exportar JSON|Copiar CSV|Copiar JSON|Copiar ultra)\s*</);
+  assert.doesNotMatch(
+    zones,
+    /Uso acciones|Resets uso|Interacciones\/sesión|Madurez de uso|Salud del módulo/,
+  );
+  assert.doesNotMatch(
+    analysisPage,
+    /uso_acciones_zonas|reset_uso_acciones_zonas|last_interaction_zonas|sesiones_zonas/,
+  );
   assert.match(zones, /Cuando las reservas tengan una zona asignada/);
 });
