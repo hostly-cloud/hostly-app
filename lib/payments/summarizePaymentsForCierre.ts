@@ -47,10 +47,14 @@ export function summarizePaymentsForCierre(
     };
 
     const sale = paymentSaleAmount(raw);
+    const tip = n(p.tip);
     totalVentas += sale;
-    totalPropinas += n(p.tip);
+    totalPropinas += tip;
     totalDiscounts += p.discountTotal != null ? n(p.discountTotal) : 0;
-    totalCobrado += n(p.received || sale);
+    // `received` is the amount handed over before change (and can also include a
+    // voucher's unused balance). The amount retained by the restaurant is the
+    // recognized sale plus any tip.
+    totalCobrado += sale + tip;
 
     const pm = String(p.paymentMethod ?? "").toLowerCase();
     if (pm === "cash") cash += sale;
