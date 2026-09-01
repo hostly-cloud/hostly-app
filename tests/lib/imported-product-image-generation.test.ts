@@ -100,6 +100,36 @@ test("a manually created generic dish without image is eligible", () => {
   });
 });
 
+test("a legacy dish without tipoVenta uses the same safe inference as Productos", () => {
+  const result = evaluateImportedProductImageEligibility(
+    importedDish({
+      importedFromMenuDraftId: undefined,
+      tipoVenta: undefined,
+      name: "Penne Arrabiata",
+      categoryName: "Pasta",
+    }),
+  );
+
+  assert.deepEqual(result, {
+    eligible: true,
+    name: "Penne Arrabiata",
+    categoryName: "Pasta",
+  });
+});
+
+test("legacy beverages without tipoVenta remain excluded from AI", () => {
+  assert.deepEqual(
+    evaluateImportedProductImageEligibility(
+      importedDish({
+        tipoVenta: undefined,
+        name: "Fanta Naranja",
+        categoryName: "Refrescos",
+      }),
+    ),
+    { eligible: false, reason: "not_food" },
+  );
+});
+
 test("the saved Spanish description or current form draft feeds the prompt", () => {
   assert.deepEqual(
     evaluateImportedProductImageEligibility(

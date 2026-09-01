@@ -6,6 +6,10 @@ import {
   canAutomaticallyReplaceProductImage,
   readProductImageEnrichment,
 } from "@/lib/carta/product-image-enrichment";
+import {
+  inferTipoVentaFromCartaText,
+  parseTipoVentaLoose,
+} from "@/lib/carta/product-sale-contract";
 import { getHostlyStorageBucket } from "@/lib/firebase/admin";
 import type { CatalogImageAccess } from "@/lib/productos/catalog-image-plan";
 
@@ -180,16 +184,19 @@ export function evaluateImportedProductImageEligibility(
   data: Record<string, unknown>,
   descriptionOverride?: string,
 ): ProductImageGenerationEligibility {
-  if (data.tipoVenta !== "plato" || data.productFamilyType === "drink") {
-    return { eligible: false, reason: "not_food" };
-  }
-
   const name = readString(data, "name") ?? "";
   if (name.length < 3) {
     return { eligible: false, reason: "invalid_product_name" };
   }
 
   const categoryName = readString(data, "categoryName") ?? "Plato";
+  const tipoVenta =
+    parseTipoVentaLoose(data.tipoVenta) ??
+    inferTipoVentaFromCartaText(categoryName, name);
+  if (tipoVenta !== "plato" || data.productFamilyType === "drink") {
+    return { eligible: false, reason: "not_food" };
+  }
+
   if (looksLikeBrandedOrBeverageProduct(name, categoryName)) {
     return { eligible: false, reason: "branded_or_beverage" };
   }
