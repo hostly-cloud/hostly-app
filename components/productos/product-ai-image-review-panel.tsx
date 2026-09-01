@@ -7,6 +7,11 @@ import {
 } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
 import type { CatalogProductImageCandidate } from "@/lib/productos/catalog-product-image-contract";
 import {
+  catalogImagePlanLabel,
+  hasCatalogImageCapability,
+  type CatalogImageAccess,
+} from "@/lib/productos/catalog-image-plan";
+import {
   attachCatalogProductImageForReview,
   CatalogProductImageApiError,
   searchCatalogProductImagesForReview,
@@ -110,11 +115,11 @@ function ProductImageActionConfirmDialog({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <h2 id={titleId} className="hostly-productos-bulk-course-modal__title">
-          {isGeneration ? "¿Generar imagen con IA?" : "¿Usar esta imagen de catálogo?"}
+          {isGeneration ? "¿Crear imagen con IA?" : "¿Usar esta imagen de catálogo?"}
         </h2>
         <p id={messageId} className="hostly-productos-bulk-course-modal__hint">
           {isGeneration
-            ? "La generación puede tener un pequeño coste y la imagen quedará pendiente de revisión."
+            ? "La generación puede consumir créditos. La imagen quedará pendiente de revisión y no sustituirá una imagen aprobada."
             : `Se copiará la imagen de “${confirmation.candidate.productName}” y quedará pendiente de aprobación.`}
         </p>
         <div className="hostly-productos-bulk-course-modal__actions">
@@ -132,7 +137,7 @@ function ProductImageActionConfirmDialog({
             className="hostly-button-primary hostly-button-compact"
             onClick={onConfirm}
           >
-            {isGeneration ? "Generar imagen" : "Usar imagen"}
+            {isGeneration ? "Crear imagen" : "Usar imagen"}
           </button>
         </div>
       </div>
@@ -157,6 +162,8 @@ function friendlyError(error: unknown): string {
         return "La coincidencia ya no es suficientemente segura para este producto.";
       case "CATALOG_IMAGE_ATTACH_IN_PROGRESS":
         return "Ya se está adjuntando una imagen de catálogo para este producto.";
+      case "CATALOG_IMAGE_SEARCH_PLAN_REQUIRED":
+        return "La búsqueda de catálogo está disponible en los planes Pro y Ultra.";
       case "PRODUCT_IMAGE_PROTECTED":
         return "La imagen actual está protegida y no se puede sustituir.";
       default:
@@ -177,6 +184,8 @@ function friendlyError(error: unknown): string {
       case "IMAGE_PROVIDER_INVALID_RESPONSE":
       case "IMAGE_PROVIDER_EMPTY_RESPONSE":
         return "El proveedor de imágenes no pudo completar la generación.";
+      case "CATALOG_IMAGE_AI_SINGLE_PLAN_REQUIRED":
+        return "La creación de imágenes con IA está disponible en los planes Pro y Ultra.";
       case "PRODUCT_IMAGE_PROTECTED":
         return "La imagen actual está protegida y no se puede modificar desde esta revisión.";
       case "PRODUCT_IMAGE_REVIEW_STATE_INVALID":
@@ -192,6 +201,8 @@ function skippedGenerationMessage(reason: string): string {
   switch (reason) {
     case "generation_in_progress":
       return "Ya hay una generación en curso para este producto.";
+    case "duplicate_request":
+      return "La misma solicitud ya se procesó. Actualiza el estado antes de volver a intentarlo.";
     case "protected_existing_image":
       return "La imagen quedó protegida antes de terminar la generación y no se sustituyó.";
     case "branded_or_beverage":
@@ -337,6 +348,7 @@ export function ProductAiImageReviewPanel({
   onImageUrlChange,
 }: ProductAiImageReviewPanelProps) {
   const [state, setState] = useState<ProductImageReviewResolution | null>(null);
+  const [access, setAccess] = useState<CatalogImageAccess | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyAction, setBusyAction] = useState<ProductImageReviewUiAction | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -355,6 +367,7 @@ export function ProductAiImageReviewPanel({
   useEffect(() => {
     lastAutomaticAppliedUrlRef.current = null;
     setState(null);
+    setAccess(null);
     setMessage(null);
     setError(null);
     setCatalogQuery(productName);
@@ -377,8 +390,11 @@ export function ProductAiImageReviewPanel({
       ? fetchProductImageReviewStateById(id)
       : fetchProductImageReviewState(name);
     void request
-      .then((next) => {
-        if (!cancelled) setState(next);
+      .then((payload) => {
+        if (!cancelled) {
+          setState(payload.state);
+          setAccess(payload.access);
+        }
       })
       .catch((cause) => {
         if (!cancelled) setError(friendlyError(cause));
@@ -533,6 +549,9 @@ export function ProductAiImageReviewPanel({
   const showCatalogSearch = Boolean(
     resolved?.canSearchCatalog && !localImageDraftDirty,
   );
+  const planAllowsSingle = Boolean(
+    access && hasCatalogImageCapability(access, "catalog.image.ai.single"),
+  );
 
   const confirmPendingAction = () => {
     const confirmation = pendingConfirmation;
@@ -566,6 +585,14 @@ export function ProductAiImageReviewPanel({
           <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: 11 }}>
             IA para platos genéricos; catálogo real para marcas, formatos y vinos.
           </p>
+          {access ? (
+            <p className="hostly-product-commercial-modal__hint">
+              Plan {catalogImagePlanLabel(access.effectivePlan)}
+              {access.source === "legacy_compatibility"
+                ? " · acceso individual conservado durante la transición"
+                : ""}
+            </p>
+          ) : null}
         </div>
         {loading ? <span style={{ color: "#64748b", fontSize: 11 }}>Comprobando…</span> : null}
       </div>
@@ -579,6 +606,13 @@ export function ProductAiImageReviewPanel({
       {!loading && state?.resolution === "ambiguous" ? (
         <p role="alert" style={{ margin: 0, color: "#92400e", fontSize: 11, lineHeight: 1.45 }}>
           Hay varios productos con este nombre. Hostly no elegirá uno automáticamente.
+        </p>
+      ) : null}
+
+      {!loading && access && !planAllowsSingle ? (
+        <p className="hostly-product-commercial-modal__hint" role="status">
+          Tu plan Básico mantiene la subida manual. Crear imágenes con IA y buscar
+          imágenes reales de catálogo está disponible desde Pro.
         </p>
       ) : null}
 
@@ -732,8 +766,8 @@ export function ProductAiImageReviewPanel({
                     {busy
                       ? "Generando…"
                       : action === "regenerate"
-                        ? "Regenerar"
-                        : "Generar imagen con IA"}
+                        ? "Regenerar imagen"
+                        : "Crear imagen"}
                   </ConfigBtnSecondary>
                 );
               })}

@@ -95,7 +95,7 @@ export function ProductCommercialIdentityPanel({
     try {
       let id = explicitId;
       if (!id) {
-        const state = await fetchProductImageReviewState(name);
+        const { state } = await fetchProductImageReviewState(name);
         if (state.resolution === "ambiguous") {
           throw new Error(
             "Hay varios productos con este nombre. Guarda un nombre único antes de editar su identidad.",

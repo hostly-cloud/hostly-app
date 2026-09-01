@@ -4,8 +4,8 @@ import { authenticatedApiFetch } from "@/lib/auth/authenticated-api-fetch";
 import type {
   ProductImageReviewAction,
   ProductImageReviewApiResponse,
-  ProductImageReviewResolution,
   ProductImageReviewResolvedState,
+  ProductImageReviewStatePayload,
 } from "@/lib/productos/product-image-review-contract";
 
 export class ProductImageReviewApiError extends Error {
@@ -44,7 +44,7 @@ function throwApiError(
   throw new ProductImageReviewApiError(code, message, response.status);
 }
 
-async function fetchState(url: string): Promise<ProductImageReviewResolution> {
+async function fetchState(url: string): Promise<ProductImageReviewStatePayload> {
   const response = await authenticatedApiFetch(url);
   const body = await readJson<ProductImageReviewApiResponse>(response);
   if (!response.ok || !body?.ok) {
@@ -54,12 +54,12 @@ async function fetchState(url: string): Promise<ProductImageReviewResolution> {
       "PRODUCT_IMAGE_STATE_FAILED",
     );
   }
-  return body.state;
+  return { state: body.state, access: body.access };
 }
 
 export async function fetchProductImageReviewState(
   productName: string,
-): Promise<ProductImageReviewResolution> {
+): Promise<ProductImageReviewStatePayload> {
   return fetchState(
     `/api/catalog/product-image-state?name=${encodeURIComponent(productName.trim())}`,
   );
@@ -67,7 +67,7 @@ export async function fetchProductImageReviewState(
 
 export async function fetchProductImageReviewStateById(
   productId: string,
-): Promise<ProductImageReviewResolution> {
+): Promise<ProductImageReviewStatePayload> {
   return fetchState(
     `/api/catalog/product-image-state?productId=${encodeURIComponent(productId.trim())}`,
   );
@@ -80,18 +80,24 @@ export type GenerateProductImageClientResult =
       imageUrl: string;
       imagePath: string;
       model: string;
+      provider?: string;
+      idempotencyKey?: string;
+      costUsd?: number;
       replacedImagePath?: string;
     }
   | {
       outcome: "skipped";
       productId: string;
       reason: string;
+      idempotencyKey?: string;
     };
 
 export async function generateProductImageForReview(
   productId: string,
   description?: string,
 ): Promise<GenerateProductImageClientResult> {
+  const idempotencyKey = globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const response = await authenticatedApiFetch(
     "/api/catalog/generate-product-image",
     {
@@ -99,6 +105,7 @@ export async function generateProductImageForReview(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         productId,
+        idempotencyKey,
         confirmGeneration: true,
         ...(description?.trim() ? { description: description.trim() } : {}),
       }),

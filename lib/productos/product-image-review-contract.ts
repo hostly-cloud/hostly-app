@@ -2,6 +2,7 @@ import type {
   ProductImageReviewStatus,
   ProductImageSource,
 } from "@/lib/carta/product-image-enrichment";
+import type { CatalogImageAccess } from "@/lib/productos/catalog-image-plan";
 
 export type ProductImageCatalogProvenance = {
   externalReference: string | null;
@@ -50,5 +51,14 @@ export type ProductImageReviewResolvedState = {
 export type ProductImageReviewAction = "approve" | "reject";
 
 export type ProductImageReviewApiResponse =
-  | { ok: true; state: ProductImageReviewResolution }
+  | {
+      ok: true;
+      state: ProductImageReviewResolution;
+      access: CatalogImageAccess;
+    }
   | { ok: false; error: string; details?: string | null };
+
+export type ProductImageReviewStatePayload = {
+  state: ProductImageReviewResolution;
+  access: CatalogImageAccess;
+};

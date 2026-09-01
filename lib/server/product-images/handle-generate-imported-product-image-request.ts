@@ -6,9 +6,14 @@ import {
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import {
+  hasCatalogImageCapability,
+  type CatalogImageAccess,
+} from "@/lib/productos/catalog-image-plan";
+import {
   generateImportedProductImage,
   type GenerateImportedProductImageResult,
 } from "@/lib/server/product-images/generate-imported-product-image";
+import { resolveCatalogImageAccess } from "@/lib/server/product-images/resolve-catalog-image-access";
 
 type Authenticate = (
   req: Request,
@@ -19,12 +24,20 @@ type Generate = (params: {
   restaurantId: string;
   productId: string;
   userId: string;
+  idempotencyKey: string;
+  access: CatalogImageAccess;
   description?: string;
 }) => Promise<GenerateImportedProductImageResult>;
+
+type ResolveAccess = (params: {
+  db: AuthenticatedRestaurantContext["db"];
+  restaurantId: string;
+}) => Promise<CatalogImageAccess>;
 
 export type GenerateImportedProductImageRequestDependencies = {
   authenticate?: Authenticate;
   generate?: Generate;
+  resolveAccess?: ResolveAccess;
 };
 
 function jsonError(status: number, error: string, details?: string) {
@@ -48,8 +61,22 @@ export async function handleGenerateImportedProductImageRequest(
     return jsonError(403, "SETTINGS_MANAGE_REQUIRED");
   }
 
+  const resolveAccess = dependencies?.resolveAccess ?? resolveCatalogImageAccess;
+  const access = await resolveAccess({
+    db: authCtx.db,
+    restaurantId: authCtx.restaurantId,
+  });
+  if (!hasCatalogImageCapability(access, "catalog.image.ai.single")) {
+    return jsonError(
+      403,
+      "CATALOG_IMAGE_AI_SINGLE_PLAN_REQUIRED",
+      "La generación individual de imágenes está disponible en los planes Pro y Ultra",
+    );
+  }
+
   const body = (await req.json().catch(() => null)) as {
     productId?: unknown;
+    idempotencyKey?: unknown;
     confirmGeneration?: unknown;
     restaurantId?: unknown;
     description?: unknown;
@@ -70,6 +97,13 @@ export async function handleGenerateImportedProductImageRequest(
     typeof body.productId === "string" ? body.productId.trim() : "";
   if (!productId) {
     return jsonError(400, "MISSING_PRODUCT_ID");
+  }
+  const idempotencyKey =
+    typeof body.idempotencyKey === "string"
+      ? body.idempotencyKey.trim()
+      : "";
+  if (!/^[A-Za-z0-9_-]{8,120}$/.test(idempotencyKey)) {
+    return jsonError(400, "INVALID_IMAGE_IDEMPOTENCY_KEY");
   }
   if (body.description != null && typeof body.description !== "string") {
     return jsonError(400, "INVALID_PRODUCT_DESCRIPTION");
@@ -92,6 +126,8 @@ export async function handleGenerateImportedProductImageRequest(
     restaurantId: authCtx.restaurantId,
     productId,
     userId: authCtx.uid,
+    idempotencyKey,
+    access,
     ...(description ? { description } : {}),
   });
 

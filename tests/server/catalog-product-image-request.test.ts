@@ -10,6 +10,14 @@ import {
   handleAttachCatalogProductImageRequest,
   handleAttachCatalogProductImageRequestSafe,
 } from "@/lib/server/product-images/handle-attach-catalog-product-image-request";
+import { resolveCatalogImageAccessFromRestaurant } from "@/lib/server/product-images/resolve-catalog-image-access";
+
+const PRO_ACCESS = resolveCatalogImageAccessFromRestaurant({
+  subscription: { plan: "pro" },
+});
+const BASIC_ACCESS = resolveCatalogImageAccessFromRestaurant({
+  subscription: { plan: "basic" },
+});
 
 function authContext(
   overrides: Partial<AuthenticatedRestaurantContext> = {},
@@ -69,6 +77,7 @@ test("catalog search rejects restaurantId supplied by the browser", async () => 
     }),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       searchCatalog: async () => {
         searched = true;
         return {
@@ -108,6 +117,28 @@ test("catalog search requires settings.manage", async () => {
   assert.equal(searched, false);
 });
 
+test("catalog search is blocked for an explicit Basic plan", async () => {
+  let searched = false;
+  const response = await handleSearchCatalogProductImagesRequest(
+    request("/api/catalog/search-product-images", {
+      productId: "product-1",
+      query: "Coca-Cola",
+    }),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => BASIC_ACCESS,
+      searchCatalog: async () => {
+        searched = true;
+        throw new Error("should not run");
+      },
+    },
+  );
+
+  assert.equal(response.status, 403);
+  assert.equal((await json(response)).error, "CATALOG_IMAGE_SEARCH_PLAN_REQUIRED");
+  assert.equal(searched, false);
+});
+
 test("catalog search receives only the server tenant and requested product", async () => {
   let received:
     | { restaurantId: string; productId: string; query: string }
@@ -119,6 +150,7 @@ test("catalog search receives only the server tenant and requested product", asy
     }),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       searchCatalog: async (params) => {
         received = {
           restaurantId: params.restaurantId,
@@ -155,6 +187,7 @@ test("catalog attach refuses client-controlled image URLs", async () => {
     }),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       attachCatalog: async () => {
         attached = true;
         throw new Error("should not run");
@@ -179,6 +212,7 @@ test("catalog attach requires explicit human selection confirmation", async () =
     }),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       attachCatalog: async () => {
         attached = true;
         throw new Error("should not run");
@@ -216,6 +250,29 @@ test("catalog attach requires settings.manage", async () => {
   assert.equal(attached, false);
 });
 
+test("catalog attach cannot bypass the Basic plan from the browser", async () => {
+  let attached = false;
+  const response = await handleAttachCatalogProductImageRequest(
+    request("/api/catalog/attach-product-image", {
+      productId: "product-1",
+      externalReference: "5449000131805",
+      confirmSelection: true,
+    }),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => BASIC_ACCESS,
+      attachCatalog: async () => {
+        attached = true;
+        throw new Error("should not run");
+      },
+    },
+  );
+
+  assert.equal(response.status, 403);
+  assert.equal((await json(response)).error, "CATALOG_IMAGE_SEARCH_PLAN_REQUIRED");
+  assert.equal(attached, false);
+});
+
 test("catalog attach receives authenticated user and server-resolved tenant", async () => {
   let received:
     | {
@@ -233,6 +290,7 @@ test("catalog attach receives authenticated user and server-resolved tenant", as
     }),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       attachCatalog: async (params) => {
         received = {
           restaurantId: params.restaurantId,
@@ -272,6 +330,7 @@ test("structured catalog errors preserve status and code", async () => {
     }),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       searchCatalog: async () => {
         throw providerError;
       },
@@ -295,6 +354,7 @@ test("structured catalog errors preserve status and code", async () => {
     }),
     {
       authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
       attachCatalog: async () => {
         throw attachError;
       },
