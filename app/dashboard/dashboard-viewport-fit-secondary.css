@@ -25,14 +25,18 @@
   overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch;
 }
 
-/* Analisis: tabs visibles; solo el informe seleccionado desplaza. */
-.hostly-module-shell:has(.hostly-analytics-stack) .hostly-analytics-stack {
+/* Analisis: tabs visibles; solo el informe seleccionado desplaza. El selector
+ * debe alcanzar únicamente el stack raíz, no los stacks internos del informe. */
+.hostly-module-shell > :is(.hostly-container, .hostly-container-wide) > .hostly-analytics-stack {
   flex: 1 1 0; min-height: 0; overflow: hidden; gap: 7px;
 }
-.hostly-module-shell:has(.hostly-analytics-stack) .hostly-analytics-stack > :first-child { flex: 0 0 auto; }
+.hostly-module-shell > :is(.hostly-container, .hostly-container-wide) > .hostly-analytics-stack > :first-child { flex: 0 0 auto; }
 .hostly-analysis-tab-viewport {
   flex: 1 1 0; min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: auto;
   overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; padding-bottom: 6px;
+}
+.hostly-analysis-tab-viewport .hostly-analytics-stack {
+  flex: none; min-height: auto; overflow: visible;
 }
 
 /* En móvil ModulePageShell devuelve el scroll al documento. Si mantenemos el
