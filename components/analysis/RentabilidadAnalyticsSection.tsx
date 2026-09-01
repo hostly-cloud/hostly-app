@@ -11,6 +11,7 @@ import {
 
 export type RentabilidadAnalyticsSectionProps = {
   orders?: Array<Record<string, unknown>> | null;
+  dataState?: "loading" | "ready" | "error";
   dateFrom: string;
   dateTo: string;
   setDateFrom: (value: string) => void;
@@ -95,6 +96,7 @@ function MarginProductsTable({
 
 export function RentabilidadAnalyticsSection({
   orders,
+  dataState = "ready",
   dateFrom,
   dateTo,
   setDateFrom,
@@ -131,10 +133,25 @@ export function RentabilidadAnalyticsSection({
       <div className="hostly-analytics-stack">
       <HostlySectionHeader
         title="Rentabilidad"
-        description={`Margen histórico con costes congelados al enviar · ${formatDateEs(dateFrom)} – ${formatDateEs(dateTo)}`}
+        description={`Ventas cobradas con costes congelados al enviar · ${formatDateEs(dateFrom)} – ${formatDateEs(dateTo)}`}
         titleVariant="section"
         className="hostly-section-header--operational"
       />
+
+      {dataState === "loading" ? (
+        <div className="hostly-panel p-4" role="status" aria-live="polite">
+          <div style={{ fontSize: 14, color: "var(--hostly-ink-muted)" }}>
+            Cargando ventas cobradas y costes…
+          </div>
+        </div>
+      ) : dataState === "error" ? (
+        <div className="hostly-panel p-4" role="alert">
+          <div style={{ fontSize: 14, color: "var(--hostly-ink-muted)", lineHeight: 1.5 }}>
+            No se pudo calcular la rentabilidad. Revisa tu conexión o tus permisos e inténtalo de nuevo.
+          </div>
+        </div>
+      ) : (
+        <>
 
       <div className="hostly-analytics-toolbar">
         <div className="hostly-analytics-toolbar__filters">
@@ -176,7 +193,9 @@ export function RentabilidadAnalyticsSection({
       {!hasCompleteData ? (
         <div className="hostly-panel p-4">
           <div style={{ fontSize: 14, color: "var(--hostly-ink-muted)", lineHeight: 1.5 }}>
-            No hay líneas con coste de inventario completo en este periodo.
+            {marginOrders.length === 0
+              ? "No hay ventas completamente cobradas en este periodo."
+              : "No hay líneas con coste de inventario completo en este periodo."}
             {summary.incompleteCostCount > 0
               ? ` ${lineCountLabel(summary.incompleteCostCount)} con coste incompleto.`
               : ""}
@@ -231,11 +250,13 @@ export function RentabilidadAnalyticsSection({
 
           {analytics.highVolumeLowMarginProducts.length > 0 ? (
             <MarginProductsTable
-              title="Muchas ventas, poco margen"
+              title="Menor margen entre productos con 2 o más unidades"
               rows={analytics.highVolumeLowMarginProducts}
               emptyLabel=""
             />
           ) : null}
+        </>
+      )}
         </>
       )}
       </div>
