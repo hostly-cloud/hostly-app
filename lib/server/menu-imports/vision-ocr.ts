@@ -7,6 +7,7 @@ import {
   type OcrLayoutExtractionMeta,
   type VisionFullTextAnnotation,
 } from "./vision-ocr-layout";
+import { resolveVisionClientOptions } from "./vision-client-options";
 
 export type VisionOcrLayoutResult = {
   text: string;
@@ -21,7 +22,10 @@ let visionClient: ImageAnnotatorClient | null | undefined;
 function getVisionClient(): ImageAnnotatorClient | null {
   if (visionClient !== undefined) return visionClient;
   try {
-    visionClient = new ImageAnnotatorClient();
+    const options = resolveVisionClientOptions();
+    visionClient = options
+      ? new ImageAnnotatorClient(options)
+      : new ImageAnnotatorClient();
     return visionClient;
   } catch {
     visionClient = null;

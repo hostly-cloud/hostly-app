@@ -5,6 +5,7 @@ import type {
   MenuImportDraftStatus,
   MenuImportDraftSummary,
 } from "@/lib/firestore/menu-import-drafts";
+import { resolveMenuImportUserError } from "./menu-import-user-error";
 
 export function flattenSectionsToItems(sections: ImportedMenuSection[]): ImportedMenuItem[] {
   return sections.flatMap((s) => s.items);
@@ -70,9 +71,7 @@ export function menuImportDraftListHint(summary: MenuImportDraftSummary): string
   const count = summary.itemsCount;
   if (summary.status === "analyzing") return "Analizando carta…";
   if (summary.status === "failed") {
-    return summary.errorMessage?.trim()
-      ? summary.errorMessage.trim().slice(0, 120)
-      : "Error en el análisis. Abre para ver detalle.";
+    return resolveMenuImportUserError(summary.errorMessage);
   }
   if (summary.status === "published") {
     return count > 0

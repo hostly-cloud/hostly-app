@@ -9,6 +9,7 @@ import {
 import { menuTypeToCartaType } from "@/lib/carta/menu-import-type-map";
 import { IMPORTED_MENU_CARTA_TYPE_LABELS } from "@/lib/carta/imported-menu-types";
 import type { MenuImportDraftStatus, MenuImportDraftSummary } from "@/lib/firestore/menu-import-drafts";
+import { resolveMenuImportUserError } from "@/lib/carta/menu-import-user-error";
 
 function statusTone(status: MenuImportDraftStatus): string {
   switch (status) {
@@ -122,7 +123,9 @@ export function ImportMenuRecentList({
                     </span>
                   </div>
                   {draft.status === "failed" && draft.errorMessage ? (
-                    <p className="mt-1.5 line-clamp-2 text-[10px] text-rose-700">{draft.errorMessage}</p>
+                    <p className="mt-1.5 line-clamp-2 text-[10px] text-rose-700">
+                      {resolveMenuImportUserError(draft.errorMessage)}
+                    </p>
                   ) : null}
                 </button>
               </li>

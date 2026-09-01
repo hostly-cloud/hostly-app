@@ -36,6 +36,7 @@ import {
   type AiImportV2ShadowReport,
 } from "./ai-import-v2/types";
 import { resolveMenuImportSourceFiles } from "@/lib/carta/menu-import-source-files";
+import { resolveMenuImportUserError } from "@/lib/carta/menu-import-user-error";
 
 const ANALYZING_STALE_MS = 2 * 60 * 1000;
 
@@ -404,14 +405,16 @@ export async function processMenuImportDraft(params: {
     };
   } catch (e) {
     trace.pipelineError(currentStep, e);
-    const message = e instanceof Error ? e.message : "Error al procesar la carta";
+    const code = e instanceof ProcessMenuImportDraftError ? e.code : "PROCESS_FAILED";
+    const httpStatus = e instanceof ProcessMenuImportDraftError ? e.httpStatus : 500;
+    const userMessage = resolveMenuImportUserError(code);
     await updateMenuImportDraftAdmin(db, restaurantId, draftId, {
       status: "failed",
-      errorMessage: message,
+      errorMessage: userMessage,
       updatedBy: userId,
     }).catch(() => {
       /* secondary failure */
     });
-    throw new ProcessMenuImportDraftError("PROCESS_FAILED", message, 500);
+    throw new ProcessMenuImportDraftError(code, userMessage, httpStatus);
   }
 }

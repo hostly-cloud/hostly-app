@@ -79,6 +79,7 @@ import {
   mergeMenuImportOperationalWarnings,
 } from "@/lib/carta/build-menu-import-operational-warnings";
 import type { MenuImportOperationalWarning } from "@/lib/carta/menu-import-operational-warnings-types";
+import { resolveMenuImportUserError } from "@/lib/carta/menu-import-user-error";
 
 type InputMethod = ImportedMenuSourceType;
 
@@ -937,7 +938,9 @@ function ReviewStep({
       {isFailed ? (
         <HostlySurface variant="flat" className="border-rose-200/90 bg-rose-50/90 p-4">
           <p className="text-sm font-semibold text-rose-950">Error en el análisis</p>
-          <p className="mt-1 text-xs text-rose-800">{draft.errorMessage ?? "No se pudo completar el análisis."}</p>
+          <p className="mt-1 text-xs text-rose-800">
+            {resolveMenuImportUserError(draft.errorMessage)}
+          </p>
           {onReprocessDraft ? (
             <button
               type="button"
@@ -1559,12 +1562,7 @@ export function ImportMenuPageContent() {
     try {
       const processResult = await requestMenuImportProcess(activeDraftId);
       if (!processResult.ok) {
-        const detail = processResult.details ?? processResult.error;
-        throw new Error(
-          processResult.httpStatus === 409
-            ? "El borrador ya se está procesando. Espera unos segundos e inténtalo de nuevo."
-            : detail,
-        );
+        throw new Error(resolveMenuImportUserError(processResult.error));
       }
       if (processResult.debugReport) {
         setPipelineDebugReport(processResult.debugReport);
@@ -1682,12 +1680,7 @@ export function ImportMenuPageContent() {
 
       const processResult = await requestMenuImportProcess(draftId);
       if (!processResult.ok) {
-        const detail = processResult.details ?? processResult.error;
-        throw new Error(
-          processResult.httpStatus === 409
-            ? "El borrador ya se está procesando. Espera unos segundos e inténtalo de nuevo."
-            : detail,
-        );
+        throw new Error(resolveMenuImportUserError(processResult.error));
       }
       if (processResult.debugReport) {
         setPipelineDebugReport(processResult.debugReport);
@@ -1872,7 +1865,7 @@ export function ImportMenuPageContent() {
         return;
       }
 
-      let publishResult = result.result;
+      const publishResult = result.result;
       logClientPublishResponse({ draftId: activeDraftId, result: publishResult });
       setPublishResult(publishResult);
 
