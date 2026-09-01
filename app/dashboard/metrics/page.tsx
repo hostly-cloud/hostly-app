@@ -1,315 +1,167 @@
 "use client";
 
-import {
-  Timestamp,
-  collection,
-  onSnapshot,
-  query,
-  where,
-} from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
-import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import ModulePageShell from "@/components/module-page-shell";
 import {
   HostlyAlert,
   HostlyButton,
   HostlyInput,
   HostlyKpiCard,
+  HostlyLoadingState,
+  HostlyOperationalEmptyState,
+  HostlyPermissionState,
   HostlySectionHeader,
   HostlyStatusBadge,
   HostlySurface,
 } from "@/components/ui/hostly";
+import { db, isFirebaseConfigured } from "@/lib/firebase/client";
+import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
+import {
+  buildServiceDashboardMetrics,
+  type ServiceDashboardOrder,
+} from "@/lib/operacion/service-dashboard-metrics";
+import {
+  formatAvgMinutes,
+  type ServiceMetricsItem,
+} from "@/lib/operacion/service-metrics";
 
-type OrderDoc = {
-  id: string;
-  createdAt?: unknown;
-  closedAt?: unknown;
-  status?: string;
-  restaurantId?: string;
-  tableId?: string | null;
-  tableName?: string | null;
+type SourceState = "loading" | "ready" | "error";
+
+type SourceSnapshot = {
+  state: SourceState;
+  restaurantId: string | null;
 };
 
-function readTsMs(v: unknown): number | undefined {
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (v instanceof Timestamp) return v.toMillis();
-  if (
-    v &&
-    typeof v === "object" &&
-    "toDate" in v &&
-    typeof (v as { toDate: () => Date }).toDate === "function"
-  ) {
-    return (v as { toDate: () => Date }).toDate().getTime();
-  }
-  return undefined;
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
-function startOfDayMs(day: Date): number {
-  const d = new Date(day);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-function endOfDayMs(day: Date): number {
-  const d = new Date(day);
-  d.setHours(23, 59, 59, 999);
-  return d.getTime();
-}
-
-function isCreatedOnDate(createdAt: unknown, day: Date): boolean {
-  const ms = readTsMs(createdAt);
-  if (ms == null) return false;
-  return ms >= startOfDayMs(day) && ms <= endOfDayMs(day);
-}
-
-function toDateInputValue(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function openOrderElapsedMinutes(o: OrderDoc): number | null {
-  const ms = readTsMs(o.createdAt);
-  if (ms == null) return null;
-  return Math.floor((Date.now() - ms) / 60000);
-}
-
-function avgClosedMinutesForDay(
-  ordersList: OrderDoc[],
-  day: Date,
-): number | null {
-  const dayOrders = ordersList.filter((o) =>
-    isCreatedOnDate(o.createdAt, day),
+function isSameLocalDay(left: Date, right: Date): boolean {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
   );
-  const durations: number[] = [];
-  for (const o of dayOrders) {
-    const c = readTsMs(o.createdAt);
-    const cl = readTsMs(o.closedAt);
-    if (c != null && cl != null && cl >= c) {
-      durations.push(cl - c);
+}
+
+function readOrder(documentId: string, data: Record<string, unknown>): ServiceDashboardOrder {
+  const items: ServiceMetricsItem[] = [];
+  if (Array.isArray(data.items)) {
+    for (const item of data.items) {
+      if (item && typeof item === "object") items.push(item as ServiceMetricsItem);
     }
   }
-  if (durations.length === 0) return null;
-  const avgMs =
-    durations.reduce((a, b) => a + b, 0) / durations.length;
-  return Math.round(avgMs / 60000);
+
+  return {
+    id: documentId,
+    createdAt: data.createdAt,
+    tableId:
+      typeof data.tableId === "string"
+        ? data.tableId
+        : data.tableId === null
+          ? null
+          : undefined,
+    tableName:
+      typeof data.tableName === "string"
+        ? data.tableName
+        : data.tableName === null
+          ? null
+          : undefined,
+    items,
+  };
 }
 
 export default function MetricsPage() {
   const router = useRouter();
-  const { restaurantId, ready: authReady } = useAuth();
-  const [orders, setOrders] = useState<OrderDoc[]>([]);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showAlert, setShowAlert] = useState(false);
-  const prevTrend = useRef<"better" | "worse" | "equal" | null>(null);
+  const { restaurantId, ready: authReady, user } = useAuth();
+  const [orders, setOrders] = useState<ServiceDashboardOrder[]>([]);
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [sourceSnapshot, setSourceSnapshot] = useState<SourceSnapshot>({
+    state: "loading",
+    restaurantId: null,
+  });
+  const [retryKey, setRetryKey] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const previousDelayedCount = useRef<number | null>(null);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNowMs(Date.now()), 15_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!authReady || !isFirebaseConfigured || !restaurantId) return;
 
-    const q = query(
+    const ordersQuery = query(
       collection(db, "orders"),
       where("restaurantId", "==", restaurantId),
     );
-
-    let cancelled = false;
-
-    const unsub = onSnapshot(q, (snapshot) => {
-      if (cancelled) return;
-      setOrders(
-        snapshot.docs.map((d) => {
-          const data = d.data() as Record<string, unknown>;
-          return {
-            id: d.id,
-            createdAt: data.createdAt,
-            closedAt: data.closedAt,
-            status: typeof data.status === "string" ? data.status : undefined,
-            restaurantId:
-              typeof data.restaurantId === "string"
-                ? data.restaurantId
-                : undefined,
-            tableId:
-              typeof data.tableId === "string"
-                ? data.tableId
-                : data.tableId === null
-                  ? null
-                  : undefined,
-            tableName:
-              typeof data.tableName === "string"
-                ? data.tableName
-                : data.tableName === null
-                  ? null
-                  : undefined,
-          };
-        }),
-      );
-    });
-
-    return () => {
-      cancelled = true;
-      unsub();
-    };
-  }, [authReady, restaurantId]);
-
-  const {
-    totalOrders,
-    readyOrders,
-    avgTimeToday,
-    avgTimeYesterday,
-    totalOrdersYesterday,
-    ordersCompareTrend,
-  } = useMemo(() => {
-    const dayOrders = orders.filter((o) =>
-      isCreatedOnDate(o.createdAt, selectedDate),
+    const unsubscribe = onSnapshot(
+      ordersQuery,
+      (snapshot) => {
+        setOrders(snapshot.docs.map((row) => readOrder(row.id, row.data())));
+        setSourceSnapshot({ state: "ready", restaurantId });
+      },
+      (error) => {
+        setOrders([]);
+        setSourceSnapshot({ state: "error", restaurantId });
+        logFirestorePermissionError(
+          {
+            file: "app/dashboard/metrics/page.tsx",
+            op: "onSnapshot",
+            path: "orders (tenant scope)",
+            restaurantId,
+            uid: user?.uid ?? null,
+            email: user?.email ?? null,
+          },
+          error,
+        );
+      },
     );
-    const totalOrders = dayOrders.length;
-    const readyOrders = dayOrders.filter((o) => o.status === "ready").length;
 
-    const yesterday = new Date(selectedDate);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const totalOrdersYesterday = orders.filter((o) =>
-      isCreatedOnDate(o.createdAt, yesterday),
-    ).length;
+    return () => unsubscribe();
+  }, [authReady, restaurantId, retryKey, user]);
 
-    let ordersCompareTrend: string | null = null;
-    if (totalOrders > totalOrdersYesterday) {
-      ordersCompareTrend = "↑ mejor";
-    } else if (totalOrders < totalOrdersYesterday) {
-      ordersCompareTrend = "↓ peor";
-    }
-
-    const avgTimeToday = avgClosedMinutesForDay(orders, selectedDate);
-    const avgTimeYesterday = avgClosedMinutesForDay(orders, yesterday);
-
-    let timeCompareTrend: string | null = null;
-    if (avgTimeToday != null && avgTimeYesterday != null) {
-      if (avgTimeToday < avgTimeYesterday) {
-        timeCompareTrend = "⚡ más rápido";
-      } else if (avgTimeToday > avgTimeYesterday) {
-        timeCompareTrend = "🐢 más lento";
-      }
-    }
-
-    return {
-      totalOrders,
-      readyOrders,
-      avgTimeToday,
-      avgTimeYesterday,
-      timeCompareTrend,
-      totalOrdersYesterday,
-      ordersCompareTrend,
-    };
-  }, [orders, selectedDate]);
-
-  const currentTrend =
-    avgTimeToday != null && avgTimeYesterday != null
-      ? avgTimeToday < avgTimeYesterday
-        ? "better"
-        : avgTimeToday > avgTimeYesterday
-          ? "worse"
-          : "equal"
-      : null;
+  const metrics = useMemo(
+    () => buildServiceDashboardMetrics(orders, selectedDate, nowMs),
+    [orders, selectedDate, nowMs],
+  );
+  const selectedIsToday = isSameLocalDay(selectedDate, new Date(nowMs));
+  const sourceState: SourceState | "missing-restaurant" = !authReady
+    ? "loading"
+    : !isFirebaseConfigured
+      ? "error"
+      : !restaurantId
+        ? "missing-restaurant"
+        : sourceSnapshot.restaurantId !== restaurantId
+          ? "loading"
+          : sourceSnapshot.state;
 
   useEffect(() => {
-    let alertTimer: number | undefined;
-    if (prevTrend.current !== "worse" && currentTrend === "worse") {
-      new Audio("/alert.mp3").play().catch(() => {});
-      alertTimer = window.setTimeout(() => setShowAlert(true), 0);
+    if (sourceState !== "ready") return;
+    if (
+      selectedIsToday &&
+      previousDelayedCount.current === 0 &&
+      metrics.delayedLineCount > 0
+    ) {
+      void new Audio("/alert.mp3").play().catch(() => {});
     }
-    prevTrend.current = currentTrend;
-    return () => {
-      if (alertTimer != null) window.clearTimeout(alertTimer);
-    };
-  }, [currentTrend]);
-
-  useEffect(() => {
-    if (!showAlert) return;
-    const t = window.setTimeout(() => setShowAlert(false), 5000);
-    return () => clearTimeout(t);
-  }, [showAlert]);
-
-  const slowestTables = useMemo(() => {
-    type Acc = { sum: number; count: number };
-    const byTable = new Map<string, Acc>();
-
-    const dayOrders = orders.filter((o) =>
-      isCreatedOnDate(o.createdAt, selectedDate),
-    );
-    for (const o of dayOrders) {
-      const c = readTsMs(o.createdAt);
-      const cl = readTsMs(o.closedAt);
-      if (c == null || cl == null || cl < c) continue;
-      const label =
-        o.tableName != null && String(o.tableName).trim() !== ""
-          ? String(o.tableName).trim()
-          : "Sin mesa";
-      const dur = cl - c;
-      const prev = byTable.get(label) ?? { sum: 0, count: 0 };
-      prev.sum += dur;
-      prev.count += 1;
-      byTable.set(label, prev);
-    }
-
-    return [...byTable.entries()]
-      .filter(([, v]) => v.count > 0)
-      .map(([name, v]) => ({
-        name,
-        avgMin: Math.round(v.sum / v.count / 60000),
-      }))
-      .sort((a, b) => b.avgMin - a.avgMin)
-      .slice(0, 3);
-  }, [orders, selectedDate]);
-
-  const { slowOrdersCount, slowOrderTableLabels } = useMemo(() => {
-    const todayOpen = orders.filter(
-      (o) =>
-        isCreatedOnDate(o.createdAt, selectedDate) &&
-        o.status !== "closed" &&
-        readTsMs(o.createdAt) != null,
-    );
-    const slowOrders = todayOpen.filter((o) => {
-      const minutes = openOrderElapsedMinutes(o);
-      return minutes != null && minutes > 20;
-    });
-    const slowOrdersCount = slowOrders.length;
-    const slowOrderTableLabels = slowOrders.map((o) =>
-      o.tableName != null && String(o.tableName).trim() !== ""
-        ? String(o.tableName).trim()
-        : "Sin mesa",
-    );
-    return { slowOrdersCount, slowOrderTableLabels };
-  }, [orders, selectedDate]);
-
-  const slowTables = useMemo(() => {
-    return orders
-      .map((o) => {
-        const minutes = openOrderElapsedMinutes(o);
-        return {
-          tableName: o.tableName || "Mesa",
-          minutes,
-          tableId: o.tableId,
-          orderId: o.id,
-        };
-      })
-      .filter((o) => o.minutes != null && o.minutes > 20)
-      .sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0))
-      .slice(0, 3);
-  }, [orders]);
-
-  const prevSlowOrdersCount = useRef(0);
-
-  useEffect(() => {
-    if (slowOrdersCount > 0 && prevSlowOrdersCount.current === 0) {
-      const audio = new Audio("/alert.mp3");
-      void audio.play().catch(() => {});
-    }
-    prevSlowOrdersCount.current = slowOrdersCount;
-  }, [slowOrdersCount]);
+    previousDelayedCount.current = metrics.delayedLineCount;
+  }, [metrics.delayedLineCount, selectedIsToday, sourceState]);
 
   return (
-    <ModulePageShell title="Métricas" subtitle="Resumen del servicio" maxWidth={1180} compactLayout>
+    <ModulePageShell
+      title="Métricas"
+      subtitle="Tiempos reales de preparación y servicio"
+      maxWidth={1180}
+      compactLayout
+    >
       <div className="hostly-service-metrics">
         <div className="hostly-service-metrics__toolbar">
           <HostlyInput
@@ -317,127 +169,150 @@ export default function MetricsPage() {
             type="date"
             aria-label="Fecha de las métricas"
             value={toDateInputValue(selectedDate)}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (!v) return;
-              const [y, m, d] = v.split("-").map(Number);
-              setSelectedDate(new Date(y, m - 1, d));
+            onChange={(event) => {
+              const value = event.target.value;
+              if (!value) return;
+              const [year, month, day] = value.split("-").map(Number);
+              setSelectedDate(new Date(year, month - 1, day));
             }}
           />
-          <HostlyButton
-            variant="secondary"
-            className="hostly-button-compact"
-            onClick={() => {
-              new Audio("/alert.mp3").play().catch(console.error);
-            }}
-          >
-            Probar alerta sonora
-          </HostlyButton>
         </div>
 
-        {showAlert ? (
-          <HostlyAlert tone="danger" title="Servicio empeorando">
-            El tiempo medio ha aumentado respecto al día anterior.
+        {sourceState === "loading" ? (
+          <HostlyLoadingState embedded label="Cargando métricas del servicio…" />
+        ) : null}
+
+        {sourceState === "missing-restaurant" ? (
+          <HostlyPermissionState embedded title="Selecciona un restaurante">
+            Las métricas se muestran únicamente para el restaurante activo.
+          </HostlyPermissionState>
+        ) : null}
+
+        {sourceState === "error" ? (
+          <HostlyAlert tone="danger" title="No se han podido cargar las métricas">
+            <p>No mostramos ceros porque la fuente de datos no está disponible.</p>
+            <HostlyButton
+              variant="secondary"
+              className="hostly-button-compact mt-3"
+              onClick={() => {
+                setSourceSnapshot({ state: "loading", restaurantId: restaurantId ?? null });
+                setRetryKey((value) => value + 1);
+              }}
+            >
+              Reintentar
+            </HostlyButton>
           </HostlyAlert>
         ) : null}
 
-        {slowOrdersCount > 0 ? (
-          <HostlyAlert tone="danger" title={`${slowOrdersCount} comandas con retraso`}>
-            {slowOrderTableLabels.join(" · ")}
-          </HostlyAlert>
+        {sourceState === "ready" && metrics.lineCount === 0 ? (
+          <HostlyOperationalEmptyState
+            title="Sin comandas enviadas en esta fecha"
+            text="Las métricas aparecerán cuando haya líneas enviadas a preparación."
+            hints={["Los borradores del TPV y los pedidos todavía no enviados no se contabilizan."]}
+            primaryAction={{ label: "Abrir TPV", href: "/dashboard/carta" }}
+          />
         ) : null}
 
-        <div className="hostly-kpi-grid-unified hostly-service-metrics__kpis">
-          <HostlyKpiCard
-            title="Comandas"
-            value={totalOrders}
-            helper={`Ayer: ${totalOrdersYesterday}${ordersCompareTrend ? ` · ${ordersCompareTrend}` : ""}`}
-          />
-          <HostlyKpiCard
-            title="Listas"
-            value={readyOrders}
-            helper="Preparadas para servir"
-          />
-          <HostlyKpiCard
-            title="Tiempo medio"
-            value={avgTimeToday != null ? `${avgTimeToday} min` : "—"}
-            helper={`Ayer: ${avgTimeYesterday != null ? `${avgTimeYesterday} min` : "—"}`}
-          />
-          <HostlyKpiCard
-            title="Con retraso"
-            value={slowOrdersCount}
-            helper="Más de 20 minutos"
-            variant={slowOrdersCount > 0 ? "soft" : "ice"}
-          />
-        </div>
+        {sourceState === "ready" && metrics.lineCount > 0 ? (
+          <>
+            {metrics.delayedLineCount > 0 ? (
+              <HostlyAlert
+                tone="danger"
+                title={`${metrics.delayedLineCount} ${
+                  metrics.delayedLineCount === 1 ? "línea con retraso" : "líneas con retraso"
+                }`}
+              >
+                {selectedIsToday
+                  ? "Llevan más de 20 minutos en preparación."
+                  : "Superaron los 20 minutos de preparación en la fecha seleccionada."}
+              </HostlyAlert>
+            ) : null}
 
-        {avgTimeToday != null && avgTimeYesterday != null ? (
-          <HostlyAlert
-            tone={
-              avgTimeToday < avgTimeYesterday
-                ? "success"
-                : avgTimeToday > avgTimeYesterday
-                  ? "danger"
-                  : "neutral"
-            }
-          >
-            {avgTimeToday < avgTimeYesterday
-              ? `Servicio más rápido que ayer (-${Math.abs(avgTimeToday - avgTimeYesterday)} min)`
-              : avgTimeToday > avgTimeYesterday
-                ? `Servicio más lento que ayer (+${Math.abs(avgTimeToday - avgTimeYesterday)} min)`
-                : "Mismo rendimiento que ayer"}
-          </HostlyAlert>
+            <div className="hostly-kpi-grid-unified hostly-service-metrics__kpis">
+              <HostlyKpiCard
+                title="Comandas"
+                value={metrics.orderCount}
+                helper={`${metrics.lineCount} líneas enviadas`}
+              />
+              <HostlyKpiCard
+                title="En preparación"
+                value={metrics.sent}
+                helper={`${metrics.prepared} listas · ${metrics.served} servidas`}
+              />
+              <HostlyKpiCard
+                title="Tiempo de preparación"
+                value={formatAvgMinutes(metrics.avgPrepMinutes)}
+                helper="Desde envío hasta lista"
+              />
+              <HostlyKpiCard
+                title="Con retraso"
+                value={metrics.delayedLineCount}
+                helper="Más de 20 minutos"
+                variant={metrics.delayedLineCount > 0 ? "soft" : "ice"}
+              />
+            </div>
+
+            <div className="hostly-service-metrics__details">
+              <HostlySurface variant="flat" className="hostly-service-metrics__panel">
+                <HostlySectionHeader
+                  title="Comandas con retraso"
+                  description={
+                    selectedIsToday
+                      ? "Líneas aún en preparación durante más de 20 minutos"
+                      : "Líneas que tardaron más de 20 minutos en estar listas"
+                  }
+                />
+                {metrics.delayedOrders.length > 0 ? (
+                  <div className="hostly-service-metrics__rows">
+                    {metrics.delayedOrders.map((row) => (
+                      <button
+                        key={row.orderId}
+                        type="button"
+                        className="hostly-service-metrics__row"
+                        title="Abrir la comanda en el TPV"
+                        onClick={() => {
+                          const params = new URLSearchParams({ orderId: row.orderId });
+                          if (row.tableId) params.set("tableId", row.tableId);
+                          router.push(`/dashboard/carta?${params.toString()}`);
+                        }}
+                      >
+                        <span>{row.tableName}</span>
+                        <HostlyStatusBadge tone="danger">
+                          {row.delayedLines} {row.delayedLines === 1 ? "línea" : "líneas"} · {row.maxDelayMinutes} min
+                        </HostlyStatusBadge>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="hostly-service-metrics__empty">Sin retrasos en esta fecha.</p>
+                )}
+              </HostlySurface>
+
+              <HostlySurface variant="flat" className="hostly-service-metrics__panel">
+                <HostlySectionHeader
+                  title="Mesas con mayor tiempo"
+                  description="Promedio real desde el envío hasta la preparación"
+                />
+                {metrics.slowestTables.length > 0 ? (
+                  <ol className="hostly-service-metrics__ranking">
+                    {metrics.slowestTables.map((row) => (
+                      <li key={row.tableName}>
+                        <span>{row.tableName}</span>
+                        <strong>
+                          {row.avgPrepMinutes} min · {row.completedLines} líneas
+                        </strong>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="hostly-service-metrics__empty">
+                    Todavía no hay líneas con tiempo de preparación completo.
+                  </p>
+                )}
+              </HostlySurface>
+            </div>
+          </>
         ) : null}
-
-        <div className="hostly-service-metrics__details">
-          <HostlySurface variant="flat" className="hostly-service-metrics__panel">
-            <HostlySectionHeader
-              title="Mesas con retraso"
-              description="Comandas abiertas durante más de 20 minutos"
-            />
-            {slowTables.length > 0 ? (
-              <div className="hostly-service-metrics__rows">
-                {slowTables.map((row) => (
-                  <button
-                    key={row.orderId}
-                    type="button"
-                    className="hostly-service-metrics__row"
-                    title="Abrir comanda"
-                    onClick={() => {
-                      router.push(
-                        `/dashboard/carta?tableId=${row.tableId}&orderId=${row.orderId}`,
-                      );
-                    }}
-                  >
-                    <span>{row.tableName}</span>
-                    <HostlyStatusBadge tone="danger">{row.minutes} min</HostlyStatusBadge>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="hostly-service-metrics__empty">Sin retrasos activos.</p>
-            )}
-          </HostlySurface>
-
-          <HostlySurface variant="flat" className="hostly-service-metrics__panel">
-            <HostlySectionHeader
-              title="Mesas más lentas"
-              description="Promedio de las comandas cerradas en la fecha seleccionada"
-            />
-            {slowestTables.length > 0 ? (
-              <ol className="hostly-service-metrics__ranking">
-                {slowestTables.map((row) => (
-                  <li key={row.name}>
-                    <span>{row.name}</span>
-                    <strong>{row.avgMin} min</strong>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="hostly-service-metrics__empty">Todavía no hay comandas cerradas.</p>
-            )}
-          </HostlySurface>
-        </div>
       </div>
     </ModulePageShell>
   );
