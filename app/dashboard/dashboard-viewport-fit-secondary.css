@@ -35,6 +35,25 @@
   overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; padding-bottom: 6px;
 }
 
+/* En móvil ModulePageShell devuelve el scroll al documento. Si mantenemos el
+ * flex-basis: 0 del visor de escritorio, el informe se monta pero colapsa a la
+ * altura de su borde superior (pestañas visibles y contenido en blanco). */
+@media (max-width: 767px) {
+  .hostly-module-shell--mobile[data-hostly-mobile-scroll-owner="page"]:has(.hostly-analytics-stack) .hostly-analytics-stack,
+  .hostly-module-shell--mobile[data-hostly-mobile-scroll-owner="page"]:has(.hostly-analytics-stack) .hostly-analysis-tab-viewport,
+  .hostly-module-shell--mobile[data-hostly-mobile-scroll-owner="page"]:has(.hostly-analytics-stack) .hostly-analytics-panel {
+    flex: none;
+    min-height: auto;
+    height: auto;
+    overflow: visible;
+  }
+
+  .hostly-module-shell--mobile[data-hostly-mobile-scroll-owner="page"]:has(.hostly-analytics-stack) .hostly-analysis-tab-viewport {
+    width: 100%;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
 /* Mesas: contexto compacto + grid tactil. */
 .hostly-mesas-viewport { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; gap: 7px; }
 .hostly-mesas-toolbar {
@@ -131,14 +150,12 @@
 
 @media (max-width: 767px) {
   .hostly-module-shell--mobile:has(.hostly-inventory-workbench),
-  .hostly-module-shell--mobile:has(.hostly-mesas-viewport),
-  .hostly-module-shell--mobile:has(.hostly-analytics-stack) {
+  .hostly-module-shell--mobile:has(.hostly-mesas-viewport) {
     height: 100dvh !important; max-height: 100dvh !important; min-height: 100dvh !important;
     overflow: hidden !important; display: flex !important; flex-direction: column !important;
   }
   .hostly-module-shell--mobile:has(.hostly-inventory-workbench) > .hostly-module-content--mobile,
-  .hostly-module-shell--mobile:has(.hostly-mesas-viewport) > .hostly-module-content--mobile,
-  .hostly-module-shell--mobile:has(.hostly-analytics-stack) > .hostly-module-content--mobile {
+  .hostly-module-shell--mobile:has(.hostly-mesas-viewport) > .hostly-module-content--mobile {
     flex: 1 1 0 !important; min-height: 0 !important; overflow: hidden !important;
   }
   .hostly-mesas-toolbar__hint,.hostly-employees-subtitle,.hostly-employees-list-head,.hostly-employees-email { display: none; }
