@@ -18,6 +18,12 @@ export type VentasAnalyticsSectionProps = {
   restaurantId?: string;
   dataState?: "loading" | "ready" | "error";
   errorMessage?: string;
+  dateFrom: string;
+  dateTo: string;
+  setDateFrom: (value: string) => void;
+  setDateTo: (value: string) => void;
+  formatDateEs: (value: string) => string;
+  detailHref: string;
 };
 
 export function VentasAnalyticsSection({
@@ -26,6 +32,12 @@ export function VentasAnalyticsSection({
   restaurantId,
   dataState = "ready",
   errorMessage,
+  dateFrom,
+  dateTo,
+  setDateFrom,
+  setDateTo,
+  formatDateEs,
+  detailHref,
 }: VentasAnalyticsSectionProps) {
   const { orders: ventasOrders } = useVentasData({
     orders,
@@ -112,7 +124,14 @@ export function VentasAnalyticsSection({
   if (!hasOrders) {
     return (
       <div className="hostly-analytics-panel">
-        <VentasHeaderBlock title="Ventas" subtitle="Importes procedentes de cobros confirmados" />
+        <VentasHeaderBlock
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          setDateFrom={setDateFrom}
+          setDateTo={setDateTo}
+          formatDateEs={formatDateEs}
+          detailHref={detailHref}
+        />
         <VentasContentBlock
           dataState={dataState}
           errorMessage={errorMessage}
@@ -136,7 +155,14 @@ export function VentasAnalyticsSection({
 
   return (
     <div className="hostly-analytics-panel">
-      <VentasHeaderBlock title="Ventas" subtitle="Importes procedentes de cobros confirmados" />
+      <VentasHeaderBlock
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        setDateFrom={setDateFrom}
+        setDateTo={setDateTo}
+        formatDateEs={formatDateEs}
+        detailHref={detailHref}
+      />
       <VentasContentBlock
         dataState={dataState}
         errorMessage={errorMessage}

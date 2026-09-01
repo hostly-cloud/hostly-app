@@ -25,6 +25,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { listenReservationsForRange, type Reservation } from "@/lib/firestore/reservations";
 import { computeReservationRangeMetrics } from "@/lib/reservas/reservation-metrics";
+import { buildSalesDetailHref } from "@/lib/analytics/analysis-navigation";
 import { Timestamp, collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 
@@ -975,6 +976,12 @@ export default function AnalisisPage() {
         paymentsState === "error"
           ? "No se pudieron cargar los cobros. Revisa tu conexión o tus permisos e inténtalo de nuevo."
           : undefined,
+      dateFrom,
+      dateTo,
+      setDateFrom,
+      setDateTo,
+      formatDateEs,
+      detailHref: buildSalesDetailHref({ dateFrom, dateTo }),
     }),
   };
 
