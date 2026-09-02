@@ -23,6 +23,11 @@ const managementPage = readFileSync(
 
 test("Productos exposes the Ultra catalog image completion action without replacing the approved table", () => {
   assert.match(managementPage, /<ProductCatalogImageBulkPanel \/>/);
+  assert.match(
+    managementPage,
+    /import \{ ProductCatalogImageBulkPanel \} from "@\/components\/productos\/product-catalog-image-bulk-panel"/,
+  );
+  assert.doesNotMatch(managementPage, /import dynamic from "next\/dynamic"/);
   assert.match(component, /Completar imágenes/);
   assert.match(component, /Nada se publicará sin aprobación/);
   assert.doesNotMatch(component, /restaurantId\s*:/);

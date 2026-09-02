@@ -3,7 +3,6 @@
 import type { CSSProperties, ReactNode, SVGProps } from "react";
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import { CategoriaCartaFormField } from "@/components/carta/categoria-carta-form-field";
@@ -33,6 +32,7 @@ import {
 } from "@/lib/productos/product-category-navigation";
 import { ProductosBulkAssignCourseModal } from "@/components/productos/productos-bulk-assign-course-modal";
 import { ProductosBulkAssignDestinationModal } from "@/components/productos/productos-bulk-assign-destination-modal";
+import { ProductCatalogImageBulkPanel } from "@/components/productos/product-catalog-image-bulk-panel";
 import { ProductosBulkAssignCategoryModal } from "@/components/productos/productos-bulk-assign-category-modal";
 import { ProductosBulkAssignFamilyModal } from "@/components/productos/productos-bulk-assign-family-modal";
 import { CartaDeleteChoiceModal } from "@/components/carta/carta-delete-choice-modal";
@@ -210,14 +210,6 @@ type CartaFilter =
   | "fueraCarta"
   | "conEscandallo"
   | "sinEscandallo";
-
-const ProductCatalogImageBulkPanel = dynamic(
-  () =>
-    import("@/components/productos/product-catalog-image-bulk-panel").then(
-      (module) => module.ProductCatalogImageBulkPanel,
-    ),
-  { ssr: false },
-);
 
 const PRODUCTOS_ROW_HOVER_CLASS = "hostly-productos-data-row";
 const PRODUCTOS_ROW_TEXT_BTN_CLASS = "hostly-productos-row-text-btn";
