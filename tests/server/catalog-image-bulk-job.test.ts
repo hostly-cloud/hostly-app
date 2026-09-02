@@ -13,6 +13,17 @@ const ULTRA_ACCESS = resolveCatalogImageAccessFromRestaurant({
   subscription: { plan: "ultra" },
 });
 
+const METERED_ULTRA_ACCESS = resolveCatalogImageAccessFromRestaurant({
+  subscription: {
+    plan: "ultra",
+    catalogImages: {
+      meteringMode: "credit_balance",
+      creditBalance: 3,
+      creditCosts: { aiBulk: 2, catalogSearch: 2 },
+    },
+  },
+});
+
 type Stored = Record<string, unknown>;
 type QueryState = {
   path: string;
@@ -57,7 +68,35 @@ function memoryFirestore(initial: Record<string, Stored>) {
 
   const applyUpdate = (path: string, patch: Stored) => {
     const current = store.get(path) ?? {};
-    store.set(path, { ...current, ...structuredCloneSafe(patch) });
+    const next = { ...current };
+    for (const [key, value] of Object.entries(patch)) {
+      if (key === "subscription.catalogImages.creditBalance") {
+        const subscription = {
+          ...((next.subscription as Record<string, unknown>) ?? {}),
+        };
+        const catalogImages = {
+          ...((subscription.catalogImages as Record<string, unknown>) ?? {}),
+        };
+        const increment =
+          value &&
+          typeof value === "object" &&
+          "operand" in value &&
+          typeof value.operand === "number"
+            ? value.operand
+            : null;
+        const currentBalance =
+          typeof catalogImages.creditBalance === "number"
+            ? catalogImages.creditBalance
+            : 0;
+        catalogImages.creditBalance =
+          increment == null ? value : currentBalance + increment;
+        subscription.catalogImages = catalogImages;
+        next.subscription = subscription;
+      } else {
+        next[key] = structuredCloneSafe(value);
+      }
+    }
+    store.set(path, next);
   };
 
   function snapshot(path: string, data?: Stored) {
@@ -449,8 +488,127 @@ test("catalog search results are recorded as reviewable usage, not attached blin
     path.startsWith("restaurants/restaurant-a/catalogImageUsage/"),
   )?.[1];
   assert.equal(usage?.operation, "catalog_image_catalog_search_bulk");
-  assert.equal(usage?.capability, "catalog.image.ai.bulk");
+  assert.equal(usage?.capability, "catalog.image.catalogSearch");
   assert.equal(usage?.result, "candidates");
+});
+
+test("bulk catalog search consumes the configured tenant credit atomically", async () => {
+  const restaurant = {
+    subscription: {
+      plan: "ultra",
+      catalogImages: {
+        meteringMode: "credit_balance",
+        creditBalance: 3,
+        creditCosts: { aiBulk: 2, catalogSearch: 2 },
+      },
+    },
+  };
+  const { db, store } = memoryFirestore({
+    "restaurants/restaurant-a": restaurant,
+    "restaurants/restaurant-a/products/brand-1": {
+      ...dish("Fanta Naranja"),
+      categoryName: "Refrescos",
+      barcode: "5449000054227",
+    },
+  });
+  const created = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-credit-catalog-1",
+    access: METERED_ULTRA_ACCESS,
+  });
+  assert.equal(created.estimate.mode, "credit_balance");
+  assert.equal(created.estimate.credits, 2);
+
+  await processNextCatalogImageBulkItem({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+    userId: "owner-a",
+    access: METERED_ULTRA_ACCESS,
+    search: async () => ({
+      query: "5449000054227",
+      candidates: [],
+      provider: "open_food_facts",
+      attribution: "Open Food Facts contributors",
+      license: "CC BY-SA 3.0",
+    }),
+  });
+
+  const storedRestaurant = store.get("restaurants/restaurant-a");
+  const subscription = storedRestaurant?.subscription as Record<string, unknown>;
+  const catalogImages = subscription.catalogImages as Record<string, unknown>;
+  assert.equal(catalogImages.creditBalance, 1);
+  const usage = [...store.entries()].find(([path]) =>
+    path.startsWith("restaurants/restaurant-a/catalogImageUsage/"),
+  )?.[1];
+  assert.equal(usage?.creditStatus, "consumed");
+  assert.equal(usage?.creditCost, 2);
+  assert.equal(usage?.creditBalanceBefore, 3);
+  assert.equal(usage?.creditBalanceAfter, 1);
+});
+
+test("bulk catalog search stops before the provider when credits are insufficient", async () => {
+  const restaurant = {
+    subscription: {
+      plan: "ultra",
+      catalogImages: {
+        meteringMode: "credit_balance",
+        creditBalance: 1,
+        creditCosts: { aiBulk: 2, catalogSearch: 2 },
+      },
+    },
+  };
+  const access = resolveCatalogImageAccessFromRestaurant(restaurant);
+  const { db, store } = memoryFirestore({
+    "restaurants/restaurant-a": restaurant,
+    "restaurants/restaurant-a/products/brand-1": {
+      ...dish("Fanta Naranja"),
+      categoryName: "Refrescos",
+      barcode: "5449000054227",
+    },
+  });
+  const created = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-credit-blocked-1",
+    access,
+  });
+  let providerCalls = 0;
+
+  await processNextCatalogImageBulkItem({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+    userId: "owner-a",
+    access,
+    search: async () => {
+      providerCalls += 1;
+      throw new Error("must not run");
+    },
+  });
+
+  assert.equal(providerCalls, 0);
+  const state = await readCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+  });
+  assert.equal(state.items[0].status, "failed");
+  assert.equal(
+    state.items[0].failureReason,
+    "CATALOG_IMAGE_CREDITS_EXHAUSTED",
+  );
+  const usage = [...store.entries()].find(([path]) =>
+    path.startsWith("restaurants/restaurant-a/catalogImageUsage/"),
+  )?.[1];
+  assert.equal(usage?.creditStatus, "blocked");
+  const storedRestaurant = store.get("restaurants/restaurant-a");
+  const subscription = storedRestaurant?.subscription as Record<string, unknown>;
+  const catalogImages = subscription.catalogImages as Record<string, unknown>;
+  assert.equal(catalogImages.creditBalance, 1);
 });
 
 test("jobs can pause, resume and cancel without losing persisted pending work", async () => {

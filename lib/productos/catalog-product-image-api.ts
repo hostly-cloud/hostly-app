@@ -44,12 +44,19 @@ export async function searchCatalogProductImagesForReview(
   productId: string,
   query: string,
 ): Promise<CatalogProductImageSearchResult> {
+  const idempotencyKey = globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const response = await authenticatedApiFetch(
     "/api/catalog/search-product-images",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ productId, query }),
+      body: JSON.stringify({
+        productId,
+        query,
+        idempotencyKey,
+        confirmSearch: true,
+      }),
     },
   );
   const body = await readJson<CatalogProductImageSearchApiResponse>(response);

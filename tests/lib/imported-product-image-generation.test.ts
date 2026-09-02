@@ -22,6 +22,8 @@ const PRO_ACCESS: CatalogImageAccess = {
     "catalog.image.catalogSearch",
   ],
   meteringMode: "usage_recorded",
+  creditBalance: null,
+  creditCosts: { aiSingle: null, aiBulk: null, catalogSearch: null },
 };
 
 const ULTRA_ACCESS: CatalogImageAccess = {
@@ -33,15 +35,33 @@ const ULTRA_ACCESS: CatalogImageAccess = {
     "catalog.image.catalogSearch",
   ],
   meteringMode: "usage_recorded",
+  creditBalance: null,
+  creditCosts: { aiSingle: null, aiBulk: null, catalogSearch: null },
 };
 
 function fakeGenerationDb(params: {
   productData: Record<string, unknown>;
+  restaurantData?: Record<string, unknown>;
   usageData?: Record<string, unknown>;
 }) {
   const reads: string[] = [];
   const creates: Array<{ path: string; data: Record<string, unknown> }> = [];
   const updates: Array<{ path: string; data: Record<string, unknown> }> = [];
+  const restaurantPath = "restaurants/restaurant-1";
+  const productPath = `${restaurantPath}/products/product-1`;
+  const usagePrefix = `${restaurantPath}/catalogImageUsage/`;
+  const documents = new Map<string, Record<string, unknown>>([
+    [
+      restaurantPath,
+      params.restaurantData ?? { subscription: { plan: "pro" } },
+    ],
+    [productPath, { ...params.productData }],
+    ...(params.usageData
+      ? ([[`${usagePrefix}request-fixed-1`, { ...params.usageData }]] as Array<
+          [string, Record<string, unknown>]
+        >)
+      : []),
+  ]);
 
   const node = (path: string): Record<string, unknown> => ({
     path,
@@ -57,9 +77,7 @@ function fakeGenerationDb(params: {
       callback({
         get: async (reference: { path: string }) => {
           reads.push(reference.path);
-          const data = reference.path.includes("/catalogImageUsage/")
-            ? params.usageData
-            : params.productData;
+          const data = documents.get(reference.path);
           return {
             exists: data != null,
             data: () => data,
@@ -68,15 +86,56 @@ function fakeGenerationDb(params: {
         create: (
           reference: { path: string },
           data: Record<string, unknown>,
-        ) => creates.push({ path: reference.path, data }),
+        ) => {
+          creates.push({ path: reference.path, data });
+          documents.set(reference.path, { ...data });
+        },
         update: (
           reference: { path: string },
           data: Record<string, unknown>,
-        ) => updates.push({ path: reference.path, data }),
+        ) => {
+          updates.push({ path: reference.path, data });
+          const current = documents.get(reference.path) ?? {};
+          const next = { ...current };
+          for (const [key, value] of Object.entries(data)) {
+            if (key === "subscription.catalogImages.creditBalance") {
+              const subscription = {
+                ...((next.subscription as Record<string, unknown>) ?? {}),
+              };
+              const catalogImages = {
+                ...((subscription.catalogImages as Record<string, unknown>) ?? {}),
+              };
+              const increment =
+                value &&
+                typeof value === "object" &&
+                "operand" in value &&
+                typeof value.operand === "number"
+                  ? value.operand
+                  : null;
+              const currentBalance =
+                typeof catalogImages.creditBalance === "number"
+                  ? catalogImages.creditBalance
+                  : 0;
+              catalogImages.creditBalance =
+                increment == null ? value : currentBalance + increment;
+              subscription.catalogImages = catalogImages;
+              next.subscription = subscription;
+            } else {
+              next[key] = value;
+            }
+          }
+          documents.set(reference.path, next);
+        },
       }),
   };
 
-  return { db: db as unknown as Firestore, reads, creates, updates };
+  return {
+    db: db as unknown as Firestore,
+    reads,
+    creates,
+    updates,
+    documents,
+  };
 }
 
 function importedDish(overrides: Record<string, unknown> = {}) {
@@ -345,11 +404,167 @@ test("a repeated idempotency key never starts a second provider operation", asyn
     idempotencyKey: "request-fixed-1",
   });
   assert.deepEqual(fake.reads, [
+    "restaurants/restaurant-1",
     "restaurants/restaurant-1/products/product-1",
     "restaurants/restaurant-1/catalogImageUsage/request-fixed-1",
   ]);
   assert.equal(fake.creates.length, 0);
   assert.equal(fake.updates.length, 0);
+});
+
+test("an explicit insufficient balance is blocked and recorded before the provider", async () => {
+  const fake = fakeGenerationDb({
+    productData: importedDish(),
+    restaurantData: {
+      subscription: {
+        plan: "pro",
+        catalogImages: {
+          meteringMode: "credit_balance",
+          creditBalance: 1,
+          creditCosts: { aiSingle: 2 },
+        },
+      },
+    },
+  });
+
+  await assert.rejects(
+    generateImportedProductImage({
+      db: fake.db,
+      restaurantId: "restaurant-1",
+      productId: "product-1",
+      userId: "owner-1",
+      idempotencyKey: "request-credit-blocked-1",
+      access: PRO_ACCESS,
+    }),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "CATALOG_IMAGE_CREDITS_EXHAUSTED",
+  );
+
+  assert.equal(
+    fake.updates.some((update) => update.path === "restaurants/restaurant-1"),
+    false,
+  );
+  assert.equal(fake.creates.length, 1);
+  assert.equal(fake.creates[0]?.data.status, "failed");
+  assert.equal(fake.creates[0]?.data.result, "blocked");
+  assert.equal(fake.creates[0]?.data.creditStatus, "blocked");
+  assert.equal(fake.creates[0]?.data.creditCost, 2);
+  assert.equal(fake.creates[0]?.data.creditBalanceBefore, 1);
+});
+
+test("a successful generation consumes one atomic configured credit reservation", async () => {
+  const fake = fakeGenerationDb({
+    productData: importedDish(),
+    restaurantData: {
+      subscription: {
+        plan: "pro",
+        catalogImages: {
+          meteringMode: "credit_balance",
+          creditBalance: 5,
+          creditCosts: { aiSingle: 2 },
+        },
+      },
+    },
+  });
+  let providerCalls = 0;
+  const request = {
+    db: fake.db,
+    restaurantId: "restaurant-1",
+    productId: "product-1",
+    userId: "owner-1",
+    idempotencyKey: "request-credit-success-1",
+    access: PRO_ACCESS,
+  };
+
+  const result = await generateImportedProductImage(request, {
+    generateImage: async () => {
+      providerCalls += 1;
+      return {
+        bytes: Buffer.from([1, 2, 3]),
+        model: "test-model",
+        mediaType: "image/webp",
+        costUsd: 0.01,
+      };
+    },
+    saveImage: async () => ({
+      imagePath:
+        "restaurants/restaurant-1/products/product-1/ai/generated.webp",
+      imageUrl: "https://example.test/generated.webp",
+    }),
+  });
+
+  assert.equal(result.outcome, "generated");
+  assert.equal(providerCalls, 1);
+  const restaurant = fake.documents.get("restaurants/restaurant-1");
+  const subscription = restaurant?.subscription as Record<string, unknown>;
+  const catalogImages = subscription.catalogImages as Record<string, unknown>;
+  assert.equal(catalogImages.creditBalance, 3);
+  const usage = fake.documents.get(
+    "restaurants/restaurant-1/catalogImageUsage/request-credit-success-1",
+  );
+  assert.equal(usage?.creditStatus, "consumed");
+  assert.equal(usage?.creditCost, 2);
+  assert.equal(usage?.creditBalanceBefore, 5);
+  assert.equal(usage?.creditBalanceAfter, 3);
+
+  const duplicate = await generateImportedProductImage(request, {
+    generateImage: async () => {
+      providerCalls += 1;
+      throw new Error("must not run");
+    },
+  });
+  assert.equal(duplicate.outcome, "skipped");
+  assert.equal(duplicate.reason, "duplicate_request");
+  assert.equal(providerCalls, 1);
+  assert.equal(catalogImages.creditBalance, 3);
+});
+
+test("a provider failure releases a configured credit reservation", async () => {
+  const fake = fakeGenerationDb({
+    productData: importedDish(),
+    restaurantData: {
+      subscription: {
+        plan: "pro",
+        catalogImages: {
+          meteringMode: "credit_balance",
+          creditBalance: 5,
+          creditCosts: { aiSingle: 2 },
+        },
+      },
+    },
+  });
+
+  await assert.rejects(
+    generateImportedProductImage(
+      {
+        db: fake.db,
+        restaurantId: "restaurant-1",
+        productId: "product-1",
+        userId: "owner-1",
+        idempotencyKey: "request-credit-failure-1",
+        access: PRO_ACCESS,
+      },
+      {
+        generateImage: async () => {
+          throw new Error("provider unavailable");
+        },
+      },
+    ),
+    /provider unavailable/,
+  );
+
+  const restaurant = fake.documents.get("restaurants/restaurant-1");
+  const subscription = restaurant?.subscription as Record<string, unknown>;
+  const catalogImages = subscription.catalogImages as Record<string, unknown>;
+  assert.equal(catalogImages.creditBalance, 5);
+  const usage = fake.documents.get(
+    "restaurants/restaurant-1/catalogImageUsage/request-credit-failure-1",
+  );
+  assert.equal(usage?.creditStatus, "released");
+  assert.equal(usage?.status, "failed");
+  assert.equal(usage?.failureReason, "IMAGE_GENERATION_FAILED");
 });
 
 test("an ineligible branded item records a tenant-scoped skipped usage", async () => {
@@ -358,6 +573,16 @@ test("an ineligible branded item records a tenant-scoped skipped usage", async (
       name: "Coca-Cola Zero",
       categoryName: "Refrescos",
     }),
+    restaurantData: {
+      subscription: {
+        plan: "pro",
+        catalogImages: {
+          meteringMode: "credit_balance",
+          creditBalance: 5,
+          creditCosts: { aiSingle: 2 },
+        },
+      },
+    },
   });
 
   const result = await generateImportedProductImage({
@@ -407,6 +632,7 @@ test("bulk generation usage records the bulk capability and durable job id", asy
       name: "Coca-Cola Zero",
       categoryName: "Refrescos",
     }),
+    restaurantData: { subscription: { plan: "ultra" } },
   });
 
   await generateImportedProductImage({

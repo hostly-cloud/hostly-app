@@ -19,6 +19,10 @@ describe("Product image form contract", () => {
     "components/productos/product-commercial-identity-panel.tsx",
     "utf8",
   );
+  const catalogApiSource = readFileSync(
+    "lib/productos/catalog-product-image-api.ts",
+    "utf8",
+  );
   const spanishLocale = readFileSync("locales/es.ts", "utf8");
 
   it("passes the edited product id to identity and image review flows", () => {
@@ -55,6 +59,8 @@ describe("Product image form contract", () => {
 
   it("explains cost, review and approved-image replacement before generating", () => {
     assert.match(reviewPanelSource, /puede consumir créditos/);
+    assert.match(catalogApiSource, /confirmSearch: true/);
+    assert.match(catalogApiSource, /idempotencyKey/);
     assert.match(reviewPanelSource, /pendiente de revisión/);
     assert.match(reviewPanelSource, /¿Regenerar la imagen aprobada\?/);
     assert.match(reviewPanelSource, /se conservará si falla/);

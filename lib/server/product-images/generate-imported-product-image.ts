@@ -16,6 +16,11 @@ import type {
   CatalogImageAccess,
   CatalogImageCapability,
 } from "@/lib/productos/catalog-image-plan";
+import {
+  evaluateCatalogImageCreditDecision,
+  hasCatalogImageCapability,
+} from "@/lib/productos/catalog-image-plan";
+import { resolveCatalogImageAccessFromRestaurant } from "@/lib/server/product-images/resolve-catalog-image-access";
 import { looksLikeBrandedOrBeverageProduct } from "@/lib/server/product-images/product-image-content-strategy";
 
 export { looksLikeBrandedOrBeverageProduct } from "@/lib/server/product-images/product-image-content-strategy";
@@ -91,6 +96,50 @@ type CatalogImageUsageStatus =
   | "succeeded"
   | "skipped"
   | "failed";
+
+function creditFailure(
+  code:
+    | "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED"
+    | "CATALOG_IMAGE_CREDITS_EXHAUSTED",
+): GenerateImportedProductImageError {
+  return code === "CATALOG_IMAGE_CREDITS_EXHAUSTED"
+    ? new GenerateImportedProductImageError(
+        code,
+        "No quedan créditos suficientes para generar esta imagen",
+        402,
+      )
+    : new GenerateImportedProductImageError(
+        code,
+        "La configuración de créditos de imágenes está incompleta",
+        503,
+      );
+}
+
+function readReservedCreditCost(data: Record<string, unknown>): number | null {
+  return data.creditStatus === "reserved" &&
+    typeof data.creditCost === "number" &&
+    Number.isSafeInteger(data.creditCost) &&
+    data.creditCost >= 0
+    ? data.creditCost
+    : null;
+}
+
+function releaseReservedCredits(
+  transaction: FirebaseFirestore.Transaction,
+  restaurantRef: FirebaseFirestore.DocumentReference,
+  usageData: Record<string, unknown>,
+): boolean {
+  const creditCost = readReservedCreditCost(usageData);
+  if (creditCost == null) return false;
+  if (creditCost > 0) {
+    transaction.update(restaurantRef, {
+      "subscription.catalogImages.creditBalance": FieldValue.increment(
+        creditCost,
+      ),
+    });
+  }
+  return true;
+}
 
 function usageRecordBase(params: {
   restaurantId: string;
@@ -442,6 +491,7 @@ async function saveGeneratedImage(
 
 async function releaseGenerationLockSafely(params: {
   db: Firestore;
+  restaurantRef: FirebaseFirestore.DocumentReference;
   productRef: FirebaseFirestore.DocumentReference;
   usageRef: FirebaseFirestore.DocumentReference;
   requestId: string;
@@ -467,6 +517,12 @@ async function releaseGenerationLockSafely(params: {
         }
       }
       if (usageSnap.exists) {
+        const usageData = usageSnap.data() as Record<string, unknown>;
+        const releasedCredit = releaseReservedCredits(
+          transaction,
+          params.restaurantRef,
+          usageData,
+        );
         const errorCode =
           params.error &&
           typeof params.error === "object" &&
@@ -480,6 +536,7 @@ async function releaseGenerationLockSafely(params: {
           failureReason: errorCode,
           ...(params.model ? { model: params.model } : {}),
           ...(params.costUsd != null ? { costUsd: params.costUsd } : {}),
+          ...(releasedCredit ? { creditStatus: "released" } : {}),
           updatedAt: now,
           completedAt: now,
         });
@@ -502,6 +559,10 @@ export async function generateImportedProductImage(params: {
   usageCapability?: CatalogImageCapability;
   jobId?: string;
   allowApprovedAiReplacement?: boolean;
+}, dependencies?: {
+  generateImage?: typeof generateImageWithAiGateway;
+  saveImage?: typeof saveGeneratedImage;
+  deleteImage?: typeof deleteStoragePathSafely;
 }): Promise<GenerateImportedProductImageResult> {
   const restaurantId = assertSimpleId(params.restaurantId, "restaurantId");
   const productId = assertSimpleId(params.productId, "productId");
@@ -527,14 +588,18 @@ export async function generateImportedProductImage(params: {
     .doc(restaurantId)
     .collection("products")
     .doc(productId);
+  const restaurantRef = params.db.collection("restaurants").doc(restaurantId);
   const usageRef = params.db
     .collection("restaurants")
     .doc(restaurantId)
     .collection("catalogImageUsage")
     .doc(idempotencyKey);
   const requestId = idempotencyKey;
+  const requiredCapability =
+    params.usageCapability ?? "catalog.image.ai.single";
 
   const acquisition = await params.db.runTransaction(async (transaction) => {
+    const restaurantSnap = await transaction.get(restaurantRef);
     const productSnap = await transaction.get(productRef);
     const usageSnap = await transaction.get(usageRef);
     if (usageSnap.exists) {
@@ -548,6 +613,19 @@ export async function generateImportedProductImage(params: {
         "PRODUCT_NOT_FOUND",
         "Producto no encontrado",
         404,
+      );
+    }
+
+    const liveAccess = resolveCatalogImageAccessFromRestaurant(
+      restaurantSnap.exists
+        ? (restaurantSnap.data() as Record<string, unknown>)
+        : null,
+    );
+    if (!hasCatalogImageCapability(liveAccess, requiredCapability)) {
+      throw new GenerateImportedProductImageError(
+        "CATALOG_IMAGE_PLAN_REQUIRED",
+        "El plan actual no permite esta operación de imagen",
+        403,
       );
     }
 
@@ -567,7 +645,7 @@ export async function generateImportedProductImage(params: {
             productId,
             userId,
             idempotencyKey,
-            access: params.access,
+            access: liveAccess,
             status: "skipped",
             now,
             operation: params.usageOperation,
@@ -594,7 +672,7 @@ export async function generateImportedProductImage(params: {
             productId,
             userId,
             idempotencyKey,
-            access: params.access,
+            access: liveAccess,
             status: "skipped",
             now,
             operation: params.usageOperation,
@@ -614,6 +692,56 @@ export async function generateImportedProductImage(params: {
       };
     }
 
+    const creditDecision = evaluateCatalogImageCreditDecision(
+      liveAccess,
+      requiredCapability,
+    );
+    if (
+      creditDecision.status === "configuration_required" ||
+      creditDecision.status === "insufficient"
+    ) {
+      const failureReason:
+        | "CATALOG_IMAGE_CREDITS_EXHAUSTED"
+        | "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED" =
+        creditDecision.status === "insufficient"
+          ? "CATALOG_IMAGE_CREDITS_EXHAUSTED"
+          : "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED";
+      transaction.create(usageRef, {
+        ...usageRecordBase({
+          restaurantId,
+          productId,
+          userId,
+          idempotencyKey,
+          access: liveAccess,
+          status: "failed",
+          now,
+          operation: params.usageOperation,
+          capability: params.usageCapability,
+          jobId: params.jobId,
+          approvedImageReplacementConfirmed:
+            params.allowApprovedAiReplacement,
+        }),
+        result: "blocked",
+        failureReason,
+        creditStatus: "blocked",
+        ...(creditDecision.creditCost != null
+          ? { creditCost: creditDecision.creditCost }
+          : {}),
+        ...(liveAccess.creditBalance != null
+          ? { creditBalanceBefore: liveAccess.creditBalance }
+          : {}),
+        completedAt: now,
+      });
+      return { acquired: false as const, creditError: failureReason };
+    }
+
+    if (creditDecision.status === "available") {
+      transaction.update(restaurantRef, {
+        "subscription.catalogImages.creditBalance":
+          creditDecision.creditBalanceAfter,
+      });
+    }
+
     transaction.update(productRef, {
       imageGenerationInProgress: {
         requestId,
@@ -625,32 +753,57 @@ export async function generateImportedProductImage(params: {
     });
     transaction.create(
       usageRef,
-      usageRecordBase({
-        restaurantId,
-        productId,
-        userId,
-        idempotencyKey,
-        access: params.access,
-        status: "processing",
-        now,
-        operation: params.usageOperation,
-        capability: params.usageCapability,
-        jobId: params.jobId,
-        approvedImageReplacementConfirmed:
-          params.allowApprovedAiReplacement,
-      }),
+      {
+        ...usageRecordBase({
+          restaurantId,
+          productId,
+          userId,
+          idempotencyKey,
+          access: liveAccess,
+          status: "processing",
+          now,
+          operation: params.usageOperation,
+          capability: params.usageCapability,
+          jobId: params.jobId,
+          approvedImageReplacementConfirmed:
+            params.allowApprovedAiReplacement,
+        }),
+        ...(creditDecision.status === "available"
+          ? {
+              creditStatus: "reserved",
+              creditCost: creditDecision.creditCost,
+              creditBalanceBefore: creditDecision.creditBalanceBefore,
+              creditBalanceAfter: creditDecision.creditBalanceAfter,
+            }
+          : {}),
+      },
     );
 
     return { acquired: true as const, eligibility };
   });
 
   if (!acquisition.acquired) {
-    return {
-      outcome: "skipped",
-      productId,
-      reason: acquisition.reason,
-      idempotencyKey,
-    };
+    if (
+      "creditError" in acquisition &&
+      (acquisition.creditError === "CATALOG_IMAGE_CREDITS_EXHAUSTED" ||
+        acquisition.creditError ===
+          "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED")
+    ) {
+      throw creditFailure(acquisition.creditError);
+    }
+    if ("reason" in acquisition && acquisition.reason) {
+      return {
+        outcome: "skipped",
+        productId,
+        reason: acquisition.reason,
+        idempotencyKey,
+      };
+    }
+    throw new GenerateImportedProductImageError(
+      "IMAGE_CREDIT_RESERVATION_FAILED",
+      "No se pudo reservar el consumo de la imagen",
+      500,
+    );
   }
 
   let stored:
@@ -668,12 +821,15 @@ export async function generateImportedProductImage(params: {
 
   try {
     const prompt = buildImportedProductImagePrompt(acquisition.eligibility);
-    const generated = await generateImageWithAiGateway(prompt, userId);
+    const generateImageForProduct =
+      dependencies?.generateImage ?? generateImageWithAiGateway;
+    const generated = await generateImageForProduct(prompt, userId);
     generatedMetadata = {
       model: generated.model,
       ...(generated.costUsd != null ? { costUsd: generated.costUsd } : {}),
     };
-    stored = await saveGeneratedImage(
+    const saveImage = dependencies?.saveImage ?? saveGeneratedImage;
+    stored = await saveImage(
       restaurantId,
       productId,
       generated.bytes,
@@ -700,15 +856,22 @@ export async function generateImportedProductImage(params: {
       }
 
       const data = productSnap.data() as Record<string, unknown>;
+      const usageData = usageSnap.data() as Record<string, unknown>;
       const lock = readGenerationLock(data.imageGenerationInProgress);
       if (!lock || lock.requestId !== requestId) {
         const now = Date.now();
+        const releasedCredit = releaseReservedCredits(
+          transaction,
+          restaurantRef,
+          usageData,
+        );
         transaction.update(usageRef, {
           status: "skipped",
           result: "skipped",
           failureReason: "generation_in_progress",
           model: generated.model,
           ...(generated.costUsd != null ? { costUsd: generated.costUsd } : {}),
+          ...(releasedCredit ? { creditStatus: "released" } : {}),
           updatedAt: now,
           completedAt: now,
         });
@@ -725,6 +888,11 @@ export async function generateImportedProductImage(params: {
       );
       if (!eligibility.eligible) {
         const now = Date.now();
+        const releasedCredit = releaseReservedCredits(
+          transaction,
+          restaurantRef,
+          usageData,
+        );
         transaction.update(productRef, {
           imageGenerationInProgress: FieldValue.delete(),
           updatedAt: now,
@@ -736,6 +904,7 @@ export async function generateImportedProductImage(params: {
           failureReason: eligibility.reason,
           model: generated.model,
           ...(generated.costUsd != null ? { costUsd: generated.costUsd } : {}),
+          ...(releasedCredit ? { creditStatus: "released" } : {}),
           updatedAt: now,
           completedAt: now,
         });
@@ -764,6 +933,9 @@ export async function generateImportedProductImage(params: {
         result: "generated",
         model: generated.model,
         ...(generated.costUsd != null ? { costUsd: generated.costUsd } : {}),
+        ...(readReservedCreditCost(usageData) != null
+          ? { creditStatus: "consumed" }
+          : {}),
         imagePath: stored!.imagePath,
         updatedAt: now,
         completedAt: now,
@@ -773,7 +945,8 @@ export async function generateImportedProductImage(params: {
     });
 
     if (!finalResult.attached) {
-      await deleteStoragePathSafely(restaurantId, productId, stored.imagePath);
+      const deleteImage = dependencies?.deleteImage ?? deleteStoragePathSafely;
+      await deleteImage(restaurantId, productId, stored.imagePath);
       return {
         outcome: "skipped",
         productId,
@@ -783,7 +956,8 @@ export async function generateImportedProductImage(params: {
     }
 
     if (replacedImagePath && replacedImagePath !== stored.imagePath) {
-      await deleteStoragePathSafely(
+      const deleteImage = dependencies?.deleteImage ?? deleteStoragePathSafely;
+      await deleteImage(
         restaurantId,
         productId,
         replacedImagePath,
@@ -803,10 +977,12 @@ export async function generateImportedProductImage(params: {
     };
   } catch (error) {
     if (stored) {
-      await deleteStoragePathSafely(restaurantId, productId, stored.imagePath);
+      const deleteImage = dependencies?.deleteImage ?? deleteStoragePathSafely;
+      await deleteImage(restaurantId, productId, stored.imagePath);
     }
     await releaseGenerationLockSafely({
       db: params.db,
+      restaurantRef,
       productRef,
       usageRef,
       requestId,

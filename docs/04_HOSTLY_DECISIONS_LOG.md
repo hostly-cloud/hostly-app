@@ -198,6 +198,25 @@ futuros límites y créditos deben vivir dentro de esta autoridad protegida o en
 colección igualmente server-only; ocultar controles en React nunca concede ni revoca
 una capacidad.
 
+El contrato de consumo opcional vive en
+`subscription.catalogImages`: `meteringMode: "credit_balance"`, un
+`creditBalance` entero no negativo y costes enteros no negativos en
+`creditCosts.aiSingle`, `creditCosts.aiBulk` y `creditCosts.catalogSearch`. Los
+importes no se fijan en componentes ni en una política global: son configuración
+comercial modificable por tenant. Solo el modo explícito `credit_balance` activa la
+restricción; un tenant sin esta configuración continúa en `usage_recorded`, sin saldo
+inventado y sin perder el acceso de transición. Si se activa el modo pero falta el
+saldo o el coste de la operación, el servidor falla de forma cerrada antes de llamar
+al proveedor.
+
+Una operación con saldo reserva créditos en la misma transacción que crea su registro
+idempotente de uso. Los créditos pasan de `reserved` a `consumed` únicamente cuando el
+resultado queda persistido para revisión; un fallo libera la reserva mediante una
+actualización atómica. Los productos no elegibles, las marcas desviadas a catálogo y
+las solicitudes duplicadas no consumen créditos. La API vuelve a leer plan, capacidad
+y saldo desde el documento del restaurante dentro de la transacción, por lo que el
+estado enviado por React nunca actúa como autoridad.
+
 Cada intento individual usa una clave idempotente y deja un registro exclusivo de
 servidor en `restaurants/{restaurantId}/catalogImageUsage/{idempotencyKey}` con tenant,
 producto, usuario, plan efectivo, proveedor, resultado, coste disponible y motivo de

@@ -3,6 +3,7 @@ import {
   HOSTLY_CATALOG_IMAGE_PLAN_POLICY,
   HOSTLY_CATALOG_IMAGE_PLANS,
   type CatalogImageAccess,
+  type CatalogImageCreditCosts,
   type HostlyCatalogImagePlan,
 } from "@/lib/productos/catalog-image-plan";
 
@@ -20,6 +21,20 @@ function normalizePlan(value: unknown): HostlyCatalogImagePlan | null {
     : null;
 }
 
+function readNonNegativeInteger(value: unknown): number | null {
+  return typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 0
+    ? value
+    : null;
+}
+
+const UNCONFIGURED_CREDIT_COSTS: CatalogImageCreditCosts = {
+  aiSingle: null,
+  aiBulk: null,
+  catalogSearch: null,
+};
+
 /**
  * `subscription.plan` es el contrato canónico futuro. `billing.plan` y `plan`
  * se leen únicamente como aliases de transición para no romper tenants previos.
@@ -33,6 +48,12 @@ export function resolveCatalogImageAccessFromRestaurant(
   const legacyPlan =
     normalizePlan(billing?.plan) ?? normalizePlan(restaurant?.plan);
   const configuredPlan = subscriptionPlan ?? legacyPlan;
+  const catalogImages = readObject(subscription?.catalogImages);
+  const creditCosts = readObject(catalogImages?.creditCosts);
+  const meteringMode =
+    catalogImages?.meteringMode === "credit_balance"
+      ? "credit_balance"
+      : "usage_recorded";
 
   const effectivePlan = configuredPlan ?? "pro";
   return {
@@ -43,7 +64,19 @@ export function resolveCatalogImageAccessFromRestaurant(
         ? "legacy_field"
         : "legacy_compatibility",
     capabilities: [...HOSTLY_CATALOG_IMAGE_PLAN_POLICY[effectivePlan]],
-    meteringMode: "usage_recorded",
+    meteringMode,
+    creditBalance:
+      meteringMode === "credit_balance"
+        ? readNonNegativeInteger(catalogImages?.creditBalance)
+        : null,
+    creditCosts:
+      meteringMode === "credit_balance"
+        ? {
+            aiSingle: readNonNegativeInteger(creditCosts?.aiSingle),
+            aiBulk: readNonNegativeInteger(creditCosts?.aiBulk),
+            catalogSearch: readNonNegativeInteger(creditCosts?.catalogSearch),
+          }
+        : { ...UNCONFIGURED_CREDIT_COSTS },
   };
 }
 

@@ -18,6 +18,16 @@ const PRO_ACCESS = resolveCatalogImageAccessFromRestaurant({
 const BASIC_ACCESS = resolveCatalogImageAccessFromRestaurant({
   subscription: { plan: "basic" },
 });
+const METERED_PRO_ACCESS = resolveCatalogImageAccessFromRestaurant({
+  subscription: {
+    plan: "pro",
+    catalogImages: {
+      meteringMode: "credit_balance",
+      creditBalance: 5,
+      creditCosts: { catalogSearch: 1 },
+    },
+  },
+});
 
 function authContext(
   overrides: Partial<AuthenticatedRestaurantContext> = {},
@@ -174,6 +184,32 @@ test("catalog search receives only the server tenant and requested product", asy
     productId: "product-1",
     query: "Coca-Cola Zero 33 cl",
   });
+});
+
+test("a metered catalog search requires explicit cost confirmation", async () => {
+  let searched = false;
+  const response = await handleSearchCatalogProductImagesRequest(
+    request("/api/catalog/search-product-images", {
+      productId: "product-1",
+      query: "Coca-Cola Zero 33 cl",
+      idempotencyKey: "catalog-search-confirm-1",
+    }),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => METERED_PRO_ACCESS,
+      searchCatalog: async () => {
+        searched = true;
+        throw new Error("should not run");
+      },
+    },
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(
+    (await json(response)).error,
+    "CATALOG_SEARCH_CONFIRMATION_REQUIRED",
+  );
+  assert.equal(searched, false);
 });
 
 test("catalog attach refuses client-controlled image URLs", async () => {
