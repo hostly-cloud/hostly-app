@@ -25,6 +25,42 @@ type EnqueueParams = CatalogImageBulkQueueMessage & {
   revision: number;
 };
 
+export class CatalogImageBulkQueueMessageError extends Error {
+  readonly code = "INVALID_CATALOG_IMAGE_BULK_QUEUE_MESSAGE";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "CatalogImageBulkQueueMessageError";
+  }
+}
+
+export class CatalogImageBulkQueueRetryError extends Error {
+  readonly code = "CATALOG_IMAGE_BULK_QUEUE_RETRY_REQUIRED";
+
+  constructor(jobId: string) {
+    super(`El trabajo ${jobId} sigue activo y debe volver a intentarse`);
+    this.name = "CatalogImageBulkQueueRetryError";
+  }
+}
+
+export function catalogImageBulkQueueRetryDecision(
+  error: unknown,
+  deliveryCount: number,
+): { acknowledge: true } | { afterSeconds: number } {
+  if (
+    error instanceof CatalogImageBulkQueueMessageError ||
+    (error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "INVALID_CATALOG_IMAGE_BULK_QUEUE_MESSAGE")
+  ) {
+    return { acknowledge: true };
+  }
+  return {
+    afterSeconds: Math.min(60, Math.max(2, deliveryCount * 5)),
+  };
+}
+
 function assertSimpleId(value: unknown, label: string): string {
   const normalized = typeof value === "string" ? value.trim() : "";
   if (
@@ -33,7 +69,9 @@ function assertSimpleId(value: unknown, label: string): string {
     normalized.includes("/") ||
     normalized.includes("..")
   ) {
-    throw new Error(`INVALID_CATALOG_IMAGE_BULK_QUEUE_${label.toUpperCase()}`);
+    throw new CatalogImageBulkQueueMessageError(
+      `INVALID_CATALOG_IMAGE_BULK_QUEUE_${label.toUpperCase()}`,
+    );
   }
   return normalized;
 }
@@ -79,7 +117,9 @@ export async function processCatalogImageBulkQueueMessage(
   dependencies?: CatalogImageBulkQueueWorkerDependencies,
 ): Promise<{ processed: boolean; requeued: boolean; status: string }> {
   if (!message || typeof message !== "object" || Array.isArray(message)) {
-    throw new Error("INVALID_CATALOG_IMAGE_BULK_QUEUE_MESSAGE");
+    throw new CatalogImageBulkQueueMessageError(
+      "INVALID_CATALOG_IMAGE_BULK_QUEUE_MESSAGE",
+    );
   }
   const raw = message as Record<string, unknown>;
   const restaurantId = assertSimpleId(raw.restaurantId, "restaurant_id");
@@ -136,6 +176,13 @@ export async function processCatalogImageBulkQueueMessage(
     userId: current.job.createdBy,
     access,
   });
+  const requiresRetry =
+    !result.processed &&
+    (result.job.status === "queued" || result.job.status === "running") &&
+    (result.job.counters.pending > 0 || result.job.counters.processing > 0);
+  if (requiresRetry) {
+    throw new CatalogImageBulkQueueRetryError(jobId);
+  }
   const shouldContinue =
     result.processed &&
     (result.job.status === "queued" || result.job.status === "running") &&

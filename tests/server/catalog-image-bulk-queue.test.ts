@@ -3,7 +3,12 @@ import test from "node:test";
 import type { Firestore } from "firebase-admin/firestore";
 import type { CatalogImageBulkJob } from "@/lib/productos/catalog-image-bulk-contract";
 import { resolveCatalogImageAccessFromRestaurant } from "@/lib/server/product-images/resolve-catalog-image-access";
-import { processCatalogImageBulkQueueMessage } from "@/lib/server/product-images/catalog-image-bulk-queue";
+import {
+  CatalogImageBulkQueueMessageError,
+  CatalogImageBulkQueueRetryError,
+  catalogImageBulkQueueRetryDecision,
+  processCatalogImageBulkQueueMessage,
+} from "@/lib/server/product-images/catalog-image-bulk-queue";
 
 const ULTRA_ACCESS = resolveCatalogImageAccessFromRestaurant({
   subscription: { plan: "ultra" },
@@ -114,6 +119,57 @@ test("queue worker pauses a job after an Ultra downgrade without processing", as
   assert.equal(processed, false);
   assert.equal(controlledTenant, "restaurant-a");
   assert.deepEqual(result, { processed: false, requeued: false, status: "paused" });
+});
+
+test("queue worker retries instead of acknowledging active leased work", async () => {
+  let enqueued = false;
+  await assert.rejects(
+    processCatalogImageBulkQueueMessage(
+      { restaurantId: "restaurant-a", jobId: "bulk-job-123" },
+      {
+        db,
+        readJob: async () => ({ job: job(), items: [] }),
+        resolveAccess: async () => ULTRA_ACCESS,
+        processNext: async () => ({
+          processed: false,
+          job: job({
+            status: "running",
+            counters: {
+              ...job().counters,
+              pending: 1,
+              processing: 1,
+            },
+          }),
+        }),
+        enqueue: async () => {
+          enqueued = true;
+        },
+      },
+    ),
+    CatalogImageBulkQueueRetryError,
+  );
+  assert.equal(enqueued, false);
+});
+
+test("queue retry policy acknowledges malformed messages and backs off recoverable failures", () => {
+  assert.deepEqual(
+    catalogImageBulkQueueRetryDecision(
+      new CatalogImageBulkQueueMessageError("INVALID_MESSAGE"),
+      1,
+    ),
+    { acknowledge: true },
+  );
+  assert.deepEqual(
+    catalogImageBulkQueueRetryDecision(
+      new CatalogImageBulkQueueRetryError("bulk-job-123"),
+      1,
+    ),
+    { afterSeconds: 5 },
+  );
+  assert.deepEqual(
+    catalogImageBulkQueueRetryDecision(new Error("FIRESTORE_UNAVAILABLE"), 20),
+    { afterSeconds: 60 },
+  );
 });
 
 test("queue worker ignores terminal jobs and rejects unsafe message ids", async () => {
