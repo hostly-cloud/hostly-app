@@ -190,6 +190,14 @@ plan reconocible conserva temporalmente el acceso individual equivalente a Pro, 
 no recibe la capacidad masiva de Ultra. Esto evita bloquear tenants actuales al
 introducir el nuevo contrato.
 
+Los campos raíz `subscription`, `billing` y `plan` constituyen autoridad comercial y
+son exclusivos del servidor: las Firestore Rules permiten a owner/admin conservarlos
+al editar otros datos del restaurante, pero impiden añadirlos, modificarlos o
+eliminarlos desde un cliente. El Admin SDK es la única vía para cambiar el plan. Los
+futuros límites y créditos deben vivir dentro de esta autoridad protegida o en otra
+colección igualmente server-only; ocultar controles en React nunca concede ni revoca
+una capacidad.
+
 Cada intento individual usa una clave idempotente y deja un registro exclusivo de
 servidor en `restaurants/{restaurantId}/catalogImageUsage/{idempotencyKey}` con tenant,
 producto, usuario, plan efectivo, proveedor, resultado, coste disponible y motivo de
