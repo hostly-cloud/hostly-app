@@ -15,10 +15,12 @@ import type {
   CatalogImageBulkJobCounters,
   CatalogImageBulkJobStatus,
 } from "@/lib/productos/catalog-image-bulk-contract";
+import { HOSTLY_CATALOG_IMAGE_BULK_POLICY } from "@/lib/productos/catalog-image-plan";
 import {
   controlCatalogImageBulkJob,
   processNextCatalogImageBulkItem,
   readCatalogImageBulkJob,
+  reconcileCatalogImageBulkControlOperation,
 } from "@/lib/server/product-images/catalog-image-bulk";
 import { resolveCatalogImageAccessFromRestaurant } from "@/lib/server/product-images/resolve-catalog-image-access";
 
@@ -74,6 +76,7 @@ async function seedJob(params: {
     action: "retry_failed" | "cancel";
     itemCount: number;
     startedAt: number;
+    operationId?: string;
   };
 }) {
   const restaurantId = params.restaurantId ?? RESTAURANT_A;
@@ -382,6 +385,190 @@ describe("catalog image bulk controls with Firestore Emulator", () => {
     assert.equal(cancelled.queueRevision, 6);
     assert.equal(cancelled.counters.pending, 0);
     assert.equal(cancelled.counters.cancelled, 1);
+  });
+
+  test("an expired retry control recovers automatically and remains tenant-isolated", async () => {
+    const jobId = "bulk-emulator-auto-retry";
+    const operationId = "control-auto-retry-123";
+    const startedAt = 10_000;
+    await Promise.all([
+      seedJob({
+        restaurantId: RESTAURANT_A,
+        jobId,
+        status: "paused",
+        queueRevision: 11,
+        counters: counters({ total: 2, failed: 2 }),
+        items: [
+          { productId: "auto-retry-1", status: "pending", attempts: 1 },
+          { productId: "auto-retry-2", status: "failed", attempts: 1 },
+        ],
+        controlOperation: {
+          action: "retry_failed",
+          itemCount: 2,
+          startedAt,
+          operationId,
+        },
+      }),
+      seedJob({
+        restaurantId: RESTAURANT_B,
+        jobId,
+        status: "paused",
+        queueRevision: 19,
+        counters: counters({ total: 1, failed: 1 }),
+        items: [
+          { productId: "foreign-auto-retry", status: "failed", attempts: 1 },
+        ],
+        controlOperation: {
+          action: "retry_failed",
+          itemCount: 1,
+          startedAt,
+          operationId: "foreign-control-operation-123",
+        },
+      }),
+    ]);
+
+    const recovery = await reconcileCatalogImageBulkControlOperation({
+      db: adminDb,
+      restaurantId: RESTAURANT_A,
+      jobId,
+      operationId,
+      now:
+        startedAt +
+        HOSTLY_CATALOG_IMAGE_BULK_POLICY.controlRecoveryDelayMs,
+    });
+
+    assert.equal(recovery.status, "reconciled");
+    assert.equal(recovery.job.status, "queued");
+    assert.equal(recovery.job.queueRevision, 12);
+    assert.equal(recovery.job.counters.pending, 2);
+    assert.equal(recovery.job.counters.failed, 0);
+    const [stateA, stateB] = await Promise.all([
+      readCatalogImageBulkJob({
+        db: adminDb,
+        restaurantId: RESTAURANT_A,
+        jobId,
+      }),
+      readCatalogImageBulkJob({
+        db: adminDb,
+        restaurantId: RESTAURANT_B,
+        jobId,
+      }),
+    ]);
+    assert.deepEqual(stateA.items.map((item) => item.status), ["pending", "pending"]);
+    assert.equal((await storedJob(RESTAURANT_A, jobId)).controlOperation, undefined);
+    assert.equal(stateB.job.status, "paused");
+    assert.equal(stateB.job.queueRevision, 19);
+    assert.equal(stateB.items[0]?.status, "failed");
+    assert.ok((await storedJob(RESTAURANT_B, jobId)).controlOperation);
+  });
+
+  test("fresh and superseded recovery messages cannot take over a control", async () => {
+    const jobId = "bulk-emulator-auto-fresh";
+    const operationId = "control-auto-fresh-123";
+    const startedAt = 20_000;
+    await seedJob({
+      jobId,
+      status: "paused",
+      queueRevision: 3,
+      counters: counters({ total: 1, failed: 1 }),
+      items: [{ productId: "fresh-retry", status: "pending", attempts: 1 }],
+      controlOperation: {
+        action: "retry_failed",
+        itemCount: 1,
+        startedAt,
+        operationId,
+      },
+    });
+
+    const superseded = await reconcileCatalogImageBulkControlOperation({
+      db: adminDb,
+      restaurantId: RESTAURANT_A,
+      jobId,
+      operationId: "obsolete-control-operation-123",
+      now:
+        startedAt +
+        HOSTLY_CATALOG_IMAGE_BULK_POLICY.controlRecoveryDelayMs,
+    });
+    const fresh = await reconcileCatalogImageBulkControlOperation({
+      db: adminDb,
+      restaurantId: RESTAURANT_A,
+      jobId,
+      operationId,
+      now:
+        startedAt +
+        HOSTLY_CATALOG_IMAGE_BULK_POLICY.controlRecoveryDelayMs -
+        1,
+    });
+
+    assert.equal(superseded.status, "superseded");
+    assert.equal(fresh.status, "pending");
+    assert.equal(fresh.retryAfterMs, 1);
+    const stored = await storedJob(RESTAURANT_A, jobId);
+    assert.equal(stored.status, "paused");
+    assert.equal(stored.queueRevision, 3);
+    assert.deepEqual(stored.controlOperation, {
+      action: "retry_failed",
+      itemCount: 1,
+      startedAt,
+      operationId,
+    });
+  });
+
+  test("concurrent automatic cancellation recovery applies counters once", async () => {
+    const jobId = "bulk-emulator-auto-cancel";
+    const operationId = "control-auto-cancel-123";
+    const startedAt = 30_000;
+    await seedJob({
+      jobId,
+      status: "paused",
+      queueRevision: 7,
+      counters: counters({ total: 3, pending: 3 }),
+      items: [
+        { productId: "auto-cancel-1", status: "cancelled" },
+        { productId: "auto-cancel-2", status: "pending" },
+        { productId: "auto-cancel-3", status: "pending" },
+      ],
+      controlOperation: {
+        action: "cancel",
+        itemCount: 3,
+        startedAt,
+        operationId,
+      },
+    });
+
+    const results = await Promise.all(
+      Array.from({ length: 12 }, () =>
+        reconcileCatalogImageBulkControlOperation({
+          db: adminDb,
+          restaurantId: RESTAURANT_A,
+          jobId,
+          operationId,
+          now:
+            startedAt +
+            HOSTLY_CATALOG_IMAGE_BULK_POLICY.controlRecoveryDelayMs,
+        }),
+      ),
+    );
+
+    assert.equal(
+      results.filter((result) => result.status === "reconciled").length,
+      1,
+    );
+    const state = await readCatalogImageBulkJob({
+      db: adminDb,
+      restaurantId: RESTAURANT_A,
+      jobId,
+    });
+    assert.equal(state.job.status, "cancelled");
+    assert.equal(state.job.queueRevision, 7);
+    assert.equal(state.job.counters.pending, 0);
+    assert.equal(state.job.counters.cancelled, 3);
+    assert.deepEqual(state.items.map((item) => item.status), [
+      "cancelled",
+      "cancelled",
+      "cancelled",
+    ]);
+    assert.equal((await storedJob(RESTAURANT_A, jobId)).controlOperation, undefined);
   });
 
   test("simultaneous worker and cancel races always end in one consistent terminal state", async () => {

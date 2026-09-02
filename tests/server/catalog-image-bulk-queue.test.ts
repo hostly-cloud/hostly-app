@@ -161,6 +161,15 @@ test("queue retry policy acknowledges malformed messages and backs off recoverab
   );
   assert.deepEqual(
     catalogImageBulkQueueRetryDecision(
+      Object.assign(new Error("missing"), {
+        code: "CATALOG_IMAGE_BULK_JOB_NOT_FOUND",
+      }),
+      1,
+    ),
+    { acknowledge: true },
+  );
+  assert.deepEqual(
+    catalogImageBulkQueueRetryDecision(
       new CatalogImageBulkQueueRetryError("bulk-job-123"),
       1,
     ),
@@ -198,4 +207,141 @@ test("queue worker ignores terminal jobs and rejects unsafe message ids", async 
     ),
     /INVALID_CATALOG_IMAGE_BULK_QUEUE_RESTAURANT_ID/,
   );
+  await assert.rejects(
+    processCatalogImageBulkQueueMessage(
+      {
+        kind: "control_recovery",
+        restaurantId: "restaurant-a",
+        jobId: "bulk-job-123",
+        operationId: "short",
+      },
+      { db },
+    ),
+    /INVALID_CATALOG_IMAGE_BULK_QUEUE_OPERATION_ID/,
+  );
+});
+
+test("control recovery messages retry until the persisted operation expires", async () => {
+  let readRegularJob = false;
+  await assert.rejects(
+    processCatalogImageBulkQueueMessage(
+      {
+        kind: "control_recovery",
+        restaurantId: "restaurant-a",
+        jobId: "bulk-job-123",
+        operationId: "control-operation-123",
+      },
+      {
+        db,
+        readJob: async () => {
+          readRegularJob = true;
+          return { job: job(), items: [] };
+        },
+        reconcileControl: async () => ({
+          status: "pending",
+          retryAfterMs: 1_000,
+          job: job({ status: "paused" }),
+        }),
+      },
+    ),
+    CatalogImageBulkQueueRetryError,
+  );
+  assert.equal(readRegularJob, false);
+});
+
+test("a recovered retry schedules normal processing with its new revision", async () => {
+  let enqueued:
+    | { restaurantId: string; jobId: string; revision: number }
+    | undefined;
+  const result = await processCatalogImageBulkQueueMessage(
+    {
+      kind: "control_recovery",
+      restaurantId: "restaurant-a",
+      jobId: "bulk-job-123",
+      operationId: "control-operation-123",
+    },
+    {
+      db,
+      reconcileControl: async (params) => {
+        assert.equal(params.restaurantId, "restaurant-a");
+        assert.equal(params.operationId, "control-operation-123");
+        return {
+          status: "reconciled",
+          retryAfterMs: null,
+          job: job({ status: "queued", queueRevision: 8 }),
+        };
+      },
+      enqueue: async (params) => {
+        enqueued = params;
+      },
+    },
+  );
+  assert.deepEqual(enqueued, {
+    restaurantId: "restaurant-a",
+    jobId: "bulk-job-123",
+    revision: 8,
+  });
+  assert.deepEqual(result, {
+    processed: false,
+    requeued: true,
+    status: "queued",
+  });
+});
+
+test("superseded control recovery messages are acknowledged without touching the job", async () => {
+  let enqueued = false;
+  const result = await processCatalogImageBulkQueueMessage(
+    {
+      kind: "control_recovery",
+      restaurantId: "restaurant-a",
+      jobId: "bulk-job-123",
+      operationId: "obsolete-operation-123",
+    },
+    {
+      db,
+      reconcileControl: async () => ({
+        status: "superseded",
+        retryAfterMs: null,
+        job: job({ status: "paused" }),
+      }),
+      enqueue: async () => {
+        enqueued = true;
+      },
+    },
+  );
+  assert.equal(enqueued, false);
+  assert.deepEqual(result, {
+    processed: false,
+    requeued: false,
+    status: "paused",
+  });
+});
+
+test("a delayed control message repairs a missing process enqueue idempotently", async () => {
+  let enqueuedRevision = -1;
+  const result = await processCatalogImageBulkQueueMessage(
+    {
+      kind: "control_recovery",
+      restaurantId: "restaurant-a",
+      jobId: "bulk-job-123",
+      operationId: "completed-control-operation-123",
+    },
+    {
+      db,
+      reconcileControl: async () => ({
+        status: "superseded",
+        retryAfterMs: null,
+        job: job({ status: "queued", queueRevision: 12 }),
+      }),
+      enqueue: async (params) => {
+        enqueuedRevision = params.revision;
+      },
+    },
+  );
+  assert.equal(enqueuedRevision, 12);
+  assert.deepEqual(result, {
+    processed: false,
+    requeued: true,
+    status: "queued",
+  });
 });

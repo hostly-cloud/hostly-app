@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   isAuthErrorResponse,
@@ -19,7 +20,10 @@ import {
   readLatestCatalogImageBulkJob,
 } from "@/lib/server/product-images/catalog-image-bulk";
 import { resolveCatalogImageAccess } from "@/lib/server/product-images/resolve-catalog-image-access";
-import { enqueueCatalogImageBulkJob } from "@/lib/server/product-images/catalog-image-bulk-queue";
+import {
+  enqueueCatalogImageBulkControlRecovery,
+  enqueueCatalogImageBulkJob,
+} from "@/lib/server/product-images/catalog-image-bulk-queue";
 import { reviewCatalogImageBulkSelection } from "@/lib/server/product-images/review-catalog-image-bulk-selection";
 import { reconcileExpiredCatalogImageCreditReservations } from "@/lib/server/product-images/reconcile-catalog-image-credits";
 
@@ -47,6 +51,7 @@ export type CatalogImageBulkRequestDependencies = {
   processNext?: typeof processNextCatalogImageBulkItem;
   controlJob?: typeof controlCatalogImageBulkJob;
   enqueueJob?: typeof enqueueCatalogImageBulkJob;
+  enqueueControlRecovery?: typeof enqueueCatalogImageBulkControlRecovery;
   reviewSelection?: typeof reviewCatalogImageBulkSelection;
   reconcileExpiredReservations?: typeof reconcileExpiredCatalogImageCreditReservations;
 };
@@ -302,11 +307,26 @@ export async function handleControlCatalogImageBulkJobRequest(
     return jsonError(400, "INVALID_BULK_JOB_ACTION");
   }
   const controlJob = dependencies?.controlJob ?? controlCatalogImageBulkJob;
+  const operationId =
+    action === "retry_failed" || action === "cancel" ? randomUUID() : undefined;
+  if (operationId) {
+    // Publish first: if a control barrier is persisted, a durable recovery
+    // message is already guaranteed to exist even if this request stops.
+    const enqueueControlRecovery =
+      dependencies?.enqueueControlRecovery ??
+      enqueueCatalogImageBulkControlRecovery;
+    await enqueueControlRecovery({
+      restaurantId: context.auth.restaurantId,
+      jobId,
+      operationId,
+    });
+  }
   const job = await controlJob({
     db: context.auth.db,
     restaurantId: context.auth.restaurantId,
     jobId,
     action,
+    ...(operationId ? { operationId } : {}),
   });
   if (
     (action === "resume" || action === "retry_failed") &&

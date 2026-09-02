@@ -90,6 +90,7 @@ export type HostlyCatalogImageBulkPolicy = {
   maxReviewItemsPerRequest: number;
   preparationLeaseMs: number;
   leaseDurationMs: number;
+  controlRecoveryDelayMs: number;
 };
 
 export const HOSTLY_CATALOG_IMAGE_BULK_POLICY: Readonly<HostlyCatalogImageBulkPolicy> = {
@@ -98,6 +99,7 @@ export const HOSTLY_CATALOG_IMAGE_BULK_POLICY: Readonly<HostlyCatalogImageBulkPo
   maxReviewItemsPerRequest: 50,
   preparationLeaseMs: 2 * 60 * 1000,
   leaseDurationMs: 2 * 60 * 1000,
+  controlRecoveryDelayMs: 5 * 60 * 1000,
 };
 
 /**

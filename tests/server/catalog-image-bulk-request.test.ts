@@ -269,6 +269,10 @@ test("processing and retry controls remain Ultra-only and tenant-scoped", async 
 
   let actionReceived = "";
   let retryRevision = -1;
+  let controlOperationId = "";
+  let recoveryOperationId = "";
+  let recoveryTenant = "";
+  const controlEvents: string[] = [];
   const controlled = await handleControlCatalogImageBulkJobRequest(
     request("/api/catalog/product-image-bulk/jobs/bulk-job-123/control", {
       action: "retry_failed",
@@ -278,10 +282,18 @@ test("processing and retry controls remain Ultra-only and tenant-scoped", async 
       authenticate: async () => authContext(),
       resolveAccess: async () => ULTRA_ACCESS,
       controlJob: async (params) => {
+        controlEvents.push("control");
         actionReceived = params.action;
+        controlOperationId = params.operationId ?? "";
         return job({ queueRevision: 2 });
       },
+      enqueueControlRecovery: async (params) => {
+        controlEvents.push("recovery");
+        recoveryOperationId = params.operationId;
+        recoveryTenant = params.restaurantId;
+      },
       enqueueJob: async (params) => {
+        controlEvents.push("process");
         retryRevision = params.revision;
       },
     },
@@ -289,6 +301,38 @@ test("processing and retry controls remain Ultra-only and tenant-scoped", async 
   assert.equal(controlled.status, 200);
   assert.equal(actionReceived, "retry_failed");
   assert.equal(retryRevision, 2);
+  assert.equal(recoveryTenant, "restaurant-server");
+  assert.match(recoveryOperationId, /^[a-f0-9-]{36}$/);
+  assert.equal(controlOperationId, recoveryOperationId);
+  assert.deepEqual(controlEvents, ["recovery", "control", "process"]);
+});
+
+test("durable recovery must be queued before retry or cancel can persist a barrier", async () => {
+  for (const action of ["retry_failed", "cancel"] as const) {
+    let controlled = false;
+    await assert.rejects(
+      handleControlCatalogImageBulkJobRequest(
+        request("/api/catalog/product-image-bulk/jobs/bulk-job-123/control", {
+          action,
+        }),
+        "bulk-job-123",
+        {
+          authenticate: async () => authContext(),
+          resolveAccess: async () => ULTRA_ACCESS,
+          enqueueControlRecovery: async (params) => {
+            assert.equal(params.restaurantId, "restaurant-server");
+            throw new Error("QUEUE_UNAVAILABLE");
+          },
+          controlJob: async () => {
+            controlled = true;
+            return job();
+          },
+        },
+      ),
+      /QUEUE_UNAVAILABLE/,
+    );
+    assert.equal(controlled, false);
+  }
 });
 
 test("bulk approval is Ultra-only, explicitly confirmed and tenant-scoped", async () => {
