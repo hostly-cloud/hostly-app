@@ -1,4 +1,7 @@
-import type { CatalogImageAccess } from "@/lib/productos/catalog-image-plan";
+import type {
+  CatalogImageAccess,
+  CatalogImageMeteringMode,
+} from "@/lib/productos/catalog-image-plan";
 
 export const CATALOG_IMAGE_BULK_ITEM_KINDS = [
   "ai_generate",
@@ -54,7 +57,7 @@ export type CatalogImageBulkEstimate = {
   catalogSearchRequests: number;
   credits: number | null;
   costUsd: number | null;
-  mode: "usage_recorded";
+  mode: CatalogImageMeteringMode;
   note: string;
 };
 

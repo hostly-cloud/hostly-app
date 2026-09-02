@@ -12,6 +12,10 @@ import {
 import type { CatalogProductImageSearchResult } from "@/lib/productos/catalog-product-image-contract";
 import { searchCatalogProductImages } from "@/lib/server/product-images/search-catalog-product-images";
 import { resolveCatalogImageAccess } from "@/lib/server/product-images/resolve-catalog-image-access";
+import {
+  finalizeCatalogImageOperation,
+  reserveCatalogImageOperation,
+} from "@/lib/server/product-images/meter-catalog-image-operation";
 
 type Authenticate = (
   req: Request,
@@ -72,6 +76,8 @@ export async function handleSearchCatalogProductImagesRequest(
   const body = (await req.json().catch(() => null)) as {
     productId?: unknown;
     query?: unknown;
+    idempotencyKey?: unknown;
+    confirmSearch?: unknown;
     restaurantId?: unknown;
   } | null;
   if (!body || typeof body !== "object") {
@@ -92,14 +98,73 @@ export async function handleSearchCatalogProductImagesRequest(
   const query = typeof body.query === "string" ? body.query.trim() : "";
   if (query.length > 160) return jsonError(400, "CATALOG_QUERY_TOO_LONG");
 
+  const idempotencyKey =
+    typeof body.idempotencyKey === "string"
+      ? body.idempotencyKey.trim()
+      : "";
+  if (access.meteringMode === "credit_balance") {
+    if (!/^[A-Za-z0-9_-]{8,120}$/.test(idempotencyKey)) {
+      return jsonError(400, "INVALID_IMAGE_IDEMPOTENCY_KEY");
+    }
+    if (body.confirmSearch !== true) {
+      return jsonError(
+        400,
+        "CATALOG_SEARCH_CONFIRMATION_REQUIRED",
+        "Confirma la búsqueda; puede consumir créditos",
+      );
+    }
+    await reserveCatalogImageOperation({
+      db: authCtx.db,
+      restaurantId: authCtx.restaurantId,
+      productId,
+      userId: authCtx.uid,
+      idempotencyKey,
+      capability: "catalog.image.catalogSearch",
+      operation: "catalog_image_catalog_search_single",
+      provider: "open_food_facts",
+    });
+  }
+
   const searchCatalog =
     dependencies?.searchCatalog ?? searchCatalogProductImages;
-  const result = await searchCatalog({
-    db: authCtx.db,
-    restaurantId: authCtx.restaurantId,
-    productId,
-    query,
-  });
+  let result: CatalogProductImageSearchResult;
+  try {
+    result = await searchCatalog({
+      db: authCtx.db,
+      restaurantId: authCtx.restaurantId,
+      productId,
+      query,
+    });
+    if (access.meteringMode === "credit_balance") {
+      await finalizeCatalogImageOperation({
+        db: authCtx.db,
+        restaurantId: authCtx.restaurantId,
+        idempotencyKey,
+        result: result.candidates.length > 0 ? "candidates" : "not_found",
+        succeeded: true,
+        metadata: { candidateCount: result.candidates.length },
+      });
+    }
+  } catch (error) {
+    if (access.meteringMode === "credit_balance") {
+      const failureReason =
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        typeof error.code === "string"
+          ? error.code
+          : "CATALOG_IMAGE_SEARCH_FAILED";
+      await finalizeCatalogImageOperation({
+        db: authCtx.db,
+        restaurantId: authCtx.restaurantId,
+        idempotencyKey,
+        result: "failed",
+        succeeded: false,
+        failureReason,
+      }).catch(() => undefined);
+    }
+    throw error;
+  }
 
   return NextResponse.json({ ok: true as const, result });
 }

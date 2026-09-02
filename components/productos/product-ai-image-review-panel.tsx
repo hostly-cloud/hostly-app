@@ -9,6 +9,7 @@ import {
 import type { CatalogProductImageCandidate } from "@/lib/productos/catalog-product-image-contract";
 import {
   catalogImagePlanLabel,
+  evaluateCatalogImageCreditDecision,
   hasCatalogImageCapability,
   type CatalogImageAccess,
 } from "@/lib/productos/catalog-image-plan";
@@ -207,6 +208,10 @@ function friendlyError(error: unknown): string {
         return "El proveedor de imágenes no pudo completar la generación.";
       case "CATALOG_IMAGE_AI_SINGLE_PLAN_REQUIRED":
         return "La creación de imágenes con IA está disponible en los planes Pro y Ultra.";
+      case "CATALOG_IMAGE_CREDITS_EXHAUSTED":
+        return "No quedan créditos suficientes para crear esta imagen.";
+      case "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED":
+        return "La configuración de créditos de imágenes está incompleta. Contacta con soporte de Hostly.";
       case "PRODUCT_IMAGE_PROTECTED":
         return "La imagen actual está protegida y no se puede modificar desde esta revisión.";
       case "PRODUCT_IMAGE_REVIEW_STATE_INVALID":
@@ -241,6 +246,10 @@ function recommendationLabel(
   if (action === "ai_generate") return "Recomendado: crear con IA";
   if (action === "catalog_search") return "Recomendado: catálogo real";
   return "Necesita revisión manual";
+}
+
+function creditLabel(value: number): string {
+  return `${value} crédito${value === 1 ? "" : "s"}`;
 }
 
 function badgeTone(
@@ -532,6 +541,7 @@ export function ProductAiImageReviewPanel({
         query,
       );
       setCatalogCandidates(result.candidates);
+      refresh();
       if (result.candidates.length === 0) {
         setMessage("No hay una coincidencia suficientemente fiable. Hostly no asignará una imagen al azar.");
       }
@@ -540,7 +550,7 @@ export function ProductAiImageReviewPanel({
     } finally {
       setCatalogSearching(false);
     }
-  }, [resolved, localImageDraftDirty, catalogQuery]);
+  }, [resolved, localImageDraftDirty, catalogQuery, refresh]);
 
   const runCatalogAttach = useCallback(
     async (candidate: CatalogProductImageCandidate) => {
@@ -581,6 +591,24 @@ export function ProductAiImageReviewPanel({
   const planAllowsSingle = Boolean(
     access && hasCatalogImageCapability(access, "catalog.image.ai.single"),
   );
+  const singleCreditDecision = access
+    ? evaluateCatalogImageCreditDecision(
+        access,
+        "catalog.image.ai.single",
+      )
+    : null;
+  const generationBlockedByCredits =
+    singleCreditDecision?.status === "insufficient" ||
+    singleCreditDecision?.status === "configuration_required";
+  const catalogSearchCreditDecision = access
+    ? evaluateCatalogImageCreditDecision(
+        access,
+        "catalog.image.catalogSearch",
+      )
+    : null;
+  const catalogSearchBlockedByCredits =
+    catalogSearchCreditDecision?.status === "insufficient" ||
+    catalogSearchCreditDecision?.status === "configuration_required";
 
   const confirmPendingAction = () => {
     const confirmation = pendingConfirmation;
@@ -634,6 +662,10 @@ export function ProductAiImageReviewPanel({
               {access.source === "legacy_compatibility"
                 ? " · acceso individual conservado durante la transición"
                 : ""}
+              {access.meteringMode === "credit_balance" &&
+              access.creditBalance != null
+                ? ` · ${creditLabel(access.creditBalance)} disponibles`
+                : ""}
             </p>
           ) : null}
         </div>
@@ -668,8 +700,18 @@ export function ProductAiImageReviewPanel({
 
       {!loading && planAllowsSingle && savedProductId && resolved?.canGenerate ? (
         <p className="hostly-product-commercial-modal__hint">
-          Crear con IA puede consumir créditos. Toda imagen automática queda pendiente
-          de revisión hasta que la apruebes.
+          {singleCreditDecision?.status === "available"
+            ? `Crear con IA consumirá ${creditLabel(singleCreditDecision.creditCost)} si se completa.`
+            : "Crear con IA puede consumir créditos."} Toda imagen automática queda
+          pendiente de revisión hasta que la apruebes.
+        </p>
+      ) : null}
+
+      {!loading && generationBlockedByCredits && resolved?.canGenerate ? (
+        <p className="hostly-product-commercial-modal__hint" role="status">
+          {singleCreditDecision?.status === "insufficient"
+            ? "No hay saldo suficiente para crear esta imagen. La subida manual sigue disponible."
+            : "La configuración de créditos está incompleta. La subida manual sigue disponible."}
         </p>
       ) : null}
 
@@ -805,7 +847,7 @@ export function ProductAiImageReviewPanel({
                   <ConfigBtnSecondary
                     key={action}
                     type="button"
-                    disabled={buttonDisabled}
+                    disabled={buttonDisabled || generationBlockedByCredits}
                     onClick={() =>
                       setPendingConfirmation({
                         kind: "generate",
@@ -841,7 +883,10 @@ export function ProductAiImageReviewPanel({
                   Buscar imagen real de catálogo
                 </h4>
                 <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: 10, lineHeight: 1.4 }}>
-                  Escribe nombre, marca, formato o código de barras. La búsqueda solo se ejecuta al pulsar el botón.
+                  Escribe nombre, marca, formato o código de barras. La búsqueda solo se ejecuta al pulsar el botón
+                  {catalogSearchCreditDecision?.status === "available"
+                    ? ` y consumirá ${creditLabel(catalogSearchCreditDecision.creditCost)}.`
+                    : "."}
                 </p>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
@@ -864,12 +909,23 @@ export function ProductAiImageReviewPanel({
                 />
                 <ConfigBtnSecondary
                   type="button"
-                  disabled={buttonDisabled || catalogQuery.trim().length < 2}
+                  disabled={
+                    buttonDisabled ||
+                    catalogSearchBlockedByCredits ||
+                    catalogQuery.trim().length < 2
+                  }
                   onClick={() => void runCatalogSearch()}
                 >
                   {catalogSearching ? "Buscando…" : "Buscar catálogo"}
                 </ConfigBtnSecondary>
               </div>
+              {catalogSearchBlockedByCredits ? (
+                <p className="hostly-product-commercial-modal__hint" role="status">
+                  {catalogSearchCreditDecision?.status === "insufficient"
+                    ? "No hay saldo suficiente para buscar en catálogo. Puedes subir una imagen manual."
+                    : "La configuración de créditos está incompleta. Puedes subir una imagen manual."}
+                </p>
+              ) : null}
               {catalogSearched && !catalogSearching && catalogCandidates.length > 0 ? (
                 <div style={{ display: "grid", gap: 8 }}>
                   {catalogCandidates.map((candidate) => (

@@ -28,6 +28,10 @@ import {
   searchCatalogProductImages,
 } from "@/lib/server/product-images/search-catalog-product-images";
 import { classifyProductImageContentStrategy } from "@/lib/server/product-images/product-image-content-strategy";
+import {
+  finalizeCatalogImageOperation,
+  reserveCatalogImageOperation,
+} from "@/lib/server/product-images/meter-catalog-image-operation";
 
 const JOBS_COLLECTION = "catalogImageJobs";
 const JOB_ITEMS_COLLECTION = "items";
@@ -89,9 +93,13 @@ function assertIdempotencyKey(value: string): string {
   return trimmed;
 }
 
-function itemIdempotencyKey(jobId: string, productId: string): string {
+function itemIdempotencyKey(
+  jobId: string,
+  productId: string,
+  attempt: number,
+): string {
   const digest = createHash("sha256").update(productId).digest("hex").slice(0, 32);
-  return `${jobId}_${digest}`.slice(0, 120);
+  return `${jobId}_${digest}_${attempt}`.slice(0, 120);
 }
 
 function readString(data: Record<string, unknown>, key: string): string {
@@ -256,22 +264,44 @@ function summarizeClassifications(
   return { summary, classified };
 }
 
-function estimateFromSummary(summary: CatalogImageBulkSummary): CatalogImageBulkEstimate {
-  const aiCredits = HOSTLY_CATALOG_IMAGE_BULK_POLICY.aiGenerationCreditsPerItem;
-  const catalogCredits =
-    HOSTLY_CATALOG_IMAGE_BULK_POLICY.catalogSearchCreditsPerItem;
+function estimateFromSummary(
+  summary: CatalogImageBulkSummary,
+  access: CatalogImageAccess,
+): CatalogImageBulkEstimate {
+  const aiCredits = access.creditCosts.aiBulk;
+  const catalogCredits = access.creditCosts.catalogSearch;
+  const availableBalance = access.creditBalance;
+  if (access.meteringMode === "usage_recorded") {
+    return {
+      aiGenerationRequests: summary.aiGenerable,
+      catalogSearchRequests: summary.catalogSearchable,
+      credits: null,
+      costUsd: null,
+      mode: "usage_recorded",
+      note:
+        "Hostly registrará cada uso completado. Este restaurante aún no tiene un saldo de créditos configurado.",
+    };
+  }
+  const complete =
+    availableBalance != null &&
+    (summary.aiGenerable === 0 || aiCredits != null) &&
+    (summary.catalogSearchable === 0 || catalogCredits != null);
+  const estimatedCredits = complete
+    ? summary.aiGenerable * (aiCredits ?? 0) +
+      summary.catalogSearchable * (catalogCredits ?? 0)
+    : null;
   return {
     aiGenerationRequests: summary.aiGenerable,
     catalogSearchRequests: summary.catalogSearchable,
-    credits:
-      aiCredits == null || catalogCredits == null
-        ? null
-        : summary.aiGenerable * aiCredits +
-          summary.catalogSearchable * catalogCredits,
+    credits: estimatedCredits,
     costUsd: null,
-    mode: "usage_recorded",
+    mode: "credit_balance",
     note:
-      "Hostly registrará cada uso completado. Los créditos y el precio unitario aún no están configurados.",
+      complete && estimatedCredits != null && availableBalance != null
+      ? estimatedCredits > availableBalance
+        ? `El catálogo necesita hasta ${estimatedCredits} créditos y el saldo actual es ${availableBalance}; el proceso se detendrá al agotarse.`
+        : `Estimación sobre el saldo actual de ${availableBalance} créditos; solo se consumen operaciones completadas.`
+      : "La configuración de créditos está incompleta para las operaciones detectadas.",
   };
 }
 
@@ -300,7 +330,7 @@ export async function analyzeCatalogImageBulk(params: {
   const { summary, classified } = summarizeClassifications(products);
   return {
     summary,
-    estimate: estimateFromSummary(summary),
+    estimate: estimateFromSummary(summary, params.access),
     access: params.access,
     classified,
   };
@@ -369,7 +399,7 @@ function readEstimate(value: unknown): CatalogImageBulkEstimate {
     catalogSearchRequests: readFiniteNumber(raw.catalogSearchRequests),
     credits: typeof raw.credits === "number" ? raw.credits : null,
     costUsd: typeof raw.costUsd === "number" ? raw.costUsd : null,
-    mode: "usage_recorded",
+    mode: raw.mode === "credit_balance" ? "credit_balance" : "usage_recorded",
     note:
       typeof raw.note === "string" && raw.note.trim()
         ? raw.note.trim()
@@ -843,47 +873,55 @@ async function finalizeClaim(params: {
   });
 }
 
-async function recordCatalogSearchUsage(params: {
+async function reserveCatalogSearchUsage(params: {
   db: Firestore;
   restaurantId: string;
   jobId: string;
   productId: string;
+  attempt: number;
   userId: string;
-  access: CatalogImageAccess;
+}) {
+  const idempotencyKey = itemIdempotencyKey(
+    params.jobId,
+    params.productId,
+    params.attempt,
+  );
+  return reserveCatalogImageOperation({
+    db: params.db,
+    restaurantId: params.restaurantId,
+    productId: params.productId,
+    userId: params.userId,
+    idempotencyKey,
+    capability: "catalog.image.catalogSearch",
+    operation: "catalog_image_catalog_search_bulk",
+    provider: "open_food_facts",
+    jobId: params.jobId,
+  });
+}
+
+async function finalizeCatalogSearchUsage(params: {
+  db: Firestore;
+  restaurantId: string;
+  jobId: string;
+  productId: string;
+  attempt: number;
   result: "candidates" | "not_found" | "failed";
   candidateCount?: number;
   failureReason?: string;
 }) {
-  const idempotencyKey = itemIdempotencyKey(params.jobId, params.productId);
-  const ref = params.db
-    .collection("restaurants")
-    .doc(params.restaurantId)
-    .collection("catalogImageUsage")
-    .doc(idempotencyKey);
-  const now = Date.now();
-  await params.db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    if (snapshot.exists) return;
-    transaction.create(ref, {
-      restaurantId: params.restaurantId,
-      productId: params.productId,
-      userId: params.userId,
-      jobId: params.jobId,
-      idempotencyKey,
-      operation: "catalog_image_catalog_search_bulk",
-      capability: "catalog.image.ai.bulk",
-      effectivePlan: params.access.effectivePlan,
-      planSource: params.access.source,
-      meteringMode: params.access.meteringMode,
-      provider: "open_food_facts",
-      status: params.result === "failed" ? "failed" : "succeeded",
-      result: params.result,
-      candidateCount: params.candidateCount ?? 0,
-      ...(params.failureReason ? { failureReason: params.failureReason } : {}),
-      createdAt: now,
-      updatedAt: now,
-      completedAt: now,
-    });
+  const idempotencyKey = itemIdempotencyKey(
+    params.jobId,
+    params.productId,
+    params.attempt,
+  );
+  await finalizeCatalogImageOperation({
+    db: params.db,
+    restaurantId: params.restaurantId,
+    idempotencyKey,
+    result: params.result,
+    succeeded: params.result !== "failed",
+    ...(params.failureReason ? { failureReason: params.failureReason } : {}),
+    metadata: { candidateCount: params.candidateCount ?? 0 },
   });
 }
 
@@ -920,7 +958,11 @@ export async function processNextCatalogImageBulkItem(params: {
         restaurantId,
         productId: claim.productId,
         userId,
-        idempotencyKey: itemIdempotencyKey(jobId, claim.productId),
+        idempotencyKey: itemIdempotencyKey(
+          jobId,
+          claim.productId,
+          claim.attempts,
+        ),
         access: params.access,
         usageOperation: "catalog_image_ai_bulk",
         usageCapability: "catalog.image.ai.bulk",
@@ -946,6 +988,14 @@ export async function processNextCatalogImageBulkItem(params: {
         });
       }
     } else if (claim.kind === "catalog_search") {
+      await reserveCatalogSearchUsage({
+        db: params.db,
+        restaurantId,
+        jobId,
+        productId: claim.productId,
+        attempt: claim.attempts,
+        userId,
+      });
       const search = params.search ?? searchCatalogProductImages;
       const result = await search({
         db: params.db,
@@ -967,13 +1017,12 @@ export async function processNextCatalogImageBulkItem(params: {
         license: candidate.license,
         attribution: candidate.attribution,
       }));
-      await recordCatalogSearchUsage({
+      await finalizeCatalogSearchUsage({
         db: params.db,
         restaurantId,
         jobId,
         productId: claim.productId,
-        userId,
-        access: params.access,
+        attempt: claim.attempts,
         result: candidateCount > 0 ? "candidates" : "not_found",
         candidateCount,
       });
@@ -1004,13 +1053,12 @@ export async function processNextCatalogImageBulkItem(params: {
   } catch (error) {
     const failureReason = errorCode(error, "CATALOG_IMAGE_BULK_ITEM_FAILED");
     if (claim.kind === "catalog_search") {
-      await recordCatalogSearchUsage({
+      await finalizeCatalogSearchUsage({
         db: params.db,
         restaurantId,
         jobId,
         productId: claim.productId,
-        userId,
-        access: params.access,
+        attempt: claim.attempts,
         result: "failed",
         failureReason,
       }).catch(() => undefined);
