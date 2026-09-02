@@ -313,6 +313,22 @@ confirmación devuelve el trabajo mientras el lease siga vivo y recupera ese mis
 `jobId`, sin crear otro, cuando haya caducado. El control nunca se recibe del navegador,
 no cruza tenants y no amplía el acceso directo permitido por Firestore Rules.
 
+### H-022 - Revisión monotónica para la continuidad de la cola de imágenes
+
+**Estado:** aceptada.
+
+Cada trabajo masivo persiste `queueRevision`, un contador monotónico independiente de
+los timestamps. La clave idempotente de cada envío a Vercel Queues se deriva del
+restaurante, el trabajo y esa revisión. Preparar el trabajo inicia la revisión; cada
+elemento finalizado y cada reanudación o reintento efectivo la incrementan antes de
+encadenar el siguiente mensaje.
+
+No se utiliza `updatedAt` como versión de entrega: dos transiciones válidas pueden
+ocurrir en el mismo milisegundo y no deben deduplicarse entre sí. Los trabajos legacy
+sin el campo se leen como revisión cero y avanzan de forma compatible en su siguiente
+transición. El contador no concede autoridad al cliente ni sustituye los leases por
+producto; únicamente hace durable y determinista la continuidad de la cola.
+
 ---
 
 ## Decisiones pendientes de cierre

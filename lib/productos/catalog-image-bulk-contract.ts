@@ -81,6 +81,7 @@ export type CatalogImageBulkJobCounters = {
 export type CatalogImageBulkJob = {
   jobId: string;
   status: CatalogImageBulkJobStatus;
+  queueRevision: number;
   createdAt: number;
   updatedAt: number;
   createdBy: string;

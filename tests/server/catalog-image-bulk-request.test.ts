@@ -67,6 +67,7 @@ function job(overrides: Partial<CatalogImageBulkJob> = {}): CatalogImageBulkJob 
   return {
     jobId: "bulk-job-123",
     status: "queued",
+    queueRevision: 1,
     createdAt: 1,
     updatedAt: 1,
     createdBy: "owner-1",
@@ -198,6 +199,7 @@ test("bulk creation does not start when the configured credit period is inactive
 test("bulk creation rejects client restaurantId and uses the authenticated tenant", async () => {
   let receivedRestaurantId = "";
   let enqueuedRestaurantId = "";
+  let enqueuedRevision = -1;
   const rejected = await handleCreateCatalogImageBulkJobRequest(
     request("/api/catalog/product-image-bulk/jobs", {
       idempotencyKey: "bulk-job-123",
@@ -227,12 +229,14 @@ test("bulk creation rejects client restaurantId and uses the authenticated tenan
       },
       enqueueJob: async (params) => {
         enqueuedRestaurantId = params.restaurantId;
+        enqueuedRevision = params.revision;
       },
     },
   );
   assert.equal(accepted.status, 200);
   assert.equal(receivedRestaurantId, "restaurant-server");
   assert.equal(enqueuedRestaurantId, "restaurant-server");
+  assert.equal(enqueuedRevision, 1);
 });
 
 test("processing and retry controls remain Ultra-only and tenant-scoped", async () => {
@@ -264,6 +268,7 @@ test("processing and retry controls remain Ultra-only and tenant-scoped", async 
   assert.equal(processedTenant, "restaurant-server");
 
   let actionReceived = "";
+  let retryRevision = -1;
   const controlled = await handleControlCatalogImageBulkJobRequest(
     request("/api/catalog/product-image-bulk/jobs/bulk-job-123/control", {
       action: "retry_failed",
@@ -274,13 +279,16 @@ test("processing and retry controls remain Ultra-only and tenant-scoped", async 
       resolveAccess: async () => ULTRA_ACCESS,
       controlJob: async (params) => {
         actionReceived = params.action;
-        return job();
+        return job({ queueRevision: 2 });
       },
-      enqueueJob: async () => undefined,
+      enqueueJob: async (params) => {
+        retryRevision = params.revision;
+      },
     },
   );
   assert.equal(controlled.status, 200);
   assert.equal(actionReceived, "retry_failed");
+  assert.equal(retryRevision, 2);
 });
 
 test("bulk approval is Ultra-only, explicitly confirmed and tenant-scoped", async () => {

@@ -17,6 +17,7 @@ function job(overrides: Partial<CatalogImageBulkJob> = {}): CatalogImageBulkJob 
   return {
     jobId: "bulk-job-123",
     status: "queued",
+    queueRevision: 1,
     createdAt: 1,
     updatedAt: 20,
     createdBy: "owner-from-job",
@@ -72,6 +73,7 @@ test("queue worker resolves current Ultra access, uses the stored creator and ch
           job: job({
             status: "running",
             updatedAt: 42,
+            queueRevision: 7,
             counters: { ...job().counters, pending: 1, needsReview: 1 },
           }),
         };
@@ -85,7 +87,7 @@ test("queue worker resolves current Ultra access, uses the stored creator and ch
   assert.deepEqual(enqueued, {
     restaurantId: "restaurant-a",
     jobId: "bulk-job-123",
-    revision: 42,
+    revision: 7,
   });
   assert.deepEqual(result, { processed: true, requeued: true, status: "running" });
 });
