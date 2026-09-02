@@ -22,7 +22,14 @@ const managementPage = readFileSync(
 );
 
 test("Productos exposes the Ultra catalog image completion action without replacing the approved table", () => {
-  assert.match(managementPage, /<ProductCatalogImageBulkPanel \/>/);
+  assert.equal(
+    managementPage.match(/<ProductCatalogImageBulkPanel \/>/g)?.length,
+    2,
+  );
+  assert.match(
+    managementPage,
+    /configCartaAdvancedOpen \?[\s\S]*?<nav className="hostly-productos-carta-advanced-nav[\s\S]*?<ProductCatalogImageBulkPanel \/>[\s\S]*?Importar IA[\s\S]*?<\/nav>/,
+  );
   assert.match(
     managementPage,
     /import \{ ProductCatalogImageBulkPanel \} from "@\/components\/productos\/product-catalog-image-bulk-panel"/,
