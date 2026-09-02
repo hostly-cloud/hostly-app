@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Firestore } from "firebase-admin/firestore";
+import { HOSTLY_CATALOG_IMAGE_BULK_POLICY } from "@/lib/productos/catalog-image-plan";
 import {
   controlCatalogImageBulkJob,
   createCatalogImageBulkJob,
@@ -159,11 +160,27 @@ function memoryFirestore(initial: Record<string, Stored>) {
       applyUpdate(String(ref.path), data),
   };
 
+  let transactionTail = Promise.resolve();
+  const runSerializedTransaction = async (
+    callback: (tx: typeof transaction) => Promise<unknown>,
+  ) => {
+    const previous = transactionTail;
+    let release = () => {};
+    transactionTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await callback(transaction);
+    } finally {
+      release();
+    }
+  };
+
   const db = {
     collection: (name: string) =>
       query({ path: name, filters: [] }),
-    runTransaction: async (callback: (tx: typeof transaction) => Promise<unknown>) =>
-      callback(transaction),
+    runTransaction: runSerializedTransaction,
     batch: () => {
       const writes: Array<() => void> = [];
       return {
@@ -245,6 +262,229 @@ test("job creation is tenant-scoped and idempotent", async () => {
   );
 });
 
+test("different request keys reuse the single active job for the tenant", async () => {
+  const { db, store } = memoryFirestore({
+    "restaurants/restaurant-a/products/dish-1": dish("Croquetas"),
+  });
+
+  const [first, duplicateConfirmation] = await Promise.all([
+    createCatalogImageBulkJob({
+      db,
+      restaurantId: "restaurant-a",
+      userId: "owner-a",
+      idempotencyKey: "bulk-active-first",
+      access: ULTRA_ACCESS,
+    }),
+    createCatalogImageBulkJob({
+      db,
+      restaurantId: "restaurant-a",
+      userId: "owner-a",
+      idempotencyKey: "bulk-active-second",
+      access: ULTRA_ACCESS,
+    }),
+  ]);
+
+  assert.equal(first.status, "queued");
+  assert.equal(duplicateConfirmation.jobId, first.jobId);
+  assert.equal(
+    [...store.keys()].filter((path) =>
+      /^restaurants\/restaurant-a\/catalogImageJobs\/bulk-active-[^/]+$/.test(
+        path,
+      ),
+    ).length,
+    1,
+  );
+  assert.equal(
+    store.has(
+      "restaurants/restaurant-a/catalogImageJobs/bulk-active-second",
+    ),
+    false,
+  );
+  assert.equal(
+    store.get(
+      "restaurants/restaurant-a/catalogImageJobControls/active",
+    )?.activeJobId,
+    first.jobId,
+  );
+});
+
+test("a terminal job allows a new active job for the same tenant", async () => {
+  const { db, store } = memoryFirestore({
+    "restaurants/restaurant-a/products/approved-1": {
+      ...dish("Croquetas"),
+      imageUrl: "https://example.test/approved.webp",
+      imageEnrichment: {
+        source: "manual_upload",
+        reviewStatus: "approved",
+        locked: true,
+      },
+    },
+  });
+
+  const completed = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-terminal-first",
+    access: ULTRA_ACCESS,
+  });
+  assert.equal(completed.status, "completed");
+  store.set(
+    "restaurants/restaurant-a/products/dish-2",
+    dish("Pasta fresca"),
+  );
+
+  const next = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-terminal-second",
+    access: ULTRA_ACCESS,
+  });
+
+  assert.equal(next.jobId, "bulk-terminal-second");
+  assert.equal(next.status, "queued");
+  assert.equal(
+    store.get(
+      "restaurants/restaurant-a/catalogImageJobControls/active",
+    )?.activeJobId,
+    next.jobId,
+  );
+});
+
+test("active job coordination remains isolated between restaurants", async () => {
+  const { db, store } = memoryFirestore({
+    "restaurants/restaurant-a/products/dish-1": dish("Croquetas"),
+    "restaurants/restaurant-b/products/dish-1": dish("Ensalada"),
+  });
+
+  const [restaurantA, restaurantB] = await Promise.all([
+    createCatalogImageBulkJob({
+      db,
+      restaurantId: "restaurant-a",
+      userId: "owner-a",
+      idempotencyKey: "bulk-tenant-a",
+      access: ULTRA_ACCESS,
+    }),
+    createCatalogImageBulkJob({
+      db,
+      restaurantId: "restaurant-b",
+      userId: "owner-b",
+      idempotencyKey: "bulk-tenant-b",
+      access: ULTRA_ACCESS,
+    }),
+  ]);
+
+  assert.equal(restaurantA.jobId, "bulk-tenant-a");
+  assert.equal(restaurantB.jobId, "bulk-tenant-b");
+  assert.equal(
+    store.get(
+      "restaurants/restaurant-a/catalogImageJobControls/active",
+    )?.activeJobId,
+    restaurantA.jobId,
+  );
+  assert.equal(
+    store.get(
+      "restaurants/restaurant-b/catalogImageJobControls/active",
+    )?.activeJobId,
+    restaurantB.jobId,
+  );
+});
+
+test("a legacy active job is adopted before creating a replacement", async () => {
+  const { db, store } = memoryFirestore({
+    "restaurants/restaurant-a/catalogImageJobs/bulk-legacy-paused": {
+      schemaVersion: 1,
+      restaurantId: "restaurant-a",
+      jobId: "bulk-legacy-paused",
+      status: "paused",
+      createdAt: 1,
+      updatedAt: 2,
+      createdBy: "owner-a",
+      counters: {
+        total: 1,
+        pending: 1,
+        processing: 0,
+        completed: 0,
+        needsReview: 0,
+        failed: 0,
+        skipped: 0,
+        cancelled: 0,
+      },
+    },
+    "restaurants/restaurant-a/products/dish-1": dish("Croquetas"),
+  });
+
+  const adopted = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-new-request",
+    access: ULTRA_ACCESS,
+  });
+
+  assert.equal(adopted.jobId, "bulk-legacy-paused");
+  assert.equal(adopted.status, "paused");
+  assert.equal(
+    store.has("restaurants/restaurant-a/catalogImageJobs/bulk-new-request"),
+    false,
+  );
+  assert.equal(
+    store.get(
+      "restaurants/restaurant-a/catalogImageJobControls/active",
+    )?.activeJobId,
+    adopted.jobId,
+  );
+});
+
+test("an expired legacy preparation is recovered under its original job id", async () => {
+  const { db, store } = memoryFirestore({
+    "restaurants/restaurant-a/catalogImageJobs/bulk-legacy-stale": {
+      schemaVersion: 1,
+      restaurantId: "restaurant-a",
+      jobId: "bulk-legacy-stale",
+      status: "preparing",
+      createdAt: 1,
+      updatedAt: 1,
+      createdBy: "owner-a",
+      counters: {
+        total: 0,
+        pending: 0,
+        processing: 0,
+        completed: 0,
+        needsReview: 0,
+        failed: 0,
+        skipped: 0,
+        cancelled: 0,
+      },
+    },
+    "restaurants/restaurant-a/products/dish-1": dish("Croquetas"),
+  });
+
+  const recovered = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-recovery",
+    idempotencyKey: "bulk-new-after-stale",
+    access: ULTRA_ACCESS,
+  });
+
+  assert.equal(recovered.jobId, "bulk-legacy-stale");
+  assert.equal(recovered.status, "queued");
+  assert.equal(
+    store.has(
+      "restaurants/restaurant-a/catalogImageJobs/bulk-new-after-stale",
+    ),
+    false,
+  );
+  assert.equal(
+    store.get(
+      "restaurants/restaurant-a/catalogImageJobs/bulk-legacy-stale",
+    )?.recoveredBy,
+    "owner-recovery",
+  );
+});
+
 test("an interrupted preparing job is safely rebuilt with the same idempotency key", async () => {
   const { db } = memoryFirestore({
     "restaurants/restaurant-a/products/dish-1": dish("Croquetas"),
@@ -285,6 +525,51 @@ test("an interrupted preparing job is safely rebuilt with the same idempotency k
   });
   assert.equal(state.items.length, 1);
   assert.equal(state.items[0].productId, "dish-1");
+});
+
+test("an active preparation lease prevents a replay from rebuilding the job", async () => {
+  const now = Date.now();
+  const { db } = memoryFirestore({
+    "restaurants/restaurant-a/products/dish-1": dish("Croquetas"),
+    "restaurants/restaurant-a/catalogImageJobs/bulk-preparing-live": {
+      schemaVersion: 1,
+      restaurantId: "restaurant-a",
+      jobId: "bulk-preparing-live",
+      status: "preparing",
+      createdAt: now,
+      updatedAt: now,
+      preparationLeaseExpiresAt:
+        now + HOSTLY_CATALOG_IMAGE_BULK_POLICY.preparationLeaseMs,
+      createdBy: "owner-a",
+      counters: {
+        total: 0,
+        pending: 0,
+        processing: 0,
+        completed: 0,
+        needsReview: 0,
+        failed: 0,
+        skipped: 0,
+        cancelled: 0,
+      },
+    },
+  });
+
+  const replayed = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-preparing-live",
+    access: ULTRA_ACCESS,
+  });
+
+  assert.equal(replayed.status, "preparing");
+  assert.equal(replayed.counters.pending, 0);
+  const state = await readCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: replayed.jobId,
+  });
+  assert.equal(state.items.length, 0);
 });
 
 test("an existing pending image is persisted in the review gallery", async () => {
