@@ -109,6 +109,21 @@ export type CatalogImageBulkJobItem = {
   candidateCount: number;
   catalogCandidates: CatalogImageBulkCatalogCandidate[];
   failureReason: string | null;
+  reviewStatus: "pending" | "approved" | null;
+};
+
+export type CatalogImageBulkReviewItemResult = {
+  productId: string;
+  status: "approved" | "already_approved" | "ineligible" | "failed";
+  error: string | null;
+};
+
+export type CatalogImageBulkReviewResult = {
+  requested: number;
+  approved: number;
+  alreadyApproved: number;
+  failed: number;
+  results: CatalogImageBulkReviewItemResult[];
 };
 
 export type CatalogImageBulkJobPayload = {

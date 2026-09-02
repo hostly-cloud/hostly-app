@@ -83,6 +83,19 @@ export async function reviewProductImage(params: {
 
     const current = readProductImageEnrichment(data.imageEnrichment);
     if (
+      params.action === "approve" &&
+      current &&
+      current.source !== "manual" &&
+      current.reviewStatus === "approved" &&
+      current.locked
+    ) {
+      return buildProductImageReviewStateFromDocument(
+        productId,
+        data,
+        Date.now(),
+      );
+    }
+    if (
       !current ||
       current.source === "manual" ||
       current.locked ||

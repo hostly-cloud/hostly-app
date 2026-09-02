@@ -18,6 +18,8 @@ import {
   readLatestCatalogImageBulkJob,
 } from "@/lib/server/product-images/catalog-image-bulk";
 import { resolveCatalogImageAccess } from "@/lib/server/product-images/resolve-catalog-image-access";
+import { enqueueCatalogImageBulkJob } from "@/lib/server/product-images/catalog-image-bulk-queue";
+import { reviewCatalogImageBulkSelection } from "@/lib/server/product-images/review-catalog-image-bulk-selection";
 
 type Authenticate = (
   req: Request,
@@ -42,6 +44,8 @@ export type CatalogImageBulkRequestDependencies = {
   readLatestJob?: typeof readLatestCatalogImageBulkJob;
   processNext?: typeof processNextCatalogImageBulkItem;
   controlJob?: typeof controlCatalogImageBulkJob;
+  enqueueJob?: typeof enqueueCatalogImageBulkJob;
+  reviewSelection?: typeof reviewCatalogImageBulkSelection;
 };
 
 function jsonError(status: number, error: string, details?: string) {
@@ -157,6 +161,15 @@ export async function handleCreateCatalogImageBulkJobRequest(
     idempotencyKey,
     access: context.access,
   });
+  if (job.status === "queued" && job.counters.pending > 0) {
+    const enqueueJob =
+      dependencies?.enqueueJob ?? enqueueCatalogImageBulkJob;
+    await enqueueJob({
+      restaurantId: context.auth.restaurantId,
+      jobId: job.jobId,
+      revision: job.updatedAt,
+    });
+  }
   return NextResponse.json({ ok: true as const, job, access: context.access });
 }
 
@@ -261,7 +274,66 @@ export async function handleControlCatalogImageBulkJobRequest(
     jobId,
     action,
   });
+  if (
+    (action === "resume" || action === "retry_failed") &&
+    job.status === "queued" &&
+    job.counters.pending > 0
+  ) {
+    const enqueueJob =
+      dependencies?.enqueueJob ?? enqueueCatalogImageBulkJob;
+    await enqueueJob({
+      restaurantId: context.auth.restaurantId,
+      jobId: job.jobId,
+      revision: job.updatedAt,
+    });
+  }
   return NextResponse.json({ ok: true as const, job });
+}
+
+export async function handleReviewCatalogImageBulkSelectionRequest(
+  req: Request,
+  jobId: string,
+  dependencies?: CatalogImageBulkRequestDependencies,
+) {
+  const context = await authorizeBulk(req, dependencies);
+  if (isAuthErrorResponse(context)) return context;
+  const body = (await req.json().catch(() => null)) as {
+    productIds?: unknown;
+    confirmApproval?: unknown;
+    restaurantId?: unknown;
+  } | null;
+  if (!body) return jsonError(400, "INVALID_JSON");
+  if (rejectsClientRestaurantId(body)) {
+    return jsonError(
+      400,
+      "RESTAURANT_ID_NOT_ALLOWED",
+      "restaurantId se resuelve en servidor",
+    );
+  }
+  if (body.confirmApproval !== true) {
+    return jsonError(
+      400,
+      "BULK_IMAGE_APPROVAL_CONFIRMATION_REQUIRED",
+      "Confirma expresamente las imágenes que se publicarán",
+    );
+  }
+  if (
+    !Array.isArray(body.productIds) ||
+    body.productIds.some((productId) => typeof productId !== "string")
+  ) {
+    return jsonError(400, "INVALID_CATALOG_IMAGE_BULK_REVIEW_SELECTION");
+  }
+
+  const reviewSelection =
+    dependencies?.reviewSelection ?? reviewCatalogImageBulkSelection;
+  const result = await reviewSelection({
+    db: context.auth.db,
+    restaurantId: context.auth.restaurantId,
+    jobId,
+    productIds: body.productIds,
+    userId: context.auth.uid,
+  });
+  return NextResponse.json({ ok: true as const, result });
 }
 
 export async function handleCatalogImageBulkRequestSafe(

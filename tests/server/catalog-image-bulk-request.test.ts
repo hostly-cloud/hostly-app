@@ -8,6 +8,7 @@ import {
   handleControlCatalogImageBulkJobRequest,
   handleCreateCatalogImageBulkJobRequest,
   handleProcessCatalogImageBulkJobRequest,
+  handleReviewCatalogImageBulkSelectionRequest,
 } from "@/lib/server/product-images/handle-catalog-image-bulk-request";
 import { resolveCatalogImageAccessFromRestaurant } from "@/lib/server/product-images/resolve-catalog-image-access";
 
@@ -161,6 +162,7 @@ test("bulk creation requires explicit confirmation before any job is written", a
 
 test("bulk creation rejects client restaurantId and uses the authenticated tenant", async () => {
   let receivedRestaurantId = "";
+  let enqueuedRestaurantId = "";
   const rejected = await handleCreateCatalogImageBulkJobRequest(
     request("/api/catalog/product-image-bulk/jobs", {
       idempotencyKey: "bulk-job-123",
@@ -188,10 +190,14 @@ test("bulk creation rejects client restaurantId and uses the authenticated tenan
         receivedRestaurantId = params.restaurantId;
         return job();
       },
+      enqueueJob: async (params) => {
+        enqueuedRestaurantId = params.restaurantId;
+      },
     },
   );
   assert.equal(accepted.status, 200);
   assert.equal(receivedRestaurantId, "restaurant-server");
+  assert.equal(enqueuedRestaurantId, "restaurant-server");
 });
 
 test("processing and retry controls remain Ultra-only and tenant-scoped", async () => {
@@ -235,10 +241,92 @@ test("processing and retry controls remain Ultra-only and tenant-scoped", async 
         actionReceived = params.action;
         return job();
       },
+      enqueueJob: async () => undefined,
     },
   );
   assert.equal(controlled.status, 200);
   assert.equal(actionReceived, "retry_failed");
+});
+
+test("bulk approval is Ultra-only, explicitly confirmed and tenant-scoped", async () => {
+  const blocked = await handleReviewCatalogImageBulkSelectionRequest(
+    request("/api/catalog/product-image-bulk/jobs/bulk-job-123/review", {
+      productIds: ["product-1"],
+      confirmApproval: true,
+    }),
+    "bulk-job-123",
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
+    },
+  );
+  assert.equal(blocked.status, 403);
+
+  const unconfirmed = await handleReviewCatalogImageBulkSelectionRequest(
+    request("/api/catalog/product-image-bulk/jobs/bulk-job-123/review", {
+      productIds: ["product-1"],
+    }),
+    "bulk-job-123",
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => ULTRA_ACCESS,
+    },
+  );
+  assert.equal(unconfirmed.status, 400);
+  assert.equal(
+    (await json(unconfirmed)).error,
+    "BULK_IMAGE_APPROVAL_CONFIRMATION_REQUIRED",
+  );
+
+  let received:
+    | { restaurantId: string; userId: string; productIds: string[] }
+    | undefined;
+  const accepted = await handleReviewCatalogImageBulkSelectionRequest(
+    request("/api/catalog/product-image-bulk/jobs/bulk-job-123/review", {
+      productIds: ["product-1", "product-2"],
+      confirmApproval: true,
+    }),
+    "bulk-job-123",
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => ULTRA_ACCESS,
+      reviewSelection: async (params) => {
+        received = {
+          restaurantId: params.restaurantId,
+          userId: params.userId,
+          productIds: params.productIds,
+        };
+        return {
+          requested: 2,
+          approved: 2,
+          alreadyApproved: 0,
+          failed: 0,
+          results: [],
+        };
+      },
+    },
+  );
+  assert.equal(accepted.status, 200);
+  assert.deepEqual(received, {
+    restaurantId: "restaurant-server",
+    userId: "owner-1",
+    productIds: ["product-1", "product-2"],
+  });
+
+  const crossTenant = await handleReviewCatalogImageBulkSelectionRequest(
+    request("/api/catalog/product-image-bulk/jobs/bulk-job-123/review", {
+      productIds: ["product-1"],
+      confirmApproval: true,
+      restaurantId: "attacker-tenant",
+    }),
+    "bulk-job-123",
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => ULTRA_ACCESS,
+    },
+  );
+  assert.equal(crossTenant.status, 400);
+  assert.equal((await json(crossTenant)).error, "RESTAURANT_ID_NOT_ALLOWED");
 });
 
 test("only settings.manage can inspect or mutate bulk jobs", async () => {
