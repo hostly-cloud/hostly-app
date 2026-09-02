@@ -27,6 +27,12 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Setup Java for Firebase Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Install dependencies
         run: npm ci
 
@@ -35,6 +41,9 @@ jobs:
 
       - name: TPV critical unit tests
         run: npm run test:tpv-unit
+
+      - name: Catalog image Firestore race tests
+        run: npm run test:catalog-images-server
 
       - name: Lint debt report
         continue-on-error: true
