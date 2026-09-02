@@ -458,6 +458,9 @@ function readCatalogCandidates(value: unknown): CatalogImageBulkCatalogCandidate
         brand: readString(raw, "brand") || null,
         quantity: readString(raw, "quantity") || null,
         thumbnailUrl,
+        sourceUrl:
+          readString(raw, "sourceUrl") ||
+          `https://world.openfoodfacts.org/product/${encodeURIComponent(externalReference)}`,
         confidence,
         matchLevel,
         warnings: Array.isArray(raw.warnings)
@@ -466,6 +469,9 @@ function readCatalogCandidates(value: unknown): CatalogImageBulkCatalogCandidate
                 typeof warning === "string" && Boolean(warning.trim()),
             )
           : [],
+        license: readString(raw, "license") || "CC BY-SA 3.0",
+        attribution:
+          readString(raw, "attribution") || "Open Food Facts contributors",
       },
     ];
   });
@@ -954,9 +960,12 @@ export async function processNextCatalogImageBulkItem(params: {
         brand: candidate.brand,
         quantity: candidate.quantity,
         thumbnailUrl: candidate.thumbnailUrl,
+        sourceUrl: candidate.sourceUrl,
         confidence: candidate.confidence,
         matchLevel: candidate.matchLevel,
         warnings: candidate.warnings,
+        license: candidate.license,
+        attribution: candidate.attribution,
       }));
       await recordCatalogSearchUsage({
         db: params.db,

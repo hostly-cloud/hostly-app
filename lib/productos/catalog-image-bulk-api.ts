@@ -3,6 +3,7 @@
 import { authenticatedApiFetch } from "@/lib/auth/authenticated-api-fetch";
 import type {
   CatalogImageBulkApiError,
+  CatalogImageBulkCatalogSelection,
   CatalogImageBulkJob,
   CatalogImageBulkJobPayload,
   CatalogImageBulkPreflight,
@@ -195,13 +196,18 @@ export async function controlCatalogImageBulkJob(
 export async function approveCatalogImageBulkSelection(
   jobId: string,
   productIds: string[],
+  catalogSelections: CatalogImageBulkCatalogSelection[] = [],
 ): Promise<CatalogImageBulkReviewResult> {
   const response = await authenticatedApiFetch(
     `/api/catalog/product-image-bulk/jobs/${encodeURIComponent(jobId)}/review`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ productIds, confirmApproval: true }),
+      body: JSON.stringify({
+        productIds,
+        catalogSelections,
+        confirmApproval: true,
+      }),
     },
   );
   const body = await readJson<

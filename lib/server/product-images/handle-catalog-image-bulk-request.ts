@@ -299,6 +299,7 @@ export async function handleReviewCatalogImageBulkSelectionRequest(
   if (isAuthErrorResponse(context)) return context;
   const body = (await req.json().catch(() => null)) as {
     productIds?: unknown;
+    catalogSelections?: unknown;
     confirmApproval?: unknown;
     restaurantId?: unknown;
   } | null;
@@ -317,11 +318,41 @@ export async function handleReviewCatalogImageBulkSelectionRequest(
       "Confirma expresamente las imágenes que se publicarán",
     );
   }
+  const productIds = body.productIds ?? [];
+  const catalogSelections = body.catalogSelections ?? [];
   if (
-    !Array.isArray(body.productIds) ||
-    body.productIds.some((productId) => typeof productId !== "string")
+    !Array.isArray(productIds) ||
+    productIds.some((productId) => typeof productId !== "string") ||
+    !Array.isArray(catalogSelections) ||
+    catalogSelections.some(
+      (selection) =>
+        !selection ||
+        typeof selection !== "object" ||
+        Array.isArray(selection) ||
+        typeof (selection as Record<string, unknown>).productId !== "string" ||
+        typeof (selection as Record<string, unknown>).externalReference !==
+          "string",
+    )
   ) {
     return jsonError(400, "INVALID_CATALOG_IMAGE_BULK_REVIEW_SELECTION");
+  }
+  if (
+    catalogSelections.some((selection) => {
+      const raw = selection as Record<string, unknown>;
+      return raw.restaurantId != null || raw.imageUrl != null;
+    })
+  ) {
+    return jsonError(
+      400,
+      "CATALOG_IMAGE_BULK_CLIENT_REFERENCE_NOT_ALLOWED",
+      "La imagen y el restaurante se resuelven y validan en servidor",
+    );
+  }
+  if (
+    catalogSelections.length > 0 &&
+    !hasCatalogImageCapability(context.access, "catalog.image.catalogSearch")
+  ) {
+    return jsonError(403, "CATALOG_IMAGE_SEARCH_PLAN_REQUIRED");
   }
 
   const reviewSelection =
@@ -330,7 +361,14 @@ export async function handleReviewCatalogImageBulkSelectionRequest(
     db: context.auth.db,
     restaurantId: context.auth.restaurantId,
     jobId,
-    productIds: body.productIds,
+    productIds,
+    catalogSelections: catalogSelections.map((selection) => {
+      const raw = selection as Record<string, string>;
+      return {
+        productId: raw.productId,
+        externalReference: raw.externalReference,
+      };
+    }),
     userId: context.auth.uid,
   });
   return NextResponse.json({ ok: true as const, result });

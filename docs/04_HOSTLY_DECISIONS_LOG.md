@@ -220,10 +220,16 @@ platos genéricos usan IA, las marcas y bebidas consultan catálogo real y los c
 ambiguos quedan para revisión manual. Ningún resultado se aprueba ni publica
 automáticamente.
 
-Esta base evita introducir una dependencia de cola externa antes de necesitar
-procesamiento autónomo sin navegador. Si el volumen operativo lo exige, el consumidor
-puede migrarse a Workflow o Queues manteniendo el contrato Firestore, los permisos y
-la galería de revisión.
+El procesamiento autónomo usa Vercel Queues con entrega durable e idempotencia por
+trabajo y revisión. Firestore sigue siendo la fuente de verdad del estado, los intentos,
+el leasing, los resultados y los fallos; la cola solo despierta al consumidor y nunca
+autoriza un tenant ni publica una imagen.
+
+La galería permite aprobar imágenes IA y seleccionar coincidencias reales devueltas por
+el catálogo. Para estas últimas, el cliente solo envía `productId` y la referencia
+persistida en el propio trabajo. El servidor vuelve a resolver y copiar la imagen bajo
+el tenant, rechaza URLs o `restaurantId` aportados por el cliente y exige una
+confirmación humana antes de aprobarla y protegerla.
 
 ---
 

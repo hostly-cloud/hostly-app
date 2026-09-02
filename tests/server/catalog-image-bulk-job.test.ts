@@ -437,6 +437,14 @@ test("catalog search results are recorded as reviewable usage, not attached blin
   assert.equal(state.items[0].candidateCount, 1);
   assert.match(state.items[0].imageUrl ?? "", /images\.openfoodfacts\.org/);
   assert.equal(state.items[0].catalogCandidates[0]?.externalReference, "5449000054227");
+  assert.equal(
+    state.items[0].catalogCandidates[0]?.sourceUrl,
+    "https://world.openfoodfacts.org/product/5449000054227",
+  );
+  assert.equal(
+    state.items[0].catalogCandidates[0]?.attribution,
+    "Open Food Facts contributors",
+  );
   const usage = [...store.entries()].find(([path]) =>
     path.startsWith("restaurants/restaurant-a/catalogImageUsage/"),
   )?.[1];
