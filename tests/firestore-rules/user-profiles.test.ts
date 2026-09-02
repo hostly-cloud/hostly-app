@@ -1288,6 +1288,57 @@ describe("Rules: autoridad canónica, mirrors y status", () => {
     assert.equal((await getDoc(ownerARef)).data()?.restaurantId, RESTAURANT_A);
   });
 
+  test("el plan comercial del restaurante es server-only", async () => {
+    const restaurantPath = `restaurants/${RESTAURANT_A}`;
+    await adminDb.doc(restaurantPath).set(
+      {
+        subscription: { plan: "pro", status: "active" },
+        billing: { plan: "pro" },
+        plan: "pro",
+      },
+      { merge: true },
+    );
+
+    const ownerRef = doc(rulesDb(OWNER_A), restaurantPath);
+    await assertSucceeds(
+      updateDoc(ownerRef, {
+        name: "Restaurante A actualizado",
+        updatedAt: serverTimestamp(),
+      }),
+    );
+
+    await assertFails(updateDoc(ownerRef, { subscription: { plan: "ultra" } }));
+    await assertFails(updateDoc(ownerRef, { billing: { plan: "ultra" } }));
+    await assertFails(updateDoc(ownerRef, { plan: "ultra" }));
+    await assertFails(
+      updateDoc(ownerRef, {
+        subscription: deleteField(),
+        billing: deleteField(),
+        plan: deleteField(),
+      }),
+    );
+
+    const legacyTenantRef = doc(
+      rulesDb(OWNER_B),
+      "restaurants",
+      RESTAURANT_B,
+    );
+    await assertFails(
+      updateDoc(legacyTenantRef, { subscription: { plan: "ultra" } }),
+    );
+    await assertFails(
+      updateDoc(
+        doc(rulesDb(OWNER_A), "restaurants", RESTAURANT_B),
+        { name: "Acceso cruzado" },
+      ),
+    );
+
+    const stored = (await adminDb.doc(restaurantPath).get()).data();
+    assert.deepEqual(stored?.subscription, { plan: "pro", status: "active" });
+    assert.deepEqual(stored?.billing, { plan: "pro" });
+    assert.equal(stored?.plan, "pro");
+  });
+
   test("supplierProductAliases exige capability, tenant, mirrors y allowlist", async () => {
     for (const uid of [OWNER_A, ADMIN_A, MANAGER_A] as const) {
       const aliasId = `alias-${uid}`;

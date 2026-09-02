@@ -497,6 +497,16 @@ service cloud.firestore {
         || role == 'administrator';
     }
 
+    function preservesRestaurantCommercialAuthority() {
+      // El plan efectivo autoriza operaciones con coste en APIs Admin. Aunque un
+      // owner pueda editar el perfil del restaurante, estos campos son server-only.
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'subscription',
+        'billing',
+        'plan',
+      ]);
+    }
+
     function isValidMenuImportSourceType(value) {
       return value == 'image' || value == 'pdf' || value == 'qr_url';
     }
@@ -828,7 +838,10 @@ service cloud.firestore {
       allow create: if false;
 
       allow read: if sameRestaurant(restaurantId);
-      allow update, delete: if sameRestaurant(restaurantId) && canManageSettings();
+      allow update: if sameRestaurant(restaurantId)
+        && canManageSettings()
+        && preservesRestaurantCommercialAuthority();
+      allow delete: if sameRestaurant(restaurantId) && canManageSettings();
 
       // Config operacional / sensible por docId.
       // tableGroups: join/separar mesas (manager+). floorPlanLayouts/printers: settings (owner/admin).
