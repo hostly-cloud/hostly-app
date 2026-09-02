@@ -329,6 +329,24 @@ sin el campo se leen como revisión cero y avanzan de forma compatible en su sig
 transición. El contador no concede autoridad al cliente ni sustituye los leases por
 producto; únicamente hace durable y determinista la continuidad de la cola.
 
+### H-023 - Reentrega obligatoria mientras exista trabajo masivo activo
+
+**Estado:** aceptada.
+
+Un mensaje de la cola no se confirma cuando el trabajo sigue en estado `queued` o
+`running`, conserva elementos pendientes o procesándose y el worker no ha podido
+adquirir un elemento. Esta situación puede producirse durante una reentrega con un
+lease de Firestore todavía activo. El consumidor lanza entonces un error recuperable
+para que Vercel Queues mantenga el mensaje y lo vuelva a entregar con backoff; cuando
+el lease vence, el mismo trabajo recupera el elemento sin duplicar el producto ni el
+consumo.
+
+Los mensajes estructuralmente inválidos son no recuperables y se confirman para no
+crear un poison loop. Los fallos transitorios de infraestructura y los trabajos
+activos sin progreso se reintentan durante la retención del mensaje. Firestore sigue
+siendo la fuente de verdad y la reentrega nunca relaja el aislamiento por restaurante,
+los permisos, la capacidad Ultra ni las claves idempotentes por producto.
+
 ---
 
 ## Decisiones pendientes de cierre
