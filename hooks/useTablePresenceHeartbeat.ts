@@ -32,6 +32,7 @@ const EMPTY_PRESENCE_STATE: ResolvedPresenceState = {
   displayLabel: null,
   showConcurrentBadge: false,
 };
+const EMPTY_PRESENCE_ENTRIES: TablePresenceDocument[] = [];
 
 function buildPresenceContextKey(params: {
   tableId: string;
@@ -61,7 +62,10 @@ export function useTablePresenceHeartbeat(
   const sessionId = useMemo(() => getRuntimeSessionId(), []);
   const deviceId = useMemo(() => getOrCreateDeviceId(), []);
 
-  const [presenceEntries, setPresenceEntries] = useState<TablePresenceDocument[]>([]);
+  const [presenceSnapshot, setPresenceSnapshot] = useState<{
+    key: string;
+    entries: TablePresenceDocument[];
+  } | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   const prevTableIdRef = useRef<string | null>(null);
@@ -74,15 +78,21 @@ export function useTablePresenceHeartbeat(
   const enabled =
     options.enabled &&
     Boolean(restaurantId && tableId && isFirebaseConfigured);
+  const presenceKey = enabled && restaurantId && tableId
+    ? `${restaurantId}:${tableId}`
+    : "";
+  const presenceEntries =
+    presenceKey && presenceSnapshot?.key === presenceKey
+      ? presenceSnapshot.entries
+      : EMPTY_PRESENCE_ENTRIES;
 
   useEffect(() => {
-    if (!enabled || !restaurantId || !tableId) {
-      setPresenceEntries([]);
-      return;
-    }
+    if (!enabled || !restaurantId || !tableId || !presenceKey) return;
 
-    return listenTablePresenceForTable(restaurantId, tableId, setPresenceEntries);
-  }, [enabled, restaurantId, tableId]);
+    return listenTablePresenceForTable(restaurantId, tableId, (entries) => {
+      setPresenceSnapshot({ key: presenceKey, entries });
+    });
+  }, [enabled, presenceKey, restaurantId, tableId]);
 
   useEffect(() => {
     const prevTableId = prevTableIdRef.current;

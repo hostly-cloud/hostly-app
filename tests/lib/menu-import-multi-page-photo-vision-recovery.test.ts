@@ -4,6 +4,10 @@ import type { ImportedMenuItem } from "@/lib/carta/imported-menu-types";
 import type { AiImportV2ValidatedItem } from "@/lib/server/menu-imports/ai-import-v2/types";
 import { recoverMultiPagePhotoVision } from "@/lib/server/menu-imports/ai-import-v2/recover-multi-page-photo-vision";
 
+type RecoveryParams = Parameters<typeof recoverMultiPagePhotoVision>[0];
+type RecoveryPage = RecoveryParams["pages"][number];
+type ShadowRunner = NonNullable<RecoveryParams["runShadow"]>;
+
 function item(name: string, price: number): ImportedMenuItem {
   return {
     id: `${name}-${price}`,
@@ -40,7 +44,7 @@ function vision(name: string, price: number): AiImportV2ValidatedItem {
   };
 }
 
-function page(index: number, items: ImportedMenuItem[]) {
+function page(index: number, items: ImportedMenuItem[]): RecoveryPage {
   return {
     source: {
       storagePath: `restaurants/r1/menu-imports/d1/pages/00${index + 1}.jpg`,
@@ -56,7 +60,7 @@ function page(index: number, items: ImportedMenuItem[]) {
       items,
       warnings: [],
     },
-  } as any;
+  } as RecoveryPage;
 }
 
 test("multi-page recovery is a no-op while the recovery flag is disabled", async () => {
@@ -72,7 +76,7 @@ test("multi-page recovery is a no-op while the recovery flag is disabled", async
       runShadow: (async () => {
         calls += 1;
         return null;
-      }) as any,
+      }) as ShadowRunner,
     });
 
     assert.equal(calls, 0);
@@ -93,7 +97,7 @@ test("recovers vision candidates per page and preserves same-name different-pric
       draftId: "d1",
       menuType: "mixed",
       pages: [page(0, [item("Rioja", 5)]), page(1, [item("Croquetas", 9.5)])],
-      runShadow: (async (params: any) => ({
+      runShadow: (async (params) => ({
         enabled: true,
         model: "test",
         apiMode: "chat_completions",
@@ -106,8 +110,9 @@ test("recovers vision candidates per page and preserves same-name different-pric
             ? [vision("Rioja", 6)]
             : [vision("Burrata", 12)],
           rejected: [],
+          globalWarnings: [],
         },
-      })) as any,
+      })) as ShadowRunner,
     });
 
     assert.equal(result.recoveredCount, 2);
@@ -147,8 +152,12 @@ test("a page without actual vision cannot contribute recovered items", async () 
         durationMs: 1,
         extraction: null,
         comparison: null,
-        validation: { accepted: [vision("Inventado", 99)], rejected: [] },
-      })) as any,
+        validation: {
+          accepted: [vision("Inventado", 99)],
+          rejected: [],
+          globalWarnings: [],
+        },
+      })) as ShadowRunner,
     });
 
     assert.equal(result.recoveredCount, 0);

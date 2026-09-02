@@ -256,7 +256,6 @@ async function main() {
   const tenantBreakdown = [...tenantIds].sort().map((rid) => {
     const bucket = byTenantRoot.get(rid) ?? { restaurantes: new Map(), restaurants: new Map() };
     let productsWithCategoryId = 0;
-    let productsWithoutCategoryId = 0;
     for (const [refKey, count] of categoryRefCount) {
       if (!refKey.startsWith(`${rid}|`)) continue;
       productsWithCategoryId += count;

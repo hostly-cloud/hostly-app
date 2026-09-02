@@ -48,33 +48,37 @@ function fileKey(file: File): string {
 export default function CartaImportPremiumLayoutBatch(
   props: CartaImportPremiumLayoutProps,
 ) {
+  const primaryKey = props.file ? fileKey(props.file) : "no-file";
+  return (
+    <CartaImportPremiumLayoutBatchContent
+      key={`${props.variant}:${primaryKey}`}
+      {...props}
+    />
+  );
+}
+
+function CartaImportPremiumLayoutBatchContent(
+  props: CartaImportPremiumLayoutProps,
+) {
   const { locale } = useI18n();
   const english = locale === "en";
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
-  const [batchFiles, setBatchFiles] = useState<File[]>([]);
+  const [batchFiles, setBatchFiles] = useState<File[]>(() => {
+    if (props.variant !== "onboarding" || !props.file) return [];
+    const registered = readRegisteredMenuImportBatch(props.file);
+    return registered?.length ? [...registered] : [props.file];
+  });
   const [batchError, setBatchError] = useState<string | null>(null);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
 
   const batchEnabled = props.variant === "onboarding";
 
   useEffect(() => {
-    if (!batchEnabled) return;
-    if (!props.file) {
-      setBatchFiles([]);
-      setBatchError(null);
-      return;
+    if (!batchEnabled || !props.file) return;
+    if (!readRegisteredMenuImportBatch(props.file)?.length) {
+      registerMenuImportBatch(props.file, [props.file]);
     }
-    const registered = readRegisteredMenuImportBatch(props.file);
-    if (registered?.length) {
-      setBatchFiles([...registered]);
-      return;
-    }
-    setBatchFiles((current) => {
-      if (current.includes(props.file!)) return current;
-      registerMenuImportBatch(props.file!, [props.file!]);
-      return [props.file!];
-    });
   }, [batchEnabled, props.file]);
 
   useEffect(() => {
@@ -84,8 +88,9 @@ export default function CartaImportPremiumLayoutBatch(
       if (!file.type.startsWith("image/")) continue;
       created[fileKey(file)] = URL.createObjectURL(file);
     }
-    setPreviewUrls(created);
+    const frame = window.requestAnimationFrame(() => setPreviewUrls(created));
     return () => {
+      window.cancelAnimationFrame(frame);
       for (const url of Object.values(created)) URL.revokeObjectURL(url);
     };
   }, [batchEnabled, batchFiles]);
@@ -111,7 +116,7 @@ export default function CartaImportPremiumLayoutBatch(
         currentTarget: syntheticTarget,
       } as ChangeEvent<HTMLInputElement>);
     },
-    [props.onFileInputChange],
+    [props],
   );
 
   const applyBatch = useCallback(
@@ -149,7 +154,7 @@ export default function CartaImportPremiumLayoutBatch(
       props.onFileInputChange(event);
       event.currentTarget.value = "";
     },
-    [applyBatch, props.onFileInputChange],
+    [applyBatch, props],
   );
 
   const handleAppendInput = useCallback(

@@ -3,6 +3,8 @@
  * Solo productos activos con station clara y sin operationStationId.
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
 import {
   parseCatalogAuditProduct,
   type CatalogAuditOperationStation,
@@ -68,8 +70,6 @@ export type OperationStationAutofixPlan = {
 
 function loadEnvFromDotLocal(): void {
   try {
-    const fs = require("node:fs") as typeof import("node:fs");
-    const path = require("node:path") as typeof import("node:path");
     const envPath = path.join(process.cwd(), ".env.local");
     if (!fs.existsSync(envPath)) return;
     for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {

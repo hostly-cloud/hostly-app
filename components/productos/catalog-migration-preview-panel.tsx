@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import type {
   CatalogMigrationExecuteResult,
   CatalogMigrationPreviewResult,
@@ -23,6 +23,24 @@ function migrationCompletedStorageKey(restaurantId: string): string {
   return `hostly.catalogMigration.completed.${restaurantId.trim()}`;
 }
 
+const subscribeHydration = () => () => {};
+const getClientHydrationSnapshot = () => true;
+const getServerHydrationSnapshot = () => false;
+
+function readCompletedMigration(
+  restaurantId: string,
+): CatalogMigrationExecuteResult | null {
+  if (typeof window === "undefined" || !restaurantId.trim()) return null;
+  try {
+    const raw = sessionStorage.getItem(migrationCompletedStorageKey(restaurantId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CatalogMigrationExecuteResult;
+    return parsed?.migrationConfig?.status === "completed" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export function CatalogMigrationPreviewPanel({
   restaurantId,
   catalogSource,
@@ -34,26 +52,26 @@ export function CatalogMigrationPreviewPanel({
   }, [restaurantId]);
 
   const [preview, setPreview] = useState<CatalogMigrationPreviewResult | null>(null);
-  const [migrationResult, setMigrationResult] = useState<CatalogMigrationExecuteResult | null>(
-    null,
+  const [migrationState, setMigrationState] = useState<{
+    restaurantId: string;
+    result: CatalogMigrationExecuteResult;
+  } | null>(() => {
+    const result = readCompletedMigration(restaurantId);
+    return result ? { restaurantId: restaurantId.trim(), result } : null;
+  });
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot,
   );
   const [previewLoading, setPreviewLoading] = useState(false);
   const [migrateLoading, setMigrateLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !restaurantId.trim()) return;
-    try {
-      const raw = sessionStorage.getItem(migrationCompletedStorageKey(restaurantId));
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as CatalogMigrationExecuteResult;
-      if (parsed?.migrationConfig?.status === "completed") {
-        setMigrationResult(parsed);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [restaurantId]);
+  const migrationResult =
+    hydrated && migrationState?.restaurantId === restaurantId.trim()
+      ? migrationState.result
+      : null;
 
   const isLegacyCatalogSource =
     catalogSource === "legacy_local" || catalogSource === "legacy_fallback";
@@ -112,7 +130,7 @@ export function CatalogMigrationPreviewPanel({
       return;
     }
 
-    setMigrationResult(result.result);
+    setMigrationState({ restaurantId: restaurantId.trim(), result: result.result });
     setPreview(result.result.preview);
     try {
       sessionStorage.setItem(

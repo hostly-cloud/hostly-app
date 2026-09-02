@@ -255,7 +255,7 @@ export async function handleMergeTableGroupOrders(
   const sourceRefs = sources.map((s) => ctx.db.collection("orders").doc(s.id));
   const tableRefs = memberIds.map((tid) => ctx.db.collection("tables").doc(tid));
   const nowMs = Date.now();
-  let resultDestOrderId = dest.id;
+  const resultDestOrderId = dest.id;
   let resultMerged = true;
   let plannedNextGroups: TableGroupsMap = preTopology.nextGroups;
 

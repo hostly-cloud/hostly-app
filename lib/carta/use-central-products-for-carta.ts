@@ -122,7 +122,6 @@ export function useCentralProductsForCarta(
   const tenantUnavailable =
     requireAuthenticatedTenant && authReady && profileReady && rid.length === 0;
 
-  const [loading, setLoading] = useState(true);
   const [platos, setPlatos] = useState<PlatoCarta[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [source, setSource] = useState<OperationalCatalogSource | null>(null);
@@ -134,6 +133,12 @@ export function useCentralProductsForCarta(
   const [centralProductDocumentsAll, setCentralProductDocumentsAll] = useState<
     ProductDocument[]
   >([]);
+  const catalogKey = rid
+    ? `${rid}:${scope}:${requireAuthenticatedTenant ? "authenticated" : "legacy"}`
+    : "";
+  const [resolvedCatalogKey, setResolvedCatalogKey] = useState<string | null>(null);
+  const catalogMatches = Boolean(catalogKey && resolvedCatalogKey === catalogKey);
+  const loading = awaitingProfileTenant || Boolean(rid && !catalogMatches);
 
   const categoryNameByIdRef = useRef<Map<string, string>>(new Map());
   const centralDocsRef = useRef<ProductDocument[]>([]);
@@ -152,28 +157,14 @@ export function useCentralProductsForCarta(
       setSource(mapped.source);
       setUsingLegacyFallback(mapped.usingLegacyFallback);
       setCatalogDevWarning(mapped.catalogDevWarning);
-      setLoading(false);
+      setResolvedCatalogKey(catalogKey);
     },
-    [scope],
+    [catalogKey, scope],
   );
 
   const applyCentralDocs = useCallback(
     (docs: ProductDocument[]) => {
-      if (!rid) {
-        if (requireAuthenticatedTenant) {
-          setCentralProductDocuments([]);
-          setCentralProductDocumentsAll([]);
-          setPlatos([]);
-          setProducts([]);
-          setSource(null);
-          setUsingLegacyFallback(false);
-          setCatalogDevWarning(null);
-          setLoading(false);
-          return;
-        }
-        applyCatalog([], "legacy_local");
-        return;
-      }
+      if (!rid) return;
 
       const filtered = filterCentralForScope(docs, scope);
       setCentralProductDocuments(filtered);
@@ -203,21 +194,7 @@ export function useCentralProductsForCarta(
   }, [applyCatalog]);
 
   useEffect(() => {
-    if (!rid) {
-      if (awaitingProfileTenant) {
-        setLoading(true);
-        return;
-      }
-      setLoading(false);
-      setPlatos([]);
-      setProducts([]);
-      setSource(null);
-      setUsingLegacyFallback(false);
-      setCatalogDevWarning(null);
-      setCentralProductDocuments([]);
-      setCentralProductDocumentsAll([]);
-      return;
-    }
+    if (!rid) return;
 
     let cancelled = false;
     void fetchCartaCategorias(rid).then((cats) => {
@@ -234,25 +211,20 @@ export function useCentralProductsForCarta(
     return () => {
       cancelled = true;
     };
-  }, [applyCentralDocs, awaitingProfileTenant, rid]);
+  }, [applyCentralDocs, rid]);
 
   useEffect(() => {
-    if (awaitingProfileTenant) {
-      setLoading(true);
-      return;
-    }
-    if (!rid) {
-      setLoading(false);
-      return;
-    }
+    if (awaitingProfileTenant || !rid) return;
     if (!authReady) return;
     if (!isAuthReady() || !isFirebaseConfigured) {
-      if (requireAuthenticatedTenant) {
-        failClosedAuthenticatedCatalog();
-        return;
-      }
-      applyCatalog(loadLegacyPlatos(rid, scope), "legacy_local");
-      return;
+      const fallbackTask = window.setTimeout(() => {
+        if (requireAuthenticatedTenant) {
+          failClosedAuthenticatedCatalog();
+          return;
+        }
+        applyCatalog(loadLegacyPlatos(rid, scope), "legacy_local");
+      }, 0);
+      return () => window.clearTimeout(fallbackTask);
     }
 
     const ridChanged = subscribedRidRef.current !== rid;
@@ -261,7 +233,6 @@ export function useCentralProductsForCarta(
       listenFailedRef.current = false;
       hasCentralSnapshotRef.current = false;
       centralDocsRef.current = [];
-      setLoading(true);
     }
 
     const unsub = listenCentralProducts(
@@ -299,7 +270,11 @@ export function useCentralProductsForCarta(
 
   useEffect(() => {
     if (!rid || !hasCentralSnapshotRef.current || listenFailedRef.current) return;
-    applyCentralDocs(centralDocsRef.current);
+    const refreshTask = window.setTimeout(
+      () => applyCentralDocs(centralDocsRef.current),
+      0,
+    );
+    return () => window.clearTimeout(refreshTask);
   }, [applyCentralDocs, rid, scope]);
 
   useEffect(() => {
@@ -322,26 +297,27 @@ export function useCentralProductsForCarta(
 
   return useMemo(() => {
     const productDocumentsById = new Map<string, ProductDocument>();
-    for (const doc of centralProductDocuments) {
+    for (const doc of catalogMatches ? centralProductDocuments : []) {
       productDocumentsById.set(doc.id, doc);
     }
     const allProductDocumentsById = new Map<string, ProductDocument>();
-    for (const doc of centralProductDocumentsAll) {
+    for (const doc of catalogMatches ? centralProductDocumentsAll : []) {
       allProductDocumentsById.set(doc.id, doc);
     }
     return {
-      products,
-      platos,
+      products: catalogMatches ? products : [],
+      platos: catalogMatches ? platos : [],
       loading,
-      source,
-      usingLegacyFallback,
-      catalogDevWarning,
+      source: catalogMatches ? source : null,
+      usingLegacyFallback: catalogMatches ? usingLegacyFallback : false,
+      catalogDevWarning: catalogMatches ? catalogDevWarning : null,
       productDocumentsById,
       allProductDocumentsById,
       tenantUnavailable,
     };
   }, [
     catalogDevWarning,
+    catalogMatches,
     centralProductDocuments,
     centralProductDocumentsAll,
     loading,

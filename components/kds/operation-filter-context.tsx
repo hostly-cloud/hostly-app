@@ -105,43 +105,64 @@ function readString(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+const EMPTY_WAITERS: OperationWaiter[] = [];
+const EMPTY_ZONES: OperationZone[] = [];
+const EMPTY_WAITER_BY_TABLE: Record<string, string> = {};
+const EMPTY_ZONE_BY_TABLE: Record<string, TableZoneInfo> = {};
+
 export function OperationFilterProvider({ children }: { children: ReactNode }) {
   const { user, restaurantId, ready, profileReady } = useAuth();
   const [waiterFilter, setWaiterFilter] =
     useState<OperationWaiterFilter>("all");
   const [zoneFilter, setZoneFilter] = useState<OperationZoneFilter>("all");
-  const [waiters, setWaiters] = useState<OperationWaiter[]>([]);
-  const [waitersLoadStatus, setWaitersLoadStatus] =
-    useState<OperationRosterLoadStatus>("idle");
-  const [waitersErrorKind, setWaitersErrorKind] =
-    useState<RestaurantRosterErrorKind | null>(null);
   const [waitersReloadToken, setWaitersReloadToken] = useState(0);
-  const [tableWaiterById, setTableWaiterById] = useState<
-    Record<string, string>
-  >({});
-  const [tableZoneById, setTableZoneById] = useState<
-    Record<string, TableZoneInfo>
-  >({});
-  const [zones, setZones] = useState<OperationZone[]>([]);
+  const rid = restaurantId?.trim() ?? "";
+  const rosterKey = `${rid}:${waitersReloadToken}`;
+  const canLoadRoster = Boolean(
+    ready && profileReady && user?.uid && isFirebaseConfigured && rid,
+  );
+  const [rosterSnapshot, setRosterSnapshot] = useState<{
+    key: string;
+    waiters: OperationWaiter[];
+    status: OperationRosterLoadStatus;
+    errorKind: RestaurantRosterErrorKind | null;
+  } | null>(null);
+  const currentRoster =
+    canLoadRoster && rosterSnapshot?.key === rosterKey
+      ? rosterSnapshot
+      : null;
+  const waiters = currentRoster?.waiters ?? EMPTY_WAITERS;
+  const waitersLoadStatus: OperationRosterLoadStatus = canLoadRoster
+    ? (currentRoster?.status ?? "loading")
+    : "idle";
+  const waitersErrorKind = currentRoster?.errorKind ?? null;
+
+  const canLoadTables = Boolean(ready && isFirebaseConfigured && rid);
+  const [tablesSnapshot, setTablesSnapshot] = useState<{
+    restaurantId: string;
+    tableWaiterById: Record<string, string>;
+    tableZoneById: Record<string, TableZoneInfo>;
+    zones: OperationZone[];
+  } | null>(null);
+  const currentTables =
+    canLoadTables && tablesSnapshot?.restaurantId === rid
+      ? tablesSnapshot
+      : null;
+  const tableWaiterById = currentTables?.tableWaiterById ?? EMPTY_WAITER_BY_TABLE;
+  const tableZoneById = currentTables?.tableZoneById ?? EMPTY_ZONE_BY_TABLE;
+  const zones = currentTables?.zones ?? EMPTY_ZONES;
 
   /** Último usuario para logs de snapshot sin meter `user` en deps (objeto inestable / tamaño de array). */
   const tablesSnapAuthUidRef = useRef<string | null>(null);
   const tablesSnapAuthEmailRef = useRef<string | null>(null);
-  tablesSnapAuthUidRef.current = user?.uid ?? null;
-  tablesSnapAuthEmailRef.current =
-    typeof user?.email === "string" ? user.email : null;
+  useEffect(() => {
+    tablesSnapAuthUidRef.current = user?.uid ?? null;
+    tablesSnapAuthEmailRef.current =
+      typeof user?.email === "string" ? user.email : null;
+  }, [user?.email, user?.uid]);
 
   useEffect(() => {
-    const rid = restaurantId?.trim() ?? "";
-    if (!ready || !profileReady || !user?.uid || !isFirebaseConfigured || !rid) {
-      setWaiters([]);
-      setWaitersLoadStatus("idle");
-      setWaitersErrorKind(null);
-      return;
-    }
-    setWaiters([]);
-    setWaitersLoadStatus("loading");
-    setWaitersErrorKind(null);
+    if (!canLoadRoster || !user) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -154,39 +175,41 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
           }))
           .filter((u) => u.id);
         mapped.sort((a, b) => a.name.localeCompare(b.name, "es"));
-        setWaiters(mapped);
-        setWaitersLoadStatus("ready");
+        setRosterSnapshot({
+          key: rosterKey,
+          waiters: mapped,
+          status: "ready",
+          errorKind: null,
+        });
       } catch (error) {
         console.error(error);
         if (!cancelled) {
-          setWaitersLoadStatus("error");
-          setWaitersErrorKind(
-            error instanceof RestaurantRosterError
-              ? error.kind
-              : "network",
-          );
+          setRosterSnapshot({
+            key: rosterKey,
+            waiters: [],
+            status: "error",
+            errorKind:
+              error instanceof RestaurantRosterError
+                ? error.kind
+                : "network",
+          });
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [ready, profileReady, user, restaurantId, waitersReloadToken]);
+  }, [canLoadRoster, rid, rosterKey, user]);
 
   const retryWaiters = useCallback(() => {
     setWaitersReloadToken((current) => current + 1);
   }, []);
 
   useEffect(() => {
-    if (!ready || !isFirebaseConfigured || !restaurantId) {
-      setTableWaiterById({});
-      setTableZoneById({});
-      setZones([]);
-      return;
-    }
+    if (!canLoadTables) return;
     const q = query(
       collection(db, "tables"),
-      where("restaurantId", "==", restaurantId),
+      where("restaurantId", "==", rid),
     );
     const unsub = onSnapshot(q, (snap) => {
       const waiterMap: Record<string, string> = {};
@@ -215,17 +238,20 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
         ([id, name]) => ({ id, name }),
       );
       list.sort((a, b) => a.name.localeCompare(b.name, "es"));
-      setTableWaiterById(waiterMap);
-      setTableZoneById(zoneMap);
-      setZones(list);
+      setTablesSnapshot({
+        restaurantId: rid,
+        tableWaiterById: waiterMap,
+        tableZoneById: zoneMap,
+        zones: list,
+      });
     }, (err) => {
       console.error(err);
       logFirestorePermissionError(
         {
           file: "components/kds/operation-filter-context.tsx",
           op: "onSnapshot",
-          path: `tables (where restaurantId==${restaurantId})`,
-          restaurantId,
+          path: `tables (where restaurantId==${rid})`,
+          restaurantId: rid,
           uid: tablesSnapAuthUidRef.current,
           email: tablesSnapAuthEmailRef.current,
         },
@@ -233,7 +259,7 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
       );
     });
     return () => unsub();
-  }, [ready, restaurantId]);
+  }, [canLoadTables, rid]);
 
   const currentUserId = user?.uid;
 

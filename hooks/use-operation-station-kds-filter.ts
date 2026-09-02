@@ -24,12 +24,22 @@ export function useOperationStationKdsFilter(scope: KdsOperationStationFilterSco
 
   useEffect(() => {
     const rid = restaurantId?.trim() ?? "";
-    if (!authReady || !rid) {
-      setStations([]);
-      return;
-    }
-    return listenOperationStations(rid, setStations);
-  }, [authReady, restaurantId]);
+    if (!authReady || !rid) return;
+    return listenOperationStations(rid, (nextStations) => {
+      setStations(nextStations);
+      setSelectedOperationStationId((current) => {
+        if (current === KDS_OPERATION_STATION_FILTER_ALL) return current;
+        return nextStations.some(
+          (station) =>
+            station.active &&
+            station.type === scope &&
+            station.id === current,
+        )
+          ? current
+          : KDS_OPERATION_STATION_FILTER_ALL;
+      });
+    });
+  }, [authReady, restaurantId, scope]);
 
   const activeStationsForScope = useMemo(
     () =>
@@ -38,18 +48,6 @@ export function useOperationStationKdsFilter(scope: KdsOperationStationFilterSco
       ),
     [stations, scope],
   );
-
-  useEffect(() => {
-    if (selectedOperationStationId === KDS_OPERATION_STATION_FILTER_ALL) {
-      return;
-    }
-    const stillValid = activeStationsForScope.some(
-      (s) => s.id === selectedOperationStationId,
-    );
-    if (!stillValid) {
-      setSelectedOperationStationId(KDS_OPERATION_STATION_FILTER_ALL);
-    }
-  }, [activeStationsForScope, selectedOperationStationId]);
 
   const allLabel = useMemo(() => kdsOperationStationAllLabel(scope), [scope]);
 

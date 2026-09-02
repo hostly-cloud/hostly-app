@@ -35,19 +35,23 @@ export function OperationStationProductSelect({
   style,
   id,
 }: OperationStationProductSelectProps) {
-  const [stations, setStations] = useState<OperationStationDocument[]>([]);
+  const [snapshot, setSnapshot] = useState<{
+    restaurantId: string;
+    stations: OperationStationDocument[];
+  } | null>(null);
   const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
+  const stations = useMemo(
+    () => (rid && snapshot?.restaurantId === rid ? snapshot.stations : []),
+    [rid, snapshot],
+  );
 
   useEffect(() => {
-    if (!rid) {
-      setStations([]);
-      return;
-    }
+    if (!rid) return;
     let defaultsEnsured = false;
     const unsub = listenOperationStations(
       rid,
       (list) => {
-        setStations(list);
+        setSnapshot({ restaurantId: rid, stations: list });
         if (!defaultsEnsured && list.length === 0) {
           defaultsEnsured = true;
           void ensureDefaultOperationStations(rid).catch((e) =>

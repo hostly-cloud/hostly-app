@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { searchBillingCustomers as filterBillingCustomers } from "@/lib/billing/search-billing-customers";
 import {
   createBillingCustomerDoc,
@@ -11,35 +11,35 @@ import {
 import type { BillingCustomer, BillingCustomerInput } from "@/types/billing-customer";
 
 export function useBillingCustomers(restaurantId: string | null | undefined) {
-  const [customers, setCustomers] = useState<BillingCustomer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<{
+    restaurantId: string;
+    customers: BillingCustomer[];
+    error: string | null;
+  } | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
   const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
+  const currentSnapshot = snapshot?.restaurantId === rid ? snapshot : null;
+  const customers = useMemo(
+    () => (rid ? (currentSnapshot?.customers ?? []) : []),
+    [currentSnapshot, rid],
+  );
+  const loading = Boolean(rid && !currentSnapshot);
+  const error = rid ? (mutationError ?? currentSnapshot?.error ?? null) : null;
 
   useEffect(() => {
-    if (!rid) {
-      setCustomers([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    setLoading(true);
+    if (!rid) return;
     const unsub = listenBillingCustomers(
       rid,
       (items) => {
-        setCustomers(items);
-        setLoading(false);
-        setError(null);
+        setSnapshot({ restaurantId: rid, customers: items, error: null });
       },
       (listenError) => {
         const message =
           listenError instanceof Error
             ? listenError.message
             : "No se pudieron cargar las empresas de facturación.";
-        setError(message);
-        setLoading(false);
+        setSnapshot({ restaurantId: rid, customers: [], error: message });
       },
     );
 
@@ -49,13 +49,13 @@ export function useBillingCustomers(restaurantId: string | null | undefined) {
   const createBillingCustomer = useCallback(
     async (input: BillingCustomerInput): Promise<BillingCustomer> => {
       if (!rid) throw new Error("Restaurante no disponible");
-      setError(null);
+      setMutationError(null);
       try {
         return await createBillingCustomerDoc(rid, input);
       } catch (e) {
         const message =
           e instanceof Error ? e.message : "No se pudo guardar la empresa.";
-        setError(message);
+        setMutationError(message);
         throw e;
       }
     },
@@ -65,13 +65,13 @@ export function useBillingCustomers(restaurantId: string | null | undefined) {
   const updateBillingCustomer = useCallback(
     async (customerId: string, input: BillingCustomerInput): Promise<void> => {
       if (!rid) throw new Error("Restaurante no disponible");
-      setError(null);
+      setMutationError(null);
       try {
         await updateBillingCustomerDoc(rid, customerId, input);
       } catch (e) {
         const message =
           e instanceof Error ? e.message : "No se pudo actualizar la empresa.";
-        setError(message);
+        setMutationError(message);
         throw e;
       }
     },
@@ -81,13 +81,13 @@ export function useBillingCustomers(restaurantId: string | null | undefined) {
   const deleteBillingCustomer = useCallback(
     async (customerId: string): Promise<void> => {
       if (!rid) throw new Error("Restaurante no disponible");
-      setError(null);
+      setMutationError(null);
       try {
         await deleteBillingCustomerDoc(rid, customerId);
       } catch (e) {
         const message =
           e instanceof Error ? e.message : "No se pudo eliminar la empresa.";
-        setError(message);
+        setMutationError(message);
         throw e;
       }
     },

@@ -200,20 +200,21 @@ function useInlineDisplayEditActivation(args: {
   prepare: () => void;
   setEditing: (value: boolean) => void;
 }) {
+  const { disabled, editing, inputRef, prepare, saving, setEditing } = args;
   const openingRef = useRef(false);
 
   useEffect(() => {
-    if (!args.editing) return;
-    focusAndSelectInput(args.inputRef.current);
+    if (!editing) return;
+    focusAndSelectInput(inputRef.current);
     openingRef.current = false;
-  }, [args.editing, args.inputRef]);
+  }, [editing, inputRef]);
 
   const startEdit = useCallback(() => {
-    if (args.disabled || args.saving || args.editing || openingRef.current) return;
+    if (disabled || saving || editing || openingRef.current) return;
     openingRef.current = true;
-    args.prepare();
-    args.setEditing(true);
-  }, [args.disabled, args.editing, args.prepare, args.saving, args.setEditing]);
+    prepare();
+    setEditing(true);
+  }, [disabled, editing, prepare, saving, setEditing]);
 
   const handleDisplayClick = useCallback(
     (event: MouseEvent) => {
@@ -251,10 +252,6 @@ export function ProductosInlineEditableName({
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const { saved, triggerSaved } = useInlineSuccessFlash();
-
-  useEffect(() => {
-    if (!editing) setDraft(p.nombre);
-  }, [p.nombre, editing]);
 
   const cancel = useCallback(() => {
     setDraft(p.nombre);
@@ -400,10 +397,6 @@ export function ProductosInlineEditablePrice({
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const { saved, triggerSaved } = useInlineSuccessFlash();
-
-  useEffect(() => {
-    if (!editing) setDraft(editSeed);
-  }, [editSeed, editing]);
 
   const cancel = useCallback(() => {
     setDraft(editSeed);

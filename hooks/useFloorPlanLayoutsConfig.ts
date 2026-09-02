@@ -17,38 +17,34 @@ const EMPTY_CONFIG: FloorPlanLayoutsConfig = {
  * Deriva el layout activo por plano en cliente (sin listener por plano).
  */
 export function useFloorPlanLayoutsConfig(restaurantId: string | null) {
-  const [config, setConfig] = useState<FloorPlanLayoutsConfig>(EMPTY_CONFIG);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<{
+    restaurantId: string;
+    config: FloorPlanLayoutsConfig;
+    error: string | null;
+  } | null>(null);
+  const rid = restaurantId?.trim() ?? "";
+  const currentSnapshot = snapshot?.restaurantId === rid ? snapshot : null;
+  const config = rid ? (currentSnapshot?.config ?? EMPTY_CONFIG) : EMPTY_CONFIG;
+  const loading = Boolean(rid && !currentSnapshot);
+  const error = rid ? (currentSnapshot?.error ?? null) : null;
 
   useEffect(() => {
-    const rid = restaurantId?.trim() ?? "";
-    if (!rid) {
-      setConfig(EMPTY_CONFIG);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
+    if (!rid) return;
 
     const unsub = listenFloorPlanLayoutsConfig(
       rid,
       (next) => {
-        setConfig(next);
-        setLoading(false);
+        setSnapshot({ restaurantId: rid, config: next, error: null });
       },
       (err) => {
-        setError(err.message);
-        setLoading(false);
+        setSnapshot({ restaurantId: rid, config: EMPTY_CONFIG, error: err.message });
       },
     );
 
     return () => {
       unsub();
     };
-  }, [restaurantId]);
+  }, [rid]);
 
   const getActiveLayoutForPlan = useMemo(() => {
     return (floorPlanId: string | null | undefined): ActiveFloorPlanLayoutEntry | null => {

@@ -541,7 +541,7 @@ export async function handleCreateOpenOrder(
         if (integrity) throw new Error(integrity.code);
         const lockedOrderId = lock.orderId?.trim() || "";
         if (lockedOrderId) {
-          let lockedOrderDoc = ordersSnap.docs.find((d) => d.id === lockedOrderId) ?? null;
+          const lockedOrderDoc = ordersSnap.docs.find((d) => d.id === lockedOrderId) ?? null;
           let lockedData: Record<string, unknown> | null = lockedOrderDoc
             ? ((lockedOrderDoc.data() as Record<string, unknown>) ?? null)
             : null;

@@ -7,7 +7,6 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import { useAuth } from "@/components/auth/auth-context";
@@ -203,7 +202,21 @@ export type ReservationFloorMapPickerProps = {
   onConfirm: (payload: ReservationFloorMapPickerConfirm) => void;
 };
 
-export function ReservationFloorMapPicker({
+export function ReservationFloorMapPicker(
+  props: ReservationFloorMapPickerProps,
+) {
+  if (!props.open) return null;
+  const sessionKey = [
+    props.restaurantId?.trim() ?? "",
+    props.reservationDateYmd.trim(),
+    props.initialTableId?.trim() ?? "",
+    props.initialFloorPlanId?.trim() ?? "",
+    props.excludeReservationId?.trim() ?? "",
+  ].join(":");
+  return <ReservationFloorMapPickerOpen key={sessionKey} {...props} />;
+}
+
+function ReservationFloorMapPickerOpen({
   open,
   onClose,
   restaurantId,
@@ -211,7 +224,6 @@ export function ReservationFloorMapPicker({
   tables,
   initialTableId,
   initialFloorPlanId,
-  excludeReservationId: _excludeReservationId,
   onConfirm,
 }: ReservationFloorMapPickerProps) {
   const { user, ready: authReady } = useAuth();
@@ -239,9 +251,9 @@ export function ReservationFloorMapPicker({
 
   const [floorPlans, setFloorPlans] = useState<FloorPlan[]>([]);
   const [zonesList, setZonesList] = useState<Zone[]>([]);
-  const [selectedFloorPlanId, setSelectedFloorPlanId] = useState<string | null>(
-    null,
-  );
+  const [selectedFloorPlanIdOverride, setSelectedFloorPlanId] = useState<
+    string | null | undefined
+  >(undefined);
   const [dayReservations, setDayReservations] = useState<Reservation[]>([]);
   const [occupiedTableIds, setOccupiedTableIds] = useState<Set<string>>(
     () => new Set(),
@@ -250,16 +262,54 @@ export function ReservationFloorMapPicker({
     Record<string, number>
   >({});
 
-  const [selectedMainTableId, setSelectedMainTableId] = useState<string | null>(
-    null,
-  );
+  const [selectedMainTableIdOverride, setSelectedMainTableId] = useState<
+    string | null | undefined
+  >(undefined);
+  const initialMainTableId = useMemo(() => {
+    const raw = String(initialTableId ?? "").trim();
+    if (!raw) return null;
+    const main = groupedTablesMapHandlers?.resolveMainTableId?.(raw) ?? raw;
+    return String(main).trim() || null;
+  }, [groupedTablesMapHandlers, initialTableId]);
+  const selectedMainTableId =
+    selectedMainTableIdOverride === undefined
+      ? initialMainTableId
+      : selectedMainTableIdOverride;
 
   const operationalFloorPlans = useMemo(
     () => floorPlans.filter((p) => p.active !== false),
     [floorPlans],
   );
-
-  const didAlignPlanRef = useRef(false);
+  const selectedFloorPlanId = useMemo(() => {
+    const pool =
+      operationalFloorPlans.length > 0 ? operationalFloorPlans : floorPlans;
+    if (
+      selectedFloorPlanIdOverride !== undefined &&
+      (selectedFloorPlanIdOverride === null ||
+        pool.some((plan) => plan.id === selectedFloorPlanIdOverride))
+    ) {
+      return selectedFloorPlanIdOverride;
+    }
+    const initialPlanId = String(initialFloorPlanId ?? "").trim();
+    if (initialPlanId && pool.some((plan) => plan.id === initialPlanId)) {
+      return initialPlanId;
+    }
+    const initialTable = initialMainTableId
+      ? tables.find((table) => String(table.id).trim() === initialMainTableId)
+      : null;
+    const tablePlanId = initialTable?.floorPlanId?.trim();
+    if (tablePlanId && pool.some((plan) => plan.id === tablePlanId)) {
+      return tablePlanId;
+    }
+    return pool.find((plan) => plan.isDefault === true)?.id ?? pool[0]?.id ?? null;
+  }, [
+    floorPlans,
+    initialFloorPlanId,
+    initialMainTableId,
+    operationalFloorPlans,
+    selectedFloorPlanIdOverride,
+    tables,
+  ]);
 
   const [livePreview, setLivePreview] = useState<
     | null
@@ -272,11 +322,6 @@ export function ReservationFloorMapPicker({
   >(null);
 
   useEffect(() => {
-    if (!open) setLivePreview(null);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
     const rid = restaurantId?.trim() ?? "";
     if (!rid || !isFirebaseConfigured || !authReady) return;
     let cancelled = false;
@@ -289,16 +334,6 @@ export function ReservationFloorMapPicker({
         if (cancelled) return;
         setFloorPlans(plans);
         setZonesList(zones);
-        const op = plans.filter((p) => p.active !== false);
-        const pool = op.length > 0 ? op : plans;
-        setSelectedFloorPlanId((prev) => {
-          if (prev && pool.some((p) => p.id === prev)) return prev;
-          return (
-            pool.find((p) => p.isDefault === true)?.id ??
-            pool[0]?.id ??
-            null
-          );
-        });
       } catch {
         if (!cancelled) {
           setFloorPlans([]);
@@ -309,61 +344,9 @@ export function ReservationFloorMapPicker({
     return () => {
       cancelled = true;
     };
-  }, [open, restaurantId, authReady]);
+  }, [authReady, restaurantId]);
 
   useEffect(() => {
-    if (!open) {
-      didAlignPlanRef.current = false;
-      return;
-    }
-    if (didAlignPlanRef.current) return;
-    if (floorPlans.length === 0) return;
-    const op = floorPlans.filter((p) => p.active !== false);
-    const pool = op.length > 0 ? op : floorPlans;
-    const initFp = String(initialFloorPlanId ?? "").trim();
-    if (initFp && pool.some((p) => p.id === initFp)) {
-      setSelectedFloorPlanId(initFp);
-      didAlignPlanRef.current = true;
-      return;
-    }
-    const raw = String(initialTableId ?? "").trim();
-    if (raw) {
-      const main =
-        groupedTablesMapHandlers?.resolveMainTableId?.(raw) ?? raw;
-      const t = tables.find(
-        (x) => String(x.id).trim() === String(main).trim(),
-      );
-      const fp = t?.floorPlanId?.trim();
-      if (fp && pool.some((p) => p.id === fp)) {
-        setSelectedFloorPlanId(fp);
-      }
-    }
-    didAlignPlanRef.current = true;
-  }, [
-    open,
-    floorPlans,
-    initialFloorPlanId,
-    initialTableId,
-    tables,
-    groupedTablesMapHandlers,
-  ]);
-
-  useEffect(() => {
-    if (!open) return;
-    const op = floorPlans.filter((p) => p.active !== false);
-    if (op.length === 0) return;
-    if (
-      !selectedFloorPlanId ||
-      !op.some((p) => p.id === selectedFloorPlanId)
-    ) {
-      setSelectedFloorPlanId(
-        op.find((p) => p.isDefault === true)?.id ?? op[0]?.id ?? null,
-      );
-    }
-  }, [open, floorPlans, selectedFloorPlanId]);
-
-  useEffect(() => {
-    if (!open) return;
     const rid = restaurantId?.trim() ?? "";
     const d = reservationDateYmd.trim();
     if (
@@ -372,22 +355,14 @@ export function ReservationFloorMapPicker({
       !authReady ||
       !user?.uid ||
       !isFirebaseConfigured
-    ) {
-      setDayReservations([]);
-      return;
-    }
+    ) return;
     const unsub = listenReservationsForDate(rid, d, setDayReservations, () =>
       setDayReservations([]),
     );
     return () => unsub();
-  }, [open, restaurantId, reservationDateYmd, authReady, user?.uid, isFirebaseConfigured]);
+  }, [restaurantId, reservationDateYmd, authReady, user?.uid]);
 
   useEffect(() => {
-    if (!open) {
-      setOccupiedTableIds(new Set());
-      setOccupancyStartMsByTable({});
-      return;
-    }
     const rid = restaurantId?.trim() ?? "";
     if (
       !rid ||
@@ -395,11 +370,7 @@ export function ReservationFloorMapPicker({
       !authReady ||
       !isFirebaseConfigured ||
       !isAuthReady()
-    ) {
-      setOccupiedTableIds(new Set());
-      setOccupancyStartMsByTable({});
-      return;
-    }
+    ) return;
     let cancelled = false;
     const q = query(collection(db, "orders"), where("restaurantId", "==", rid));
     const unsub = onSnapshot(
@@ -439,22 +410,7 @@ export function ReservationFloorMapPicker({
       cancelled = true;
       unsub();
     };
-  }, [open, restaurantId, user?.uid, authReady, isFirebaseConfigured]);
-
-  useEffect(() => {
-    if (!open) {
-      setSelectedMainTableId(null);
-      return;
-    }
-    const raw = String(initialTableId ?? "").trim();
-    if (!raw) {
-      setSelectedMainTableId(null);
-      return;
-    }
-    const main =
-      groupedTablesMapHandlers?.resolveMainTableId?.(raw) ?? raw;
-    setSelectedMainTableId(String(main).trim() || null);
-  }, [open, initialTableId, groupedTablesMapHandlers]);
+  }, [restaurantId, user?.uid, authReady]);
 
   const selectedFloorPlan = useMemo(() => {
     if (!selectedFloorPlanId) return null;
@@ -518,7 +474,7 @@ export function ReservationFloorMapPicker({
     if (!isToday) return 0;
     const now = new Date();
     return now.getHours() * 60 + now.getMinutes();
-  }, [reservationDateYmd, open]);
+  }, [reservationDateYmd]);
 
   const resolveMain = useMemo(
     () => groupedTablesMapHandlers?.resolveMainTableId ?? ((x: string) => x),

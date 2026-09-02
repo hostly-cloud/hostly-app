@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { TranslateFn } from "@/lib/i18n";
 import {
   BULK_SELECT_MIXED_VALUE,
@@ -26,6 +26,18 @@ export type ProductosBulkAssignCourseModalProps = {
 };
 
 export function ProductosBulkAssignCourseModal({
+  ...props
+}: ProductosBulkAssignCourseModalProps) {
+  if (!props.open) return null;
+  return (
+    <ProductosBulkAssignCourseModalContent
+      key={props.initialSelectValue}
+      {...props}
+    />
+  );
+}
+
+function ProductosBulkAssignCourseModalContent({
   open,
   count,
   saving,
@@ -34,11 +46,7 @@ export function ProductosBulkAssignCourseModal({
   onConfirm,
   t,
 }: ProductosBulkAssignCourseModalProps) {
-  const [courseValue, setCourseValue] = useState("");
-
-  useEffect(() => {
-    if (open) setCourseValue(initialSelectValue);
-  }, [open, initialSelectValue]);
+  const [courseValue, setCourseValue] = useState(initialSelectValue);
 
   if (!open) return null;
 

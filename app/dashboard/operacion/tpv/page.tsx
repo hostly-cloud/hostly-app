@@ -45,11 +45,11 @@ export default function OperacionTpvPage() {
   }, [restaurantIdTrimmed]);
 
   useEffect(() => {
-    const handler = (e: any) => {
+    const handler = (e: CustomEvent<string[]>) => {
       setTablesReadyToClose(new Set(e.detail ?? []));
     };
 
-    const clearHandler = (e: any) => {
+    const clearHandler = (e: CustomEvent<string>) => {
       const tableId = e.detail;
       setTablesReadyToClose((prev) => {
         const next = new Set(prev);
@@ -58,11 +58,11 @@ export default function OperacionTpvPage() {
       });
     };
 
-    window.addEventListener("tablesReadyToClose:update", handler);
-    window.addEventListener("tablesReadyToClose:clear", clearHandler);
+    window.addEventListener("tablesReadyToClose:update", handler as EventListener);
+    window.addEventListener("tablesReadyToClose:clear", clearHandler as EventListener);
     return () => {
-      window.removeEventListener("tablesReadyToClose:update", handler);
-      window.removeEventListener("tablesReadyToClose:clear", clearHandler);
+      window.removeEventListener("tablesReadyToClose:update", handler as EventListener);
+      window.removeEventListener("tablesReadyToClose:clear", clearHandler as EventListener);
     };
   }, []);
 

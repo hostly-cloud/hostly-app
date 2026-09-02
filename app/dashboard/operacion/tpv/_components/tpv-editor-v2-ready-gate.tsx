@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { loadTpvEditorV2OperationalMap } from "@/lib/tpv/load-editor-v2-operational-map";
 
 type TpvEditorV2ReadyGateProps = {
@@ -90,32 +90,44 @@ export function TpvEditorV2ReadyGate({
   children,
 }: TpvEditorV2ReadyGateProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const [status, setStatus] = useState<GateStatus>("loading");
+  const [gateState, setGateState] = useState<{
+    restaurantId: string;
+    status: GateStatus;
+  } | null>(null);
+  const rid = restaurantId?.trim() ?? "";
+  const status = rid && gateState?.restaurantId === rid
+    ? gateState.status
+    : "loading";
+  const setStatus = useCallback(
+    (nextStatus: GateStatus) => {
+      if (!rid) return;
+      setGateState({ restaurantId: rid, status: nextStatus });
+    },
+    [rid],
+  );
 
   useEffect(() => {
-    const rid = restaurantId?.trim() ?? "";
-    if (!rid) {
-      setStatus("loading");
-      return;
-    }
+    if (!rid) return;
 
     let cancelled = false;
-    setStatus("loading");
 
     void loadTpvEditorV2OperationalMap(rid)
       .then((operationalMap) => {
         if (cancelled) return;
-        setStatus(operationalMap?.document ? "mounting" : "missing");
+        setGateState({
+          restaurantId: rid,
+          status: operationalMap?.document ? "mounting" : "missing",
+        });
       })
       .catch(() => {
         if (cancelled) return;
-        setStatus("error");
+        setGateState({ restaurantId: rid, status: "error" });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [restaurantId]);
+  }, [rid]);
 
   useEffect(() => {
     if (status !== "mounting") return;
@@ -221,7 +233,7 @@ export function TpvEditorV2ReadyGate({
       window.clearTimeout(timeoutId);
       observer.disconnect();
     };
-  }, [status]);
+  }, [setStatus, status]);
 
   if (status === "loading") {
     return <LoadingV2MapState />;

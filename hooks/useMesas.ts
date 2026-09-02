@@ -6,17 +6,18 @@ import { db } from "@/lib/firebase/client";
 import type { Mesa } from "@/types/mesa";
 
 export const useMesas = (restaurantId?: string | null) => {
-  const [mesas, setMesas] = useState<Mesa[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [snapshot, setSnapshot] = useState<{
+    restaurantId: string;
+    mesas: Mesa[];
+  } | null>(null);
+  const rid = restaurantId?.trim() ?? "";
+  const mesas = rid && snapshot?.restaurantId === rid ? snapshot.mesas : [];
+  const loading = Boolean(rid && snapshot?.restaurantId !== rid);
 
   useEffect(() => {
-    if (!restaurantId) {
-      setMesas([]);
-      setLoading(false);
-      return;
-    }
+    if (!rid) return;
 
-    const q = query(collection(db, "mesas"), where("restaurantId", "==", restaurantId));
+    const q = query(collection(db, "mesas"), where("restaurantId", "==", rid));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map((docSnap) => ({
@@ -24,12 +25,11 @@ export const useMesas = (restaurantId?: string | null) => {
         ...(docSnap.data() as Omit<Mesa, "id">),
       }));
 
-      setMesas(data);
-      setLoading(false);
+      setSnapshot({ restaurantId: rid, mesas: data });
     });
 
     return () => unsubscribe();
-  }, [restaurantId]);
+  }, [rid]);
 
   return {
     mesas,

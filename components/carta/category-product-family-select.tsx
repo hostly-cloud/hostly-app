@@ -27,19 +27,23 @@ export function CategoryProductFamilySelect({
   disabled = false,
   className = defaultClass,
 }: CategoryProductFamilySelectProps) {
-  const [families, setFamilies] = useState<ProductFamilyDocument[]>([]);
+  const [snapshot, setSnapshot] = useState<{
+    restaurantId: string;
+    families: ProductFamilyDocument[];
+  } | null>(null);
   const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
+  const families = useMemo(
+    () => (rid && snapshot?.restaurantId === rid ? snapshot.families : []),
+    [rid, snapshot],
+  );
 
   useEffect(() => {
-    if (!rid) {
-      setFamilies([]);
-      return;
-    }
+    if (!rid) return;
     let defaultsEnsured = false;
     const unsub = listenProductFamilies(
       rid,
       (list) => {
-        setFamilies(list);
+        setSnapshot({ restaurantId: rid, families: list });
         if (!defaultsEnsured && list.length === 0) {
           defaultsEnsured = true;
           void ensureDefaultProductFamilies(rid).catch((e) =>

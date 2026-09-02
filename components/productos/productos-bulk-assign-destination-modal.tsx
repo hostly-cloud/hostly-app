@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { BulkCatalogKdsDestination } from "@/lib/firestore/central-catalog-write";
 import type { TranslateFn } from "@/lib/i18n";
 import {
@@ -28,6 +28,18 @@ export type ProductosBulkAssignDestinationModalProps = {
 };
 
 export function ProductosBulkAssignDestinationModal({
+  ...props
+}: ProductosBulkAssignDestinationModalProps) {
+  if (!props.open) return null;
+  return (
+    <ProductosBulkAssignDestinationModalContent
+      key={props.initialSelectValue}
+      {...props}
+    />
+  );
+}
+
+function ProductosBulkAssignDestinationModalContent({
   open,
   count,
   saving,
@@ -38,11 +50,7 @@ export function ProductosBulkAssignDestinationModal({
 }: ProductosBulkAssignDestinationModalProps) {
   const [destination, setDestination] = useState<
     BulkCatalogKdsDestination | typeof BULK_SELECT_MIXED_VALUE
-  >("kitchen");
-
-  useEffect(() => {
-    if (open) setDestination(initialSelectValue);
-  }, [open, initialSelectValue]);
+  >(initialSelectValue);
 
   if (!open) return null;
 
