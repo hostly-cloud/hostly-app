@@ -11,7 +11,10 @@ import {
   parseTipoVentaLoose,
 } from "@/lib/carta/product-sale-contract";
 import { getHostlyStorageBucket } from "@/lib/firebase/admin";
-import type { CatalogImageAccess } from "@/lib/productos/catalog-image-plan";
+import type {
+  CatalogImageAccess,
+  CatalogImageCapability,
+} from "@/lib/productos/catalog-image-plan";
 
 const AI_IMAGE_TIMEOUT_MS = 90_000;
 const MAX_GENERATED_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -93,14 +96,18 @@ function usageRecordBase(params: {
   access: CatalogImageAccess;
   status: CatalogImageUsageStatus;
   now: number;
+  operation?: "catalog_image_ai_single" | "catalog_image_ai_bulk";
+  capability?: CatalogImageCapability;
+  jobId?: string;
 }) {
   return {
     restaurantId: params.restaurantId,
     productId: params.productId,
     userId: params.userId,
     idempotencyKey: params.idempotencyKey,
-    operation: "catalog_image_ai_single",
-    capability: "catalog.image.ai.single",
+    operation: params.operation ?? "catalog_image_ai_single",
+    capability: params.capability ?? "catalog.image.ai.single",
+    ...(params.jobId ? { jobId: params.jobId } : {}),
     effectivePlan: params.access.effectivePlan,
     planSource: params.access.source,
     meteringMode: params.access.meteringMode,
@@ -500,6 +507,9 @@ export async function generateImportedProductImage(params: {
   idempotencyKey: string;
   access: CatalogImageAccess;
   description?: string;
+  usageOperation?: "catalog_image_ai_single" | "catalog_image_ai_bulk";
+  usageCapability?: CatalogImageCapability;
+  jobId?: string;
 }): Promise<GenerateImportedProductImageResult> {
   const restaurantId = assertSimpleId(params.restaurantId, "restaurantId");
   const productId = assertSimpleId(params.productId, "productId");
@@ -567,6 +577,9 @@ export async function generateImportedProductImage(params: {
             access: params.access,
             status: "skipped",
             now,
+            operation: params.usageOperation,
+            capability: params.usageCapability,
+            jobId: params.jobId,
           }),
           result: "skipped",
           failureReason: eligibility.reason,
@@ -589,6 +602,9 @@ export async function generateImportedProductImage(params: {
             access: params.access,
             status: "skipped",
             now,
+            operation: params.usageOperation,
+            capability: params.usageCapability,
+            jobId: params.jobId,
           }),
           result: "skipped",
           failureReason: "generation_in_progress",
@@ -620,6 +636,9 @@ export async function generateImportedProductImage(params: {
         access: params.access,
         status: "processing",
         now,
+        operation: params.usageOperation,
+        capability: params.usageCapability,
+        jobId: params.jobId,
       }),
     );
 

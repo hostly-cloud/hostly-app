@@ -42,6 +42,26 @@ export const HOSTLY_CATALOG_IMAGE_PLAN_POLICY: Readonly<
   ],
 };
 
+/**
+ * Configuración operativa y comercial centralizada para trabajos masivos.
+ * Los créditos y precios permanecen sin fijar hasta que exista facturación.
+ */
+export type HostlyCatalogImageBulkPolicy = {
+  maxConcurrentItemsPerJob: number;
+  maxAttemptsPerItem: number;
+  leaseDurationMs: number;
+  aiGenerationCreditsPerItem: number | null;
+  catalogSearchCreditsPerItem: number | null;
+};
+
+export const HOSTLY_CATALOG_IMAGE_BULK_POLICY: Readonly<HostlyCatalogImageBulkPolicy> = {
+  maxConcurrentItemsPerJob: 1,
+  maxAttemptsPerItem: 3,
+  leaseDurationMs: 2 * 60 * 1000,
+  aiGenerationCreditsPerItem: null,
+  catalogSearchCreditsPerItem: null,
+};
+
 export function hasCatalogImageCapability(
   access: CatalogImageAccess,
   capability: CatalogImageCapability,
