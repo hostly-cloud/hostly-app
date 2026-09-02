@@ -195,6 +195,15 @@ servidor en `restaurants/{restaurantId}/catalogImageUsage/{idempotencyKey}` con 
 producto, usuario, plan efectivo, proveedor, resultado, coste disponible y motivo de
 fallo. La colección no amplía el acceso del cliente ni cambia las reglas del catálogo.
 
+El editor individual opera únicamente sobre un `productId` ya persistido; un borrador
+sin guardar no se resuelve por nombre ni puede iniciar una operación con coste. La
+misma clasificación conservadora sirve al flujo individual y al masivo: platos
+genéricos usan IA, marcas y bebidas buscan catálogo real y los casos ambiguos requieren
+intervención manual. Una imagen IA aprobada puede regenerarse solo tras confirmación
+explícita, queda de nuevo pendiente de revisión y conserva la versión aprobada si la
+generación falla. Las imágenes manuales, de catálogo y legacy nunca se desbloquean con
+esa confirmación.
+
 ### H-019 - Cola masiva de imágenes persistente y acotada
 
 **Estado:** aceptada.

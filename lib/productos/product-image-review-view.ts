@@ -95,8 +95,14 @@ export function buildProductImageReviewView(
       : state.reviewStatus === "rejected"
         ? "Puedes regenerar una alternativa; la imagen rechazada no queda bloqueada."
         : state.reviewStatus === "approved"
-          ? "La imagen está aprobada y protegida frente a sustituciones automáticas."
-          : productImageGenerationReasonLabel(state.generationReason);
+          ? state.requiresApprovedImageReplacementConfirmation
+            ? "La imagen está aprobada. Solo se sustituirá si confirmas expresamente una regeneración."
+            : "La imagen está aprobada y protegida frente a sustituciones automáticas."
+          : state.recommendedAction === "catalog_search"
+            ? "Este producto necesita una imagen real de catálogo para no inventar marcas, etiquetas ni envases."
+            : state.recommendedAction === "manual_review"
+              ? "Hostly no puede elegir una fuente fiable. Sube una imagen manual o completa mejor los datos del producto."
+              : productImageGenerationReasonLabel(state.generationReason);
 
   return { sourceLabel, statusLabel, statusTone, actions, guidance };
 }

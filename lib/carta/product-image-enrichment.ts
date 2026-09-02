@@ -236,6 +236,23 @@ export function canAutomaticallyReplaceProductImage(
   return true;
 }
 
+/**
+ * Explicit regeneration may replace only an approved AI proposal. Manual,
+ * catalog and legacy images remain protected even when the client confirms.
+ */
+export function canExplicitlyReplaceApprovedAiProductImage(
+  state: ProductImageState,
+): boolean {
+  const hasImage = Boolean(state.imageUrl?.trim() || state.imagePath?.trim());
+  const metadata = state.imageEnrichment;
+  return Boolean(
+    hasImage &&
+      metadata?.source === "ai_generated" &&
+      metadata.reviewStatus === "approved" &&
+      metadata.locked === true,
+  );
+}
+
 export function approveProductImageEnrichment(
   current: ProductImageEnrichment,
   args: { reviewedAt: number; reviewedBy: string },

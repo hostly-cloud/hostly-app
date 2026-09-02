@@ -95,6 +95,7 @@ export type GenerateProductImageClientResult =
 export async function generateProductImageForReview(
   productId: string,
   description?: string,
+  options?: { confirmReplaceApprovedImage?: boolean },
 ): Promise<GenerateProductImageClientResult> {
   const idempotencyKey = globalThis.crypto?.randomUUID?.() ??
     `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -107,6 +108,9 @@ export async function generateProductImageForReview(
         productId,
         idempotencyKey,
         confirmGeneration: true,
+        ...(options?.confirmReplaceApprovedImage
+          ? { confirmReplaceApprovedImage: true }
+          : {}),
         ...(description?.trim() ? { description: description.trim() } : {}),
       }),
     },

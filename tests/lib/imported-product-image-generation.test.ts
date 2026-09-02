@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Firestore } from "firebase-admin/firestore";
 import {
+  approveProductImageEnrichment,
   buildManualProductImageEnrichment,
   buildPendingAutomaticProductImageEnrichment,
 } from "@/lib/carta/product-image-enrichment";
@@ -244,6 +245,53 @@ test("a pending automatic image can be regenerated before approval", () => {
     }),
   );
   assert.equal(result.eligible, true);
+});
+
+test("an approved AI image requires an explicit replacement confirmation", () => {
+  const approvedAi = approveProductImageEnrichment(
+    buildPendingAutomaticProductImageEnrichment({ source: "ai_generated" }),
+    { reviewedAt: 123, reviewedBy: "owner-1" },
+  );
+  const product = importedDish({
+    imageUrl: "https://example.test/approved-ai.webp",
+    imagePath: "restaurants/r1/products/p1/ai/approved-ai.webp",
+    imageEnrichment: approvedAi,
+  });
+
+  assert.deepEqual(evaluateImportedProductImageEligibility(product), {
+    eligible: false,
+    reason: "protected_existing_image",
+  });
+  assert.equal(
+    evaluateImportedProductImageEligibility(product, undefined, {
+      allowApprovedAiReplacement: true,
+    }).eligible,
+    true,
+  );
+});
+
+test("replacement confirmation never unlocks manual or catalog images", () => {
+  const options = { allowApprovedAiReplacement: true };
+  const manual = importedDish({
+    imageUrl: "https://example.test/manual.webp",
+    imageEnrichment: buildManualProductImageEnrichment(),
+  });
+  const catalog = importedDish({
+    imageUrl: "https://example.test/catalog.webp",
+    imageEnrichment: approveProductImageEnrichment(
+      buildPendingAutomaticProductImageEnrichment({ source: "catalog_exact" }),
+      { reviewedAt: 123, reviewedBy: "owner-1" },
+    ),
+  });
+
+  assert.deepEqual(
+    evaluateImportedProductImageEligibility(manual, undefined, options),
+    { eligible: false, reason: "protected_existing_image" },
+  );
+  assert.deepEqual(
+    evaluateImportedProductImageEligibility(catalog, undefined, options),
+    { eligible: false, reason: "protected_existing_image" },
+  );
 });
 
 test("invalid names are rejected before any provider call", () => {

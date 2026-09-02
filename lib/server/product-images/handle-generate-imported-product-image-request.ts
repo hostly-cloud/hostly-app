@@ -27,6 +27,7 @@ type Generate = (params: {
   idempotencyKey: string;
   access: CatalogImageAccess;
   description?: string;
+  allowApprovedAiReplacement?: boolean;
 }) => Promise<GenerateImportedProductImageResult>;
 
 type ResolveAccess = (params: {
@@ -80,6 +81,7 @@ export async function handleGenerateImportedProductImageRequest(
     confirmGeneration?: unknown;
     restaurantId?: unknown;
     description?: unknown;
+    confirmReplaceApprovedImage?: unknown;
   } | null;
 
   if (!body || typeof body !== "object") {
@@ -108,6 +110,12 @@ export async function handleGenerateImportedProductImageRequest(
   if (body.description != null && typeof body.description !== "string") {
     return jsonError(400, "INVALID_PRODUCT_DESCRIPTION");
   }
+  if (
+    body.confirmReplaceApprovedImage != null &&
+    typeof body.confirmReplaceApprovedImage !== "boolean"
+  ) {
+    return jsonError(400, "INVALID_IMAGE_REPLACEMENT_CONFIRMATION");
+  }
   const description =
     typeof body.description === "string"
       ? body.description.replace(/\s+/g, " ").trim().slice(0, 500)
@@ -128,6 +136,9 @@ export async function handleGenerateImportedProductImageRequest(
     userId: authCtx.uid,
     idempotencyKey,
     access,
+    ...(body.confirmReplaceApprovedImage === true
+      ? { allowApprovedAiReplacement: true }
+      : {}),
     ...(description ? { description } : {}),
   });
 

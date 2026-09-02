@@ -4,6 +4,7 @@ import { generateImage, NoImageGeneratedError } from "ai";
 import {
   buildPendingAutomaticProductImageEnrichment,
   canAutomaticallyReplaceProductImage,
+  canExplicitlyReplaceApprovedAiProductImage,
   readProductImageEnrichment,
 } from "@/lib/carta/product-image-enrichment";
 import {
@@ -15,6 +16,9 @@ import type {
   CatalogImageAccess,
   CatalogImageCapability,
 } from "@/lib/productos/catalog-image-plan";
+import { looksLikeBrandedOrBeverageProduct } from "@/lib/server/product-images/product-image-content-strategy";
+
+export { looksLikeBrandedOrBeverageProduct } from "@/lib/server/product-images/product-image-content-strategy";
 
 const AI_IMAGE_TIMEOUT_MS = 90_000;
 const MAX_GENERATED_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -99,6 +103,7 @@ function usageRecordBase(params: {
   operation?: "catalog_image_ai_single" | "catalog_image_ai_bulk";
   capability?: CatalogImageCapability;
   jobId?: string;
+  approvedImageReplacementConfirmed?: boolean;
 }) {
   return {
     restaurantId: params.restaurantId,
@@ -108,6 +113,9 @@ function usageRecordBase(params: {
     operation: params.operation ?? "catalog_image_ai_single",
     capability: params.capability ?? "catalog.image.ai.single",
     ...(params.jobId ? { jobId: params.jobId } : {}),
+    ...(params.approvedImageReplacementConfirmed
+      ? { approvedImageReplacementConfirmed: true }
+      : {}),
     effectivePlan: params.access.effectivePlan,
     planSource: params.access.source,
     meteringMode: params.access.meteringMode,
@@ -130,30 +138,6 @@ function normalizeDescription(value: unknown): string | undefined {
     .replace(/\s+/g, " ")
     .trim();
   return normalized ? normalized.slice(0, 500) : undefined;
-}
-
-function normalizeMatchText(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/**
- * Esta primera fase no genera envases, etiquetas ni productos comerciales.
- * Incluso si un ítem llega mal clasificado como plato, estas señales lo bloquean.
- */
-export function looksLikeBrandedOrBeverageProduct(
-  name: string,
-  categoryName: string,
-): boolean {
-  const text = normalizeMatchText(`${categoryName} ${name}`);
-  return /\b(coca cola|fanta|sprite|pepsi|heineken|mahou|estrella damm|san miguel|corona|red bull|monster|aquarius|nestea|schweppes|tonicas?|cervezas?|beers?|vinos?|wines?|rioja|ribera del duero|cavas?|champagnes?|proseccos?|whisk(?:y|ey)s?|vodkas?|rones?|rums?|gins?|ginebras?|vermuts?|vermouths?|licores?|refrescos?|sodas?|aguas? minerales?|zumos?|juices?|cafes?|coffees?|cocktails?|cocteles?)\b/.test(
-    text,
-  );
 }
 
 function readImageState(data: Record<string, unknown>) {
@@ -185,11 +169,13 @@ function readGenerationLock(value: unknown): ProductImageGenerationLock | null {
  * Generación deliberadamente conservadora:
  * - solo `tipoVenta: plato`;
  * - excluye bebidas/marcas aunque hayan sido clasificadas incorrectamente;
- * - nunca sustituye imágenes manuales, aprobadas o legacy protegidas.
+ * - nunca sustituye imágenes manuales, de catálogo o legacy protegidas;
+ * - una imagen IA aprobada solo se sustituye con confirmación explícita.
  */
 export function evaluateImportedProductImageEligibility(
   data: Record<string, unknown>,
   descriptionOverride?: string,
+  options?: { allowApprovedAiReplacement?: boolean },
 ): ProductImageGenerationEligibility {
   const name = readString(data, "name") ?? "";
   if (name.length < 3) {
@@ -208,7 +194,12 @@ export function evaluateImportedProductImageEligibility(
     return { eligible: false, reason: "branded_or_beverage" };
   }
 
-  if (!canAutomaticallyReplaceProductImage(readImageState(data))) {
+  const imageState = readImageState(data);
+  const canReplace =
+    canAutomaticallyReplaceProductImage(imageState) ||
+    (options?.allowApprovedAiReplacement === true &&
+      canExplicitlyReplaceApprovedAiProductImage(imageState));
+  if (!canReplace) {
     return { eligible: false, reason: "protected_existing_image" };
   }
 
@@ -510,6 +501,7 @@ export async function generateImportedProductImage(params: {
   usageOperation?: "catalog_image_ai_single" | "catalog_image_ai_bulk";
   usageCapability?: CatalogImageCapability;
   jobId?: string;
+  allowApprovedAiReplacement?: boolean;
 }): Promise<GenerateImportedProductImageResult> {
   const restaurantId = assertSimpleId(params.restaurantId, "restaurantId");
   const productId = assertSimpleId(params.productId, "productId");
@@ -564,6 +556,7 @@ export async function generateImportedProductImage(params: {
     const eligibility = evaluateImportedProductImageEligibility(
       data,
       params.description,
+      { allowApprovedAiReplacement: params.allowApprovedAiReplacement },
     );
     if (!eligibility.eligible) {
       transaction.create(
@@ -580,6 +573,8 @@ export async function generateImportedProductImage(params: {
             operation: params.usageOperation,
             capability: params.usageCapability,
             jobId: params.jobId,
+            approvedImageReplacementConfirmed:
+              params.allowApprovedAiReplacement,
           }),
           result: "skipped",
           failureReason: eligibility.reason,
@@ -605,6 +600,8 @@ export async function generateImportedProductImage(params: {
             operation: params.usageOperation,
             capability: params.usageCapability,
             jobId: params.jobId,
+            approvedImageReplacementConfirmed:
+              params.allowApprovedAiReplacement,
           }),
           result: "skipped",
           failureReason: "generation_in_progress",
@@ -639,6 +636,8 @@ export async function generateImportedProductImage(params: {
         operation: params.usageOperation,
         capability: params.usageCapability,
         jobId: params.jobId,
+        approvedImageReplacementConfirmed:
+          params.allowApprovedAiReplacement,
       }),
     );
 
@@ -719,7 +718,11 @@ export async function generateImportedProductImage(params: {
         };
       }
 
-      const eligibility = evaluateImportedProductImageEligibility(data);
+      const eligibility = evaluateImportedProductImageEligibility(
+        data,
+        undefined,
+        { allowApprovedAiReplacement: params.allowApprovedAiReplacement },
+      );
       if (!eligibility.eligible) {
         const now = Date.now();
         transaction.update(productRef, {

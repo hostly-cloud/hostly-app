@@ -7,7 +7,6 @@ import {
   fetchProductCommercialIdentity,
   saveProductCommercialIdentity,
 } from "@/lib/productos/product-commercial-identity-api";
-import { fetchProductImageReviewState } from "@/lib/productos/product-image-review-api";
 
 function identityKey(values: {
   brand: string;
@@ -29,13 +28,11 @@ function identityKey(values: {
 
 export function ProductCommercialIdentityPanel({
   productId,
-  productName,
   disabled = false,
   inputClassName,
   onExactImageAttached,
 }: {
   productId?: string | null;
-  productName: string;
   disabled?: boolean;
   inputClassName: string;
   onExactImageAttached?: (imageUrl: string) => void;
@@ -83,8 +80,7 @@ export function ProductCommercialIdentityPanel({
 
   const load = useCallback(async () => {
     const explicitId = productId?.trim() || "";
-    const name = productName.trim();
-    if (!explicitId && !name) {
+    if (!explicitId) {
       clear();
       setError(null);
       return;
@@ -93,22 +89,7 @@ export function ProductCommercialIdentityPanel({
     setError(null);
     setSaved(false);
     try {
-      let id = explicitId;
-      if (!id) {
-        const { state } = await fetchProductImageReviewState(name);
-        if (state.resolution === "ambiguous") {
-          throw new Error(
-            "Hay varios productos con este nombre. Guarda un nombre único antes de editar su identidad.",
-          );
-        }
-        if (state.resolution !== "resolved") {
-          clear();
-          return;
-        }
-        id = state.productId;
-      }
-
-      const identity = await fetchProductCommercialIdentity(id);
+      const identity = await fetchProductCommercialIdentity(explicitId);
       setResolvedProductId(identity.productId);
       setBrand(identity.brand);
       setQuantity(identity.quantity);
@@ -128,7 +109,7 @@ export function ProductCommercialIdentityPanel({
     } finally {
       setLoading(false);
     }
-  }, [clear, productId, productName]);
+  }, [clear, productId]);
 
   useEffect(() => {
     void load();

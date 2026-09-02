@@ -56,11 +56,14 @@ function applyAccess(
   access: CatalogImageAccess,
 ): ProductImageReviewResolution {
   if (state.resolution !== "resolved") return state;
+  const canGenerate =
+    state.canGenerate &&
+    hasCatalogImageCapability(access, "catalog.image.ai.single");
   return {
     ...state,
-    canGenerate:
-      state.canGenerate &&
-      hasCatalogImageCapability(access, "catalog.image.ai.single"),
+    canGenerate,
+    requiresApprovedImageReplacementConfirmation:
+      canGenerate && state.requiresApprovedImageReplacementConfirmation,
     canSearchCatalog:
       state.canSearchCatalog &&
       hasCatalogImageCapability(access, "catalog.image.catalogSearch"),
