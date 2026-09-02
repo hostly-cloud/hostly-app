@@ -347,6 +347,30 @@ activos sin progreso se reintentan durante la retención del mensaje. Firestore 
 siendo la fuente de verdad y la reentrega nunca relaja el aislamiento por restaurante,
 los permisos, la capacidad Ultra ni las claves idempotentes por producto.
 
+### H-024 - Controles masivos serializados y recuperables
+
+**Estado:** aceptada.
+
+Pausar, reanudar, reintentar fallos y cancelar un trabajo de imágenes se decide con
+una transacción sobre el documento del trabajo. Los controles que reescriben varios
+elementos (`retry_failed` y `cancel`) levantan primero una barrera server-only llamada
+`controlOperation`, dejan el trabajo en pausa y conservan el número de elementos que
+debe reflejarse en los contadores. Mientras exista esa barrera ningún worker puede
+adquirir un producto nuevo ni otro tipo de control puede adelantar la operación.
+
+Los cambios de elementos se ejecutan después en lotes y una segunda transacción aplica
+los contadores sobre la versión más reciente del trabajo, incrementando
+`queueRevision` solamente una vez cuando el reintento queda listo. Repetir el mismo
+control adopta la barrera existente: es seguro ante doble pulsación y permite terminar
+una operación interrumpida entre los lotes y la actualización final. Cancelar o
+reintentar mientras un elemento ya se procesa devuelve conflicto y conserva el lease;
+no se sobrescribe progreso, no se reabre un fallo dos veces y una cancelación no puede
+convertirse después en completada por una escritura antigua.
+
+`controlOperation` nunca se acepta desde el cliente ni se expone como autoridad. Vive
+dentro del trabajo aislado por `restaurantId`, permanece inaccesible por Firestore
+Rules y no modifica los controles de plan, permisos, créditos o revisión humana.
+
 ---
 
 ## Decisiones pendientes de cierre

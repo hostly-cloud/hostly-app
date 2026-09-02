@@ -712,6 +712,263 @@ test("partial failures persist, can be retried, and never publish automatically"
   assert.equal(state.job.counters.needsReview, 2);
 });
 
+test("concurrent failed retries reset counters and queue revision only once", async () => {
+  const { db } = memoryFirestore({
+    "restaurants/restaurant-a/products/dish-1": dish("Croquetas"),
+  });
+  const created = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-retry-race-1",
+    access: ULTRA_ACCESS,
+  });
+  await processNextCatalogImageBulkItem({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+    userId: "owner-a",
+    access: ULTRA_ACCESS,
+    generate: async () => {
+      throw new Error("provider failed");
+    },
+  });
+
+  const before = await readCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+  });
+  await Promise.all([
+    controlCatalogImageBulkJob({
+      db,
+      restaurantId: "restaurant-a",
+      jobId: created.jobId,
+      action: "retry_failed",
+    }),
+    controlCatalogImageBulkJob({
+      db,
+      restaurantId: "restaurant-a",
+      jobId: created.jobId,
+      action: "retry_failed",
+    }),
+  ]);
+
+  const state = await readCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+  });
+  assert.equal(state.job.status, "queued");
+  assert.equal(state.job.queueRevision, before.job.queueRevision + 1);
+  assert.equal(state.job.counters.pending, 1);
+  assert.equal(state.job.counters.failed, 0);
+  assert.equal(state.items[0].status, "pending");
+});
+
+test("a retry resumes safely after item writes completed but counters did not", async () => {
+  const { db, store } = memoryFirestore({
+    "restaurants/restaurant-a/products/dish-1": dish("Croquetas"),
+  });
+  const created = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-retry-recovery-1",
+    access: ULTRA_ACCESS,
+  });
+  const jobPath = `restaurants/restaurant-a/catalogImageJobs/${created.jobId}`;
+  const itemPath = `${jobPath}/items/dish-1`;
+  const job = store.get(jobPath);
+  const item = store.get(itemPath);
+  assert.ok(job);
+  assert.ok(item);
+  store.set(jobPath, {
+    ...job,
+    status: "paused",
+    counters: { ...created.counters, pending: 0, failed: 1 },
+    controlOperation: {
+      action: "retry_failed",
+      itemCount: 1,
+      startedAt: Date.now(),
+    },
+  });
+  store.set(itemPath, { ...item, status: "pending", failureReason: undefined });
+
+  const recovered = await controlCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+    action: "retry_failed",
+  });
+
+  assert.equal(recovered.status, "queued");
+  assert.equal(recovered.queueRevision, created.queueRevision + 1);
+  assert.equal(recovered.counters.pending, 1);
+  assert.equal(recovered.counters.failed, 0);
+});
+
+test("concurrent cancellation is idempotent and can finish an interrupted control", async () => {
+  const { db, store } = memoryFirestore({
+    "restaurants/restaurant-a/products/dish-1": dish("Croquetas"),
+    "restaurants/restaurant-a/products/dish-2": dish("Pasta fresca"),
+  });
+  const created = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-cancel-race-1",
+    access: ULTRA_ACCESS,
+  });
+  await Promise.all([
+    controlCatalogImageBulkJob({
+      db,
+      restaurantId: "restaurant-a",
+      jobId: created.jobId,
+      action: "cancel",
+    }),
+    controlCatalogImageBulkJob({
+      db,
+      restaurantId: "restaurant-a",
+      jobId: created.jobId,
+      action: "cancel",
+    }),
+  ]);
+  let state = await readCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+  });
+  assert.equal(state.job.status, "cancelled");
+  assert.equal(state.job.counters.pending, 0);
+  assert.equal(state.job.counters.cancelled, 2);
+  assert.deepEqual(state.items.map((item) => item.status), ["cancelled", "cancelled"]);
+
+  const recoveryCreated = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-cancel-recovery-1",
+    access: ULTRA_ACCESS,
+  });
+  const jobPath = `restaurants/restaurant-a/catalogImageJobs/${recoveryCreated.jobId}`;
+  const job = store.get(jobPath);
+  assert.ok(job);
+  store.set(jobPath, {
+    ...job,
+    status: "paused",
+    controlOperation: {
+      action: "cancel",
+      itemCount: 2,
+      startedAt: Date.now(),
+    },
+  });
+  for (const productId of ["dish-1", "dish-2"]) {
+    const itemPath = `${jobPath}/items/${productId}`;
+    const item = store.get(itemPath);
+    assert.ok(item);
+    store.set(itemPath, { ...item, status: "cancelled" });
+  }
+  const recovered = await controlCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: recoveryCreated.jobId,
+    action: "cancel",
+  });
+  assert.equal(recovered.status, "cancelled");
+  assert.equal(recovered.counters.pending, 0);
+  assert.equal(recovered.counters.cancelled, 2);
+
+  state = await readCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: recoveryCreated.jobId,
+  });
+  assert.deepEqual(state.items.map((item) => item.status), ["cancelled", "cancelled"]);
+});
+
+test("cancel and retry controls cannot overtake an item already processing", async () => {
+  const { db } = memoryFirestore({
+    "restaurants/restaurant-a/products/dish-1": dish("Croquetas"),
+    "restaurants/restaurant-a/products/dish-2": dish("Pasta fresca"),
+  });
+  const created = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-processing-race-1",
+    access: ULTRA_ACCESS,
+  });
+  await processNextCatalogImageBulkItem({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+    userId: "owner-a",
+    access: ULTRA_ACCESS,
+    generate: async () => {
+      throw new Error("first item failed");
+    },
+  });
+
+  let releaseGeneration = () => {};
+  let markProcessing = () => {};
+  const processingStarted = new Promise<void>((resolve) => {
+    markProcessing = resolve;
+  });
+  const generationBlocked = new Promise<void>((resolve) => {
+    releaseGeneration = resolve;
+  });
+  const processing = processNextCatalogImageBulkItem({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+    userId: "owner-a",
+    access: ULTRA_ACCESS,
+    generate: async (params) => {
+      markProcessing();
+      await generationBlocked;
+      return {
+        outcome: "generated",
+        productId: params.productId,
+        imageUrl: "https://example.test/second.webp",
+        imagePath: `restaurants/restaurant-a/products/${params.productId}/ai/second.webp`,
+        model: "test-model",
+      };
+    },
+  });
+  await processingStarted;
+
+  for (const action of ["cancel", "retry_failed"] as const) {
+    await assert.rejects(
+      controlCatalogImageBulkJob({
+        db,
+        restaurantId: "restaurant-a",
+        jobId: created.jobId,
+        action,
+      }),
+      (error: unknown) =>
+        Boolean(
+          error &&
+            typeof error === "object" &&
+            "code" in error &&
+            error.code === "CATALOG_IMAGE_BULK_ITEM_PROCESSING",
+        ),
+    );
+  }
+
+  releaseGeneration();
+  await processing;
+  const state = await readCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+  });
+  assert.equal(state.job.status, "completed");
+  assert.equal(state.job.counters.processing, 0);
+  assert.equal(state.job.counters.failed, 1);
+  assert.equal(state.job.counters.needsReview, 1);
+});
+
 test("catalog search results are recorded as reviewable usage, not attached blindly", async () => {
   const { db, store } = memoryFirestore({
     "restaurants/restaurant-a/products/brand-1": {

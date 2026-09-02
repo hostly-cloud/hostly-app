@@ -67,6 +67,12 @@ type StoredJobLease = {
   expiresAt: number;
 };
 
+type StoredJobControl = {
+  action: "retry_failed" | "cancel";
+  itemCount: number;
+  startedAt: number;
+};
+
 export class CatalogImageBulkError extends Error {
   readonly code: string;
   readonly httpStatus: number;
@@ -852,6 +858,23 @@ function readLease(value: unknown): StoredJobLease | null {
     : null;
 }
 
+function readJobControl(value: unknown): StoredJobControl | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const action = raw.action;
+  const rawItemCount = readFiniteNumber(raw.itemCount, -1);
+  const itemCount = Math.floor(rawItemCount);
+  const startedAt = readFiniteNumber(raw.startedAt, -1);
+  if (
+    (action !== "retry_failed" && action !== "cancel") ||
+    rawItemCount < 0 ||
+    startedAt < 0
+  ) {
+    return null;
+  }
+  return { action, itemCount, startedAt };
+}
+
 type ClaimedItem = {
   requestId: string;
   productId: string;
@@ -1258,6 +1281,20 @@ export async function processNextCatalogImageBulkItem(params: {
   return { processed: true, job: current.job };
 }
 
+async function readEligibleItemsWithStatus(params: {
+  collection: FirebaseFirestore.CollectionReference;
+  status: CatalogImageBulkItemStatus;
+  maxAttemptsExclusive?: number;
+}): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
+  const snapshot = await params.collection
+    .where("status", "==", params.status)
+    .get();
+  return snapshot.docs.filter((doc) => {
+    if (params.maxAttemptsExclusive == null) return true;
+    return readFiniteNumber(doc.get("attempts")) < params.maxAttemptsExclusive;
+  });
+}
+
 async function updateItemsWithStatus(params: {
   db: Firestore;
   collection: FirebaseFirestore.CollectionReference;
@@ -1265,12 +1302,10 @@ async function updateItemsWithStatus(params: {
   toStatus: CatalogImageBulkItemStatus;
   maxAttemptsExclusive?: number;
 }) {
-  const snapshot = await params.collection
-    .where("status", "==", params.fromStatus)
-    .get();
-  const eligible = snapshot.docs.filter((doc) => {
-    if (params.maxAttemptsExclusive == null) return true;
-    return readFiniteNumber(doc.get("attempts")) < params.maxAttemptsExclusive;
+  const eligible = await readEligibleItemsWithStatus({
+    collection: params.collection,
+    status: params.fromStatus,
+    maxAttemptsExclusive: params.maxAttemptsExclusive,
   });
   for (let offset = 0; offset < eligible.length; offset += WRITE_BATCH_SIZE) {
     const batch = params.db.batch();
@@ -1295,32 +1330,86 @@ export async function controlCatalogImageBulkJob(params: {
   const restaurantId = assertSimpleId(params.restaurantId, "restaurantId");
   const jobId = assertIdempotencyKey(params.jobId);
   const ref = jobRef(params.db, restaurantId, jobId);
-  const snapshot = await ref.get();
-  if (!snapshot.exists) {
-    throw new CatalogImageBulkError(
+  const jobNotFound = () =>
+    new CatalogImageBulkError(
       "CATALOG_IMAGE_BULK_JOB_NOT_FOUND",
       "Trabajo masivo no encontrado",
       404,
     );
-  }
-  const current = deserializeJob(jobId, snapshot.data() as Record<string, unknown>);
-  const now = Date.now();
+  const controlInProgress = () =>
+    new CatalogImageBulkError(
+      "CATALOG_IMAGE_BULK_CONTROL_IN_PROGRESS",
+      "Hay otro control del trabajo en curso. Espera unos segundos y reintenta.",
+      409,
+    );
+  const itemProcessing = () =>
+    new CatalogImageBulkError(
+      "CATALOG_IMAGE_BULK_ITEM_PROCESSING",
+      "Pausa y espera a que termine el elemento actual antes de continuar",
+      409,
+    );
 
-  if (params.action === "pause") {
-    if (current.status === "queued" || current.status === "running") {
-      await ref.update({ status: "paused", updatedAt: now });
-    }
-  } else if (params.action === "resume") {
-    if (current.status === "paused") {
-      await ref.update({
-        status: "queued",
-        queueRevision: current.queueRevision + 1,
-        updatedAt: now,
-      });
-    }
+  if (params.action === "pause" || params.action === "resume") {
+    await params.db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) throw jobNotFound();
+      const data = snapshot.data() as Record<string, unknown>;
+      if (readJobControl(data.controlOperation)) throw controlInProgress();
+      const current = deserializeJob(jobId, data);
+      if (
+        params.action === "pause" &&
+        (current.status === "queued" || current.status === "running")
+      ) {
+        transaction.update(ref, { status: "paused", updatedAt: Date.now() });
+      } else if (params.action === "resume" && current.status === "paused") {
+        transaction.update(ref, {
+          status: "queued",
+          queueRevision: readQueueRevision(data.queueRevision) + 1,
+          updatedAt: Date.now(),
+        });
+      }
+    });
   } else if (params.action === "retry_failed") {
-    if (current.counters.failed > 0 && current.status !== "cancelled") {
-      const reset = await updateItemsWithStatus({
+    const operation = await params.db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) throw jobNotFound();
+      const data = snapshot.data() as Record<string, unknown>;
+      const existing = readJobControl(data.controlOperation);
+      if (existing) {
+        if (existing.action !== "retry_failed") throw controlInProgress();
+        return existing;
+      }
+      const current = deserializeJob(jobId, data);
+      if (
+        current.status === "cancelled" ||
+        current.counters.failed === 0
+      ) {
+        return null;
+      }
+      if (current.counters.processing > 0) throw itemProcessing();
+      const failedSnapshot = await transaction.get(
+        ref.collection(JOB_ITEMS_COLLECTION).where("status", "==", "failed"),
+      );
+      const eligibleCount = failedSnapshot.docs.filter(
+        (doc) =>
+          readFiniteNumber(doc.get("attempts")) <
+          HOSTLY_CATALOG_IMAGE_BULK_POLICY.maxAttemptsPerItem,
+      ).length;
+      if (eligibleCount === 0) return null;
+      const next: StoredJobControl = {
+        action: "retry_failed",
+        itemCount: eligibleCount,
+        startedAt: Date.now(),
+      };
+      transaction.update(ref, {
+        status: "paused",
+        controlOperation: next,
+        updatedAt: next.startedAt,
+      });
+      return next;
+    });
+    if (operation) {
+      await updateItemsWithStatus({
         db: params.db,
         collection: ref.collection(JOB_ITEMS_COLLECTION),
         fromStatus: "failed",
@@ -1328,47 +1417,92 @@ export async function controlCatalogImageBulkJob(params: {
         maxAttemptsExclusive:
           HOSTLY_CATALOG_IMAGE_BULK_POLICY.maxAttemptsPerItem,
       });
-      await ref.update({
-        status: "queued",
-        queueRevision: current.queueRevision + (reset > 0 ? 1 : 0),
-        counters: {
-          ...current.counters,
-          pending: current.counters.pending + reset,
-          failed: Math.max(0, current.counters.failed - reset),
-        },
-        failureReason: FieldValue.delete(),
-        completedAt: FieldValue.delete(),
-        updatedAt: now,
+      await params.db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists) throw jobNotFound();
+        const data = snapshot.data() as Record<string, unknown>;
+        const active = readJobControl(data.controlOperation);
+        if (!active) return;
+        if (active.action !== "retry_failed") throw controlInProgress();
+        const counters = readCounters(data.counters);
+        if (counters.processing > 0) throw itemProcessing();
+        transaction.update(ref, {
+          status: "queued",
+          queueRevision: readQueueRevision(data.queueRevision) + 1,
+          counters: {
+            ...counters,
+            pending: counters.pending + active.itemCount,
+            failed: Math.max(0, counters.failed - active.itemCount),
+          },
+          controlOperation: FieldValue.delete(),
+          failureReason: FieldValue.delete(),
+          completedAt: FieldValue.delete(),
+          updatedAt: Date.now(),
+        });
       });
     }
-  } else if (params.action === "cancel") {
-    if (current.status !== "completed" && current.status !== "cancelled") {
-      if (current.counters.processing > 0) {
-        throw new CatalogImageBulkError(
-          "CATALOG_IMAGE_BULK_ITEM_PROCESSING",
-          "Pausa y espera a que termine el elemento actual antes de cancelar",
-          409,
-        );
+  } else {
+    const operation = await params.db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) throw jobNotFound();
+      const data = snapshot.data() as Record<string, unknown>;
+      const existing = readJobControl(data.controlOperation);
+      if (existing) {
+        if (existing.action !== "cancel") throw controlInProgress();
+        return existing;
       }
-      const cancelled = await updateItemsWithStatus({
+      const current = deserializeJob(jobId, data);
+      if (current.status === "completed" || current.status === "cancelled") {
+        return null;
+      }
+      if (current.counters.processing > 0) throw itemProcessing();
+      const next: StoredJobControl = {
+        action: "cancel",
+        itemCount: current.counters.pending,
+        startedAt: Date.now(),
+      };
+      transaction.update(ref, {
+        status: "paused",
+        controlOperation: next,
+        updatedAt: next.startedAt,
+      });
+      return next;
+    });
+    if (operation) {
+      await updateItemsWithStatus({
         db: params.db,
         collection: ref.collection(JOB_ITEMS_COLLECTION),
         fromStatus: "pending",
         toStatus: "cancelled",
       });
-      await ref.update({
-        status: "cancelled",
-        counters: {
-          ...current.counters,
-          pending: Math.max(0, current.counters.pending - cancelled),
-          cancelled: current.counters.cancelled + cancelled,
-        },
-        updatedAt: now,
-        completedAt: now,
+      await params.db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists) throw jobNotFound();
+        const data = snapshot.data() as Record<string, unknown>;
+        const active = readJobControl(data.controlOperation);
+        if (!active) return;
+        if (active.action !== "cancel") throw controlInProgress();
+        const counters = readCounters(data.counters);
+        if (counters.processing > 0) throw itemProcessing();
+        const now = Date.now();
+        transaction.update(ref, {
+          status: "cancelled",
+          counters: {
+            ...counters,
+            pending: Math.max(0, counters.pending - active.itemCount),
+            cancelled: counters.cancelled + active.itemCount,
+          },
+          controlOperation: FieldValue.delete(),
+          activeProductId: FieldValue.delete(),
+          processingLease: FieldValue.delete(),
+          updatedAt: now,
+          completedAt: now,
+        });
       });
     }
   }
 
   const updated = await ref.get();
+  if (!updated.exists) throw jobNotFound();
   return deserializeJob(jobId, updated.data() as Record<string, unknown>);
 }
