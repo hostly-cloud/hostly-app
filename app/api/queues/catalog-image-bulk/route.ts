@@ -1,14 +1,14 @@
 import { handleCallback } from "@vercel/queue";
 import {
   catalogImageBulkQueueRetryDecision,
-  processCatalogImageBulkQueueMessage,
 } from "@/lib/server/product-images/catalog-image-bulk-queue";
+import { handleCatalogImageBulkQueueDelivery } from "@/lib/server/product-images/catalog-image-bulk-telemetry";
 
 export const maxDuration = 120;
 
 export const POST = handleCallback(
-  async (message) => {
-    await processCatalogImageBulkQueueMessage(message);
+  async (message, metadata) => {
+    await handleCatalogImageBulkQueueDelivery(message, metadata);
   },
   {
     visibilityTimeoutSeconds: 180,

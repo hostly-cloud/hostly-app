@@ -242,3 +242,24 @@ Antes de considerar terminada una funciÃ³n, comprobar:
 - Â¿afecta al siguiente equipo del servicio?
 
 Si funciona un sÃ¡bado con el restaurante lleno, funciona siempre.
+
+---
+
+## 15. Soporte de la cola masiva de imágenes
+
+El consumidor `catalog-image-bulk` emite una línea JSON por cada señal operativa. Para
+investigar un trabajo, soporte debe filtrar los Runtime Logs de Vercel por
+`service=catalog-image-bulk-queue` y después por `restaurantId`, `jobId` o
+`messageId`. Nunca se necesita consultar productos de otro restaurante.
+
+| Evento | Significado | Acción de soporte |
+| --- | --- | --- |
+| `delivery_started` | Vercel entregó el mensaje al consumidor | Buscar el cierre con el mismo `messageId` e intento |
+| `delivery_completed` | El trabajo terminó esa entrega sin error | Revisar `jobStatus`, `requeued` y `recoveryStatus` |
+| `delivery_retry_scheduled` | El error es recuperable y habrá reentrega | Vigilar que el siguiente intento avance |
+| `delivery_discarded` | El mensaje es inválido o el trabajo ya no existe | No reinyectar; comprobar origen si se repite |
+| `delivery_expiring` | El siguiente reintento roza el fin de retención | Investigar de inmediato Firestore, proveedor y estado del job |
+
+Los logs nunca son autoridad para cambiar el trabajo. Firestore conserva el estado,
+los contadores y los leases; las acciones de soporte deben utilizar los endpoints
+autenticados y acotados al tenant.
