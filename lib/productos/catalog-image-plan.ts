@@ -87,6 +87,7 @@ export const HOSTLY_CATALOG_IMAGE_PLAN_POLICY: Readonly<
 export type HostlyCatalogImageBulkPolicy = {
   maxConcurrentItemsPerJob: number;
   maxAttemptsPerItem: number;
+  maxQueueDeliveryAttempts: number;
   maxReviewItemsPerRequest: number;
   preparationLeaseMs: number;
   leaseDurationMs: number;
@@ -96,6 +97,7 @@ export type HostlyCatalogImageBulkPolicy = {
 export const HOSTLY_CATALOG_IMAGE_BULK_POLICY: Readonly<HostlyCatalogImageBulkPolicy> = {
   maxConcurrentItemsPerJob: 1,
   maxAttemptsPerItem: 3,
+  maxQueueDeliveryAttempts: 12,
   maxReviewItemsPerRequest: 50,
   preparationLeaseMs: 2 * 60 * 1000,
   leaseDurationMs: 2 * 60 * 1000,

@@ -15,10 +15,12 @@ import type {
   CatalogImageBulkJobCounters,
   CatalogImageBulkJobStatus,
 } from "@/lib/productos/catalog-image-bulk-contract";
+import { CATALOG_IMAGE_BULK_QUEUE_RETRY_EXHAUSTED } from "@/lib/productos/catalog-image-bulk-contract";
 import { HOSTLY_CATALOG_IMAGE_BULK_POLICY } from "@/lib/productos/catalog-image-plan";
 import {
   controlCatalogImageBulkJob,
   processNextCatalogImageBulkItem,
+  quarantineCatalogImageBulkJob,
   readCatalogImageBulkJob,
   reconcileCatalogImageBulkControlOperation,
 } from "@/lib/server/product-images/catalog-image-bulk";
@@ -256,6 +258,79 @@ describe("catalog image bulk controls with Firestore Emulator", () => {
     assert.equal(stateB.job.queueRevision, 9);
     assert.equal(stateB.job.counters.pending, 1);
     assert.equal(stateB.items[0]?.status, "pending");
+  });
+
+  test("exhausted queue delivery pauses one tenant idempotently and resume clears the visible reason", async () => {
+    const jobId = "bulk-emulator-quarantine-1";
+    await Promise.all([
+      seedJob({
+        restaurantId: RESTAURANT_A,
+        jobId,
+        status: "running",
+        queueRevision: 6,
+        counters: counters({ total: 2, pending: 2 }),
+        items: [
+          { productId: "quarantine-dish-1", status: "pending" },
+          { productId: "quarantine-dish-2", status: "pending" },
+        ],
+      }),
+      seedJob({
+        restaurantId: RESTAURANT_B,
+        jobId,
+        status: "queued",
+        queueRevision: 11,
+        counters: counters({ total: 1, pending: 1 }),
+        items: [{ productId: "foreign-quarantine-dish", status: "pending" }],
+      }),
+    ]);
+
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        quarantineCatalogImageBulkJob({
+          db: adminDb,
+          restaurantId: RESTAURANT_A,
+          jobId,
+          deliveryCount: 12,
+        }),
+      ),
+    );
+    assert.equal(results.filter((result) => result.quarantined).length, 1);
+
+    const [stateA, stateB] = await Promise.all([
+      readCatalogImageBulkJob({
+        db: adminDb,
+        restaurantId: RESTAURANT_A,
+        jobId,
+      }),
+      readCatalogImageBulkJob({
+        db: adminDb,
+        restaurantId: RESTAURANT_B,
+        jobId,
+      }),
+    ]);
+    assert.equal(stateA.job.status, "paused");
+    assert.equal(
+      stateA.job.failureReason,
+      CATALOG_IMAGE_BULK_QUEUE_RETRY_EXHAUSTED,
+    );
+    assert.equal(stateA.job.queueRevision, 6);
+    assert.equal(stateA.job.counters.pending, 2);
+    assert.equal(stateB.job.status, "queued");
+    assert.equal(stateB.job.queueRevision, 11);
+    assert.equal(stateB.job.failureReason, null);
+
+    const resumed = await controlCatalogImageBulkJob({
+      db: adminDb,
+      restaurantId: RESTAURANT_A,
+      jobId,
+      action: "resume",
+    });
+    assert.equal(resumed.status, "queued");
+    assert.equal(resumed.queueRevision, 7);
+    assert.equal(resumed.failureReason, null);
+    const stored = await storedJob(RESTAURANT_A, jobId);
+    assert.equal(stored.queueDeliveryCount, 12);
+    assert.equal(typeof stored.queueQuarantinedAt, "number");
   });
 
   test("cancel and retry cannot overtake a real active worker lease", async () => {

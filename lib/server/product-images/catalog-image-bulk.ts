@@ -20,6 +20,7 @@ import type {
   CatalogImageBulkPreflight,
   CatalogImageBulkSummary,
 } from "@/lib/productos/catalog-image-bulk-contract";
+import { CATALOG_IMAGE_BULK_QUEUE_RETRY_EXHAUSTED } from "@/lib/productos/catalog-image-bulk-contract";
 import {
   evaluateImportedProductImageEligibility,
   generateImportedProductImage,
@@ -1538,6 +1539,7 @@ export async function controlCatalogImageBulkJob(params: {
         transaction.update(ref, {
           status: "queued",
           queueRevision: readQueueRevision(data.queueRevision) + 1,
+          failureReason: FieldValue.delete(),
           updatedAt: Date.now(),
         });
       }
@@ -1639,4 +1641,64 @@ export async function controlCatalogImageBulkJob(params: {
   const updated = await ref.get();
   if (!updated.exists) throw catalogImageBulkJobNotFound();
   return deserializeJob(jobId, updated.data() as Record<string, unknown>);
+}
+
+export type CatalogImageBulkQueueQuarantineResult = {
+  quarantined: boolean;
+  job: CatalogImageBulkJob;
+};
+
+/**
+ * Pausa un trabajo cuya entrega ha fallado repetidamente. La operación es
+ * idempotente y queda acotada al documento del tenant recibido desde la cola.
+ * No altera elementos, reservas de créditos ni resultados ya persistidos.
+ */
+export async function quarantineCatalogImageBulkJob(params: {
+  db: Firestore;
+  restaurantId: string;
+  jobId: string;
+  deliveryCount: number;
+  now?: number;
+}): Promise<CatalogImageBulkQueueQuarantineResult> {
+  const restaurantId = assertSimpleId(params.restaurantId, "restaurantId");
+  const jobId = assertIdempotencyKey(params.jobId);
+  const deliveryCount = Number.isFinite(params.deliveryCount)
+    ? Math.max(1, Math.floor(params.deliveryCount))
+    : 1;
+  const now = params.now ?? Date.now();
+  const ref = jobRef(params.db, restaurantId, jobId);
+
+  return params.db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw catalogImageBulkJobNotFound();
+    const data = snapshot.data() as Record<string, unknown>;
+    const current = deserializeJob(jobId, data);
+
+    if (readJobControl(data.controlOperation)) {
+      throw catalogImageBulkControlInProgress();
+    }
+    if (current.status !== "queued" && current.status !== "running") {
+      return { quarantined: false, job: current };
+    }
+
+    const nextData = {
+      ...data,
+      status: "paused" as const,
+      failureReason: CATALOG_IMAGE_BULK_QUEUE_RETRY_EXHAUSTED,
+      queueQuarantinedAt: now,
+      queueDeliveryCount: deliveryCount,
+      updatedAt: now,
+    };
+    transaction.update(ref, {
+      status: nextData.status,
+      failureReason: nextData.failureReason,
+      queueQuarantinedAt: nextData.queueQuarantinedAt,
+      queueDeliveryCount: nextData.queueDeliveryCount,
+      updatedAt: nextData.updatedAt,
+    });
+    return {
+      quarantined: true,
+      job: deserializeJob(jobId, nextData),
+    };
+  });
 }
