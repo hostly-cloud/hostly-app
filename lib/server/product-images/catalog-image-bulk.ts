@@ -67,10 +67,15 @@ type StoredJobLease = {
   expiresAt: number;
 };
 
+export type CatalogImageBulkRecoverableControlAction =
+  | "retry_failed"
+  | "cancel";
+
 type StoredJobControl = {
-  action: "retry_failed" | "cancel";
+  action: CatalogImageBulkRecoverableControlAction;
   itemCount: number;
   startedAt: number;
+  operationId?: string;
 };
 
 export class CatalogImageBulkError extends Error {
@@ -865,6 +870,11 @@ function readJobControl(value: unknown): StoredJobControl | null {
   const rawItemCount = readFiniteNumber(raw.itemCount, -1);
   const itemCount = Math.floor(rawItemCount);
   const startedAt = readFiniteNumber(raw.startedAt, -1);
+  const operationId =
+    typeof raw.operationId === "string" &&
+    /^[A-Za-z0-9_-]{8,100}$/.test(raw.operationId.trim())
+      ? raw.operationId.trim()
+      : undefined;
   if (
     (action !== "retry_failed" && action !== "cancel") ||
     rawItemCount < 0 ||
@@ -872,7 +882,12 @@ function readJobControl(value: unknown): StoredJobControl | null {
   ) {
     return null;
   }
-  return { action, itemCount, startedAt };
+  return {
+    action,
+    itemCount,
+    startedAt,
+    ...(operationId ? { operationId } : {}),
+  };
 }
 
 type ClaimedItem = {
@@ -1321,40 +1336,198 @@ async function updateItemsWithStatus(params: {
   return eligible.length;
 }
 
+function catalogImageBulkJobNotFound() {
+  return new CatalogImageBulkError(
+    "CATALOG_IMAGE_BULK_JOB_NOT_FOUND",
+    "Trabajo masivo no encontrado",
+    404,
+  );
+}
+
+function catalogImageBulkControlInProgress() {
+  return new CatalogImageBulkError(
+    "CATALOG_IMAGE_BULK_CONTROL_IN_PROGRESS",
+    "Hay otro control del trabajo en curso. Espera unos segundos y reintenta.",
+    409,
+  );
+}
+
+function catalogImageBulkItemProcessing() {
+  return new CatalogImageBulkError(
+    "CATALOG_IMAGE_BULK_ITEM_PROCESSING",
+    "Pausa y espera a que termine el elemento actual antes de continuar",
+    409,
+  );
+}
+
+async function finishCatalogImageBulkControlOperation(params: {
+  db: Firestore;
+  ref: FirebaseFirestore.DocumentReference;
+  action: CatalogImageBulkRecoverableControlAction;
+  expectedOperationId?: string;
+}): Promise<boolean> {
+  const operation = await params.db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(params.ref);
+    if (!snapshot.exists) throw catalogImageBulkJobNotFound();
+    const data = snapshot.data() as Record<string, unknown>;
+    const active = readJobControl(data.controlOperation);
+    if (!active) return null;
+    if (active.action !== params.action) {
+      if (params.expectedOperationId) return null;
+      throw catalogImageBulkControlInProgress();
+    }
+    if (
+      params.expectedOperationId &&
+      active.operationId !== params.expectedOperationId
+    ) {
+      return null;
+    }
+    const counters = readCounters(data.counters);
+    if (counters.processing > 0) throw catalogImageBulkItemProcessing();
+    return active;
+  });
+  if (!operation) return false;
+
+  if (params.action === "retry_failed") {
+    await updateItemsWithStatus({
+      db: params.db,
+      collection: params.ref.collection(JOB_ITEMS_COLLECTION),
+      fromStatus: "failed",
+      toStatus: "pending",
+      maxAttemptsExclusive:
+        HOSTLY_CATALOG_IMAGE_BULK_POLICY.maxAttemptsPerItem,
+    });
+  } else {
+    await updateItemsWithStatus({
+      db: params.db,
+      collection: params.ref.collection(JOB_ITEMS_COLLECTION),
+      fromStatus: "pending",
+      toStatus: "cancelled",
+    });
+  }
+
+  return params.db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(params.ref);
+    if (!snapshot.exists) throw catalogImageBulkJobNotFound();
+    const data = snapshot.data() as Record<string, unknown>;
+    const active = readJobControl(data.controlOperation);
+    if (!active) return false;
+    if (active.action !== params.action) {
+      if (params.expectedOperationId) return false;
+      throw catalogImageBulkControlInProgress();
+    }
+    if (
+      params.expectedOperationId &&
+      active.operationId !== params.expectedOperationId
+    ) {
+      return false;
+    }
+    const counters = readCounters(data.counters);
+    if (counters.processing > 0) throw catalogImageBulkItemProcessing();
+    const now = Date.now();
+    if (params.action === "retry_failed") {
+      transaction.update(params.ref, {
+        status: "queued",
+        queueRevision: readQueueRevision(data.queueRevision) + 1,
+        counters: {
+          ...counters,
+          pending: counters.pending + active.itemCount,
+          failed: Math.max(0, counters.failed - active.itemCount),
+        },
+        controlOperation: FieldValue.delete(),
+        failureReason: FieldValue.delete(),
+        completedAt: FieldValue.delete(),
+        updatedAt: now,
+      });
+    } else {
+      transaction.update(params.ref, {
+        status: "cancelled",
+        counters: {
+          ...counters,
+          pending: Math.max(0, counters.pending - active.itemCount),
+          cancelled: counters.cancelled + active.itemCount,
+        },
+        controlOperation: FieldValue.delete(),
+        activeProductId: FieldValue.delete(),
+        processingLease: FieldValue.delete(),
+        updatedAt: now,
+        completedAt: now,
+      });
+    }
+    return true;
+  });
+}
+
+export type CatalogImageBulkControlRecoveryResult = {
+  status: "pending" | "reconciled" | "superseded";
+  retryAfterMs: number | null;
+  job: CatalogImageBulkJob;
+};
+
+export async function reconcileCatalogImageBulkControlOperation(params: {
+  db: Firestore;
+  restaurantId: string;
+  jobId: string;
+  operationId: string;
+  now?: number;
+}): Promise<CatalogImageBulkControlRecoveryResult> {
+  const restaurantId = assertSimpleId(params.restaurantId, "restaurantId");
+  const jobId = assertIdempotencyKey(params.jobId);
+  const operationId = assertIdempotencyKey(params.operationId);
+  const ref = jobRef(params.db, restaurantId, jobId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw catalogImageBulkJobNotFound();
+  const data = snapshot.data() as Record<string, unknown>;
+  const active = readJobControl(data.controlOperation);
+  const current = deserializeJob(jobId, data);
+  if (!active || active.operationId !== operationId) {
+    return { status: "superseded", retryAfterMs: null, job: current };
+  }
+  const now = params.now ?? Date.now();
+  const retryAfterMs =
+    active.startedAt +
+    HOSTLY_CATALOG_IMAGE_BULK_POLICY.controlRecoveryDelayMs -
+    now;
+  if (retryAfterMs > 0) {
+    return { status: "pending", retryAfterMs, job: current };
+  }
+  const reconciled = await finishCatalogImageBulkControlOperation({
+    db: params.db,
+    ref,
+    action: active.action,
+    expectedOperationId: operationId,
+  });
+  const updated = await ref.get();
+  if (!updated.exists) throw catalogImageBulkJobNotFound();
+  return {
+    status: reconciled ? "reconciled" : "superseded",
+    retryAfterMs: null,
+    job: deserializeJob(jobId, updated.data() as Record<string, unknown>),
+  };
+}
+
 export async function controlCatalogImageBulkJob(params: {
   db: Firestore;
   restaurantId: string;
   jobId: string;
   action: "pause" | "resume" | "retry_failed" | "cancel";
+  operationId?: string;
 }): Promise<CatalogImageBulkJob> {
   const restaurantId = assertSimpleId(params.restaurantId, "restaurantId");
   const jobId = assertIdempotencyKey(params.jobId);
   const ref = jobRef(params.db, restaurantId, jobId);
-  const jobNotFound = () =>
-    new CatalogImageBulkError(
-      "CATALOG_IMAGE_BULK_JOB_NOT_FOUND",
-      "Trabajo masivo no encontrado",
-      404,
-    );
-  const controlInProgress = () =>
-    new CatalogImageBulkError(
-      "CATALOG_IMAGE_BULK_CONTROL_IN_PROGRESS",
-      "Hay otro control del trabajo en curso. Espera unos segundos y reintenta.",
-      409,
-    );
-  const itemProcessing = () =>
-    new CatalogImageBulkError(
-      "CATALOG_IMAGE_BULK_ITEM_PROCESSING",
-      "Pausa y espera a que termine el elemento actual antes de continuar",
-      409,
-    );
+  const operationId = params.operationId
+    ? assertIdempotencyKey(params.operationId)
+    : undefined;
 
   if (params.action === "pause" || params.action === "resume") {
     await params.db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(ref);
-      if (!snapshot.exists) throw jobNotFound();
+      if (!snapshot.exists) throw catalogImageBulkJobNotFound();
       const data = snapshot.data() as Record<string, unknown>;
-      if (readJobControl(data.controlOperation)) throw controlInProgress();
+      if (readJobControl(data.controlOperation)) {
+        throw catalogImageBulkControlInProgress();
+      }
       const current = deserializeJob(jobId, data);
       if (
         params.action === "pause" &&
@@ -1372,11 +1545,13 @@ export async function controlCatalogImageBulkJob(params: {
   } else if (params.action === "retry_failed") {
     const operation = await params.db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(ref);
-      if (!snapshot.exists) throw jobNotFound();
+      if (!snapshot.exists) throw catalogImageBulkJobNotFound();
       const data = snapshot.data() as Record<string, unknown>;
       const existing = readJobControl(data.controlOperation);
       if (existing) {
-        if (existing.action !== "retry_failed") throw controlInProgress();
+        if (existing.action !== "retry_failed") {
+          throw catalogImageBulkControlInProgress();
+        }
         return existing;
       }
       const current = deserializeJob(jobId, data);
@@ -1386,7 +1561,9 @@ export async function controlCatalogImageBulkJob(params: {
       ) {
         return null;
       }
-      if (current.counters.processing > 0) throw itemProcessing();
+      if (current.counters.processing > 0) {
+        throw catalogImageBulkItemProcessing();
+      }
       const failedSnapshot = await transaction.get(
         ref.collection(JOB_ITEMS_COLLECTION).where("status", "==", "failed"),
       );
@@ -1400,6 +1577,7 @@ export async function controlCatalogImageBulkJob(params: {
         action: "retry_failed",
         itemCount: eligibleCount,
         startedAt: Date.now(),
+        ...(operationId ? { operationId } : {}),
       };
       transaction.update(ref, {
         status: "paused",
@@ -1409,57 +1587,37 @@ export async function controlCatalogImageBulkJob(params: {
       return next;
     });
     if (operation) {
-      await updateItemsWithStatus({
+      await finishCatalogImageBulkControlOperation({
         db: params.db,
-        collection: ref.collection(JOB_ITEMS_COLLECTION),
-        fromStatus: "failed",
-        toStatus: "pending",
-        maxAttemptsExclusive:
-          HOSTLY_CATALOG_IMAGE_BULK_POLICY.maxAttemptsPerItem,
-      });
-      await params.db.runTransaction(async (transaction) => {
-        const snapshot = await transaction.get(ref);
-        if (!snapshot.exists) throw jobNotFound();
-        const data = snapshot.data() as Record<string, unknown>;
-        const active = readJobControl(data.controlOperation);
-        if (!active) return;
-        if (active.action !== "retry_failed") throw controlInProgress();
-        const counters = readCounters(data.counters);
-        if (counters.processing > 0) throw itemProcessing();
-        transaction.update(ref, {
-          status: "queued",
-          queueRevision: readQueueRevision(data.queueRevision) + 1,
-          counters: {
-            ...counters,
-            pending: counters.pending + active.itemCount,
-            failed: Math.max(0, counters.failed - active.itemCount),
-          },
-          controlOperation: FieldValue.delete(),
-          failureReason: FieldValue.delete(),
-          completedAt: FieldValue.delete(),
-          updatedAt: Date.now(),
-        });
+        ref,
+        action: "retry_failed",
+        expectedOperationId: operation.operationId,
       });
     }
   } else {
     const operation = await params.db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(ref);
-      if (!snapshot.exists) throw jobNotFound();
+      if (!snapshot.exists) throw catalogImageBulkJobNotFound();
       const data = snapshot.data() as Record<string, unknown>;
       const existing = readJobControl(data.controlOperation);
       if (existing) {
-        if (existing.action !== "cancel") throw controlInProgress();
+        if (existing.action !== "cancel") {
+          throw catalogImageBulkControlInProgress();
+        }
         return existing;
       }
       const current = deserializeJob(jobId, data);
       if (current.status === "completed" || current.status === "cancelled") {
         return null;
       }
-      if (current.counters.processing > 0) throw itemProcessing();
+      if (current.counters.processing > 0) {
+        throw catalogImageBulkItemProcessing();
+      }
       const next: StoredJobControl = {
         action: "cancel",
         itemCount: current.counters.pending,
         startedAt: Date.now(),
+        ...(operationId ? { operationId } : {}),
       };
       transaction.update(ref, {
         status: "paused",
@@ -1469,40 +1627,16 @@ export async function controlCatalogImageBulkJob(params: {
       return next;
     });
     if (operation) {
-      await updateItemsWithStatus({
+      await finishCatalogImageBulkControlOperation({
         db: params.db,
-        collection: ref.collection(JOB_ITEMS_COLLECTION),
-        fromStatus: "pending",
-        toStatus: "cancelled",
-      });
-      await params.db.runTransaction(async (transaction) => {
-        const snapshot = await transaction.get(ref);
-        if (!snapshot.exists) throw jobNotFound();
-        const data = snapshot.data() as Record<string, unknown>;
-        const active = readJobControl(data.controlOperation);
-        if (!active) return;
-        if (active.action !== "cancel") throw controlInProgress();
-        const counters = readCounters(data.counters);
-        if (counters.processing > 0) throw itemProcessing();
-        const now = Date.now();
-        transaction.update(ref, {
-          status: "cancelled",
-          counters: {
-            ...counters,
-            pending: Math.max(0, counters.pending - active.itemCount),
-            cancelled: counters.cancelled + active.itemCount,
-          },
-          controlOperation: FieldValue.delete(),
-          activeProductId: FieldValue.delete(),
-          processingLease: FieldValue.delete(),
-          updatedAt: now,
-          completedAt: now,
-        });
+        ref,
+        action: "cancel",
+        expectedOperationId: operation.operationId,
       });
     }
   }
 
   const updated = await ref.get();
-  if (!updated.exists) throw jobNotFound();
+  if (!updated.exists) throw catalogImageBulkJobNotFound();
   return deserializeJob(jobId, updated.data() as Record<string, unknown>);
 }

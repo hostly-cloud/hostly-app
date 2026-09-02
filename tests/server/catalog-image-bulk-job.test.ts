@@ -7,6 +7,7 @@ import {
   createCatalogImageBulkJob,
   processNextCatalogImageBulkItem,
   readCatalogImageBulkJob,
+  reconcileCatalogImageBulkControlOperation,
 } from "@/lib/server/product-images/catalog-image-bulk";
 import { resolveCatalogImageAccessFromRestaurant } from "@/lib/server/product-images/resolve-catalog-image-access";
 
@@ -806,6 +807,78 @@ test("a retry resumes safely after item writes completed but counters did not", 
   assert.equal(recovered.queueRevision, created.queueRevision + 1);
   assert.equal(recovered.counters.pending, 1);
   assert.equal(recovered.counters.failed, 0);
+});
+
+test("an exact expired control token recovers automatically but a fresh token waits", async () => {
+  const { db, store } = memoryFirestore({
+    "restaurants/restaurant-a/products/dish-1": dish("Croquetas"),
+  });
+  const created = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-auto-control-recovery-1",
+    access: ULTRA_ACCESS,
+  });
+  const jobPath = `restaurants/restaurant-a/catalogImageJobs/${created.jobId}`;
+  const itemPath = `${jobPath}/items/dish-1`;
+  const storedJob = store.get(jobPath);
+  const storedItem = store.get(itemPath);
+  assert.ok(storedJob);
+  assert.ok(storedItem);
+  const startedAt = 50_000;
+  const operationId = "control-auto-retry-123";
+  store.set(jobPath, {
+    ...storedJob,
+    status: "paused",
+    counters: { ...created.counters, pending: 0, failed: 1 },
+    controlOperation: {
+      action: "retry_failed",
+      itemCount: 1,
+      startedAt,
+      operationId,
+    },
+  });
+  store.set(itemPath, { ...storedItem, status: "pending" });
+
+  const fresh = await reconcileCatalogImageBulkControlOperation({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+    operationId,
+    now:
+      startedAt +
+      HOSTLY_CATALOG_IMAGE_BULK_POLICY.controlRecoveryDelayMs -
+      1,
+  });
+  assert.equal(fresh.status, "pending");
+  assert.equal(fresh.retryAfterMs, 1);
+
+  const recovered = await reconcileCatalogImageBulkControlOperation({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+    operationId,
+    now:
+      startedAt +
+      HOSTLY_CATALOG_IMAGE_BULK_POLICY.controlRecoveryDelayMs,
+  });
+  assert.equal(recovered.status, "reconciled");
+  assert.equal(recovered.job.status, "queued");
+  assert.equal(recovered.job.queueRevision, created.queueRevision + 1);
+  assert.equal(recovered.job.counters.pending, 1);
+  assert.equal(recovered.job.counters.failed, 0);
+
+  const obsolete = await reconcileCatalogImageBulkControlOperation({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+    operationId,
+    now:
+      startedAt +
+      HOSTLY_CATALOG_IMAGE_BULK_POLICY.controlRecoveryDelayMs,
+  });
+  assert.equal(obsolete.status, "superseded");
 });
 
 test("concurrent cancellation is idempotent and can finish an interrupted control", async () => {
