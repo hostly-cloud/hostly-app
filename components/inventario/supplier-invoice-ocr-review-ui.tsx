@@ -386,18 +386,20 @@ export function SearchableProductSelect({
 }: SearchableProductSelectProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
-
   const selected = products.find((product) => product.id === value);
-
-  useEffect(() => {
-    if (!selected) {
-      setQuery("");
-      return;
-    }
-    setQuery(selected.name);
-  }, [selected?.id, selected?.name]);
+  const selectionKey = selected ? `${selected.id}:${selected.name}` : "";
+  const [queryDraft, setQueryDraft] = useState<{
+    selectionKey: string;
+    value: string;
+  } | null>(null);
+  const query =
+    queryDraft?.selectionKey === selectionKey
+      ? queryDraft.value
+      : (selected?.name ?? "");
+  const setQuery = (value: string) => {
+    setQueryDraft({ selectionKey, value });
+  };
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

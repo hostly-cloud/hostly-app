@@ -99,7 +99,9 @@ export function useActiveSessionHeartbeat(
     Boolean(restaurantId && userId && isFirebaseConfigured);
 
   const optionsRef = useRef(options);
-  optionsRef.current = options;
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   const firstWriteRef = useRef(false);
   const loginLoggedRef = useRef(false);

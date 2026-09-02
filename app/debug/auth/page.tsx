@@ -414,47 +414,56 @@ export default function DebugAuthPage() {
     role,
   } = useAuth();
 
-  const [usersDoc, setUsersDoc] = useState<DocReadResult>(() =>
-    emptyDocResult("users/…"),
-  );
-  const [usuariosDoc, setUsuariosDoc] = useState<DocReadResult>(() =>
-    emptyDocResult("usuarios/…"),
-  );
-  const [restaurantReads, setRestaurantReads] = useState<
-    Record<string, RestaurantReadResult & { loading: boolean }>
-  >({});
-  const [inviteProbe, setInviteProbe] = useState<InviteProbeState>(() => ({
-    pathDescription:
-      "query restaurant_invites (email, status=pending) — patrón Hostly",
-    loading: true,
-    status: "ok_missing",
-    code: null,
-    shortMessage: "",
-    pendingCount: null,
-    sampleDocId: null,
-  }));
-
   const uid = user?.uid ?? null;
   const email = user?.email ?? null;
-
-  useEffect(() => {
-    if (!isFirebaseConfigured || !uid) {
-      setUsersDoc((p) => ({
-        ...p,
-        path: "users/(sin uid)",
+  const readKey = `${uid ?? ""}:${email ?? ""}:${ctxRestaurantId ?? ""}`;
+  const [readState, setReadState] = useState<{
+    key: string;
+    usersDoc: DocReadResult;
+    usuariosDoc: DocReadResult;
+    restaurantReads: Record<
+      string,
+      RestaurantReadResult & { loading: boolean }
+    >;
+    inviteProbe: InviteProbeState;
+  } | null>(null);
+  const canProbe = Boolean(isFirebaseConfigured && uid);
+  const currentReadState =
+    canProbe && readState?.key === readKey ? readState : null;
+  const { usersDoc, usuariosDoc, restaurantReads, inviteProbe } = useMemo(() => {
+    if (canProbe) {
+      return {
+        usersDoc:
+          currentReadState?.usersDoc ?? emptyDocResult(`users/${uid}`),
+        usuariosDoc:
+          currentReadState?.usuariosDoc ?? emptyDocResult(`usuarios/${uid}`),
+        restaurantReads: currentReadState?.restaurantReads ?? {},
+        inviteProbe:
+          currentReadState?.inviteProbe ?? ({
+            pathDescription:
+              "query restaurant_invites (email, status=pending) — patrón Hostly",
+            loading: true,
+            status: "ok_missing",
+            code: null,
+            shortMessage: "",
+            pendingCount: null,
+            sampleDocId: null,
+          } satisfies InviteProbeState),
+      };
+    }
+    return {
+      usersDoc: {
+        ...emptyDocResult("users/(sin uid)"),
         loading: false,
-        exists: null,
         json: "(omitido: sin usuario o Firebase)",
-      }));
-      setUsuariosDoc((p) => ({
-        ...p,
-        path: "usuarios/(sin uid)",
+      },
+      usuariosDoc: {
+        ...emptyDocResult("usuarios/(sin uid)"),
         loading: false,
-        exists: null,
         json: "(omitido: sin usuario o Firebase)",
-      }));
-      setRestaurantReads({});
-      setInviteProbe({
+      },
+      restaurantReads: {},
+      inviteProbe: {
         pathDescription:
           "query restaurant_invites — sin uid / sin Firebase en cliente",
         loading: false,
@@ -463,30 +472,22 @@ export default function DebugAuthPage() {
         shortMessage: "omitido",
         pendingCount: null,
         sampleDocId: null,
-      });
-      return;
-    }
+      } satisfies InviteProbeState,
+    };
+  }, [canProbe, currentReadState, uid]);
+
+  useEffect(() => {
+    if (!canProbe || !uid) return;
 
     let cancelled = false;
 
-    setUsersDoc({ ...emptyDocResult(`users/${uid}`), loading: true });
-    setUsuariosDoc({ ...emptyDocResult(`usuarios/${uid}`), loading: true });
-    setInviteProbe((prev) => ({ ...prev, loading: true }));
-
     void (async () => {
-      const [u, o] = await Promise.all([
+      const [u, o, invite] = await Promise.all([
         readProfileDoc("users", uid),
         readProfileDoc("usuarios", uid),
-      ]);
-      if (cancelled) return;
-
-      setUsersDoc({ ...u, loading: false });
-      setUsuariosDoc({ ...o, loading: false });
-
-      const invite =
         email != null && email.trim() !== ""
-          ? await probeRestaurantInvitesQuery(email)
-          : ({
+          ? probeRestaurantInvitesQuery(email)
+          : Promise.resolve({
               pathDescription:
                 "query restaurant_invites — sin email en sesión Hostly",
               loading: false,
@@ -495,9 +496,9 @@ export default function DebugAuthPage() {
               shortMessage: "sin email",
               pendingCount: null,
               sampleDocId: null,
-            } satisfies InviteProbeState);
-
-      if (!cancelled) setInviteProbe(invite);
+            } satisfies InviteProbeState),
+      ]);
+      if (cancelled) return;
 
       const ids = new Set<string>();
       const push = (v: unknown) => {
@@ -507,37 +508,29 @@ export default function DebugAuthPage() {
       push(u.restaurantIdValue);
       push(o.restaurantIdValue);
 
-      const nextReads: Record<string, RestaurantReadResult & { loading: boolean }> =
-        {};
-      for (const id of ids) {
-        nextReads[id] = {
-          path: `restaurants/${id}`,
-          loading: true,
-          exists: null,
-          nameValue: undefined,
-          json: "",
-          errorCode: null,
-          errorMessage: null,
-        };
-      }
-      setRestaurantReads(nextReads);
-
-      await Promise.all(
-        [...ids].map(async (id) => {
-          const r = await readRestaurantDoc(id);
-          if (cancelled) return;
-          setRestaurantReads((prev) => ({
-            ...prev,
-            [id]: { ...r, loading: false },
-          }));
-        }),
+      const resolvedRestaurants = await Promise.all(
+        [...ids].map(async (id) => [id, await readRestaurantDoc(id)] as const),
       );
+      if (cancelled) return;
+      const nextReads = Object.fromEntries(
+        resolvedRestaurants.map(([id, result]) => [
+          id,
+          { ...result, loading: false },
+        ]),
+      );
+      setReadState({
+        key: readKey,
+        usersDoc: { ...u, loading: false },
+        usuariosDoc: { ...o, loading: false },
+        restaurantReads: nextReads,
+        inviteProbe: invite,
+      });
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [uid, ctxRestaurantId, email]);
+  }, [canProbe, ctxRestaurantId, email, readKey, uid]);
 
   const candidates = useMemo(() => {
     const out: string[] = [];

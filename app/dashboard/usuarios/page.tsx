@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
 import { UsuariosCapabilityShell } from "@/components/auth/configuracion-capability-shell";
@@ -148,6 +148,9 @@ const colHeadStyle: CSSProperties = {
 };
 
 type ListFilter = "todos" | UsuarioRol | "inactivo";
+const subscribeHydration = () => () => {};
+const getClientHydrationSnapshot = () => true;
+const getServerHydrationSnapshot = () => false;
 
 function modLabelKey(m: UsuarioModulo): string {
   switch (m) {
@@ -175,8 +178,14 @@ function roleLabelKey(rol: UsuarioRol): string {
 
 export default function UsuariosPage() {
   const { t, locale } = useI18n();
-  const [items, setItems] = useState<UsuarioLocal[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+  const [items, setItems] = useState<UsuarioLocal[]>(() =>
+    typeof window === "undefined" ? [] : loadUsuarios(),
+  );
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot,
+  );
   const [listSearch, setListSearch] = useState("");
   const [listFilter, setListFilter] = useState<ListFilter>("todos");
   const [formOpen, setFormOpen] = useState(false);
@@ -189,15 +198,6 @@ export default function UsuariosPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [ctaHover, setCtaHover] = useState(false);
   const [hoverRowId, setHoverRowId] = useState<string | null>(null);
-
-  const refresh = useCallback(() => {
-    setItems(loadUsuarios());
-  }, []);
-
-  useEffect(() => {
-    refresh();
-    setHydrated(true);
-  }, [refresh]);
 
   const roleFiltered = useMemo(() => {
     if (listFilter === "todos") return items;

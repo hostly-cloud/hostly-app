@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   buildCartLineDisplayName,
   buildSelectedModifiersFromDraft,
@@ -94,13 +94,11 @@ function pruneSelectionForVisibleGroups(
 const EMPTY_INVENTORY_LOOKUP: TpvInventoryProductsById = new Map();
 
 function ModifierOptionButton({
-  group,
   option,
   active,
   inventoryProductsById,
   onSelect,
 }: {
-  group: ModifierGroupDocument;
   option: ModifierGroupDocument["options"][number];
   active: boolean;
   inventoryProductsById: TpvInventoryProductsById;
@@ -179,7 +177,6 @@ function ModifierGroupSection({
         {group.options.map((option) => (
           <ModifierOptionButton
             key={option.id}
-            group={group}
             option={option}
             active={selectedIds.includes(option.id)}
             inventoryProductsById={inventoryProductsById}
@@ -191,24 +188,46 @@ function ModifierGroupSection({
   );
 }
 
-export function TpvProductModifiersModal({
+function buildInitialSelection(
+  groups: readonly ModifierGroupDocument[],
+): ModifierSelectionByGroup {
+  const initial: ModifierSelectionByGroup = {};
+  for (const group of groups) {
+    if (group.required && group.options.length === 1) {
+      initial[group.id] = [group.options[0]!.id];
+    }
+  }
+  return initial;
+}
+
+export function TpvProductModifiersModal(
+  props: TpvProductModifiersModalProps,
+) {
+  const groupsKey = props.groups
+    .map((group) =>
+      `${group.id}:${group.required ? "1" : "0"}:${group.options
+        .map((option) => option.id)
+        .join(",")}`,
+    )
+    .join("|");
+  return (
+    <TpvProductModifiersModalContent
+      key={`${props.product.id}:${groupsKey}`}
+      {...props}
+    />
+  );
+}
+
+function TpvProductModifiersModalContent({
   product,
   groups,
   inventoryProductsById = EMPTY_INVENTORY_LOOKUP,
   onCancel,
   onConfirm,
 }: TpvProductModifiersModalProps) {
-  const [selection, setSelection] = useState<ModifierSelectionByGroup>({});
-
-  useEffect(() => {
-    const initial: ModifierSelectionByGroup = {};
-    for (const group of groups) {
-      if (group.required && group.options.length === 1) {
-        initial[group.id] = [group.options[0]!.id];
-      }
-    }
-    setSelection(initial);
-  }, [product.id, groups]);
+  const [selection, setSelection] = useState<ModifierSelectionByGroup>(() =>
+    buildInitialSelection(groups),
+  );
 
   const { formatGroups, mixerGroups, showMixerStep } = useMemo(
     () => partitionVisibleModifierGroupsForTpv(groups, selection),

@@ -16,33 +16,35 @@ export default function EditorSalaV2PreviewPage() {
     () => resolveAuthenticatedRestaurantId(profileReady, profileRestaurantId),
     [profileReady, profileRestaurantId],
   );
-  const [handoffReadyForRestaurantId, setHandoffReadyForRestaurantId] = useState<
-    string | null
-  >(null);
-  const [handoffError, setHandoffError] = useState<string | null>(null);
+  const [handoff, setHandoff] = useState<{
+    restaurantId: string;
+    error: string | null;
+  } | null>(null);
+  const handoffReadyForRestaurantId = handoff?.restaurantId ?? null;
+  const handoffError =
+    handoff?.restaurantId === restaurantId ? handoff.error : null;
 
   useEffect(() => {
     if (!profileReady || !restaurantId) return;
 
     let cancelled = false;
-    setHandoffReadyForRestaurantId(null);
-    setHandoffError(null);
-
-    void seedSalaEditorV2DraftFromRoomsAssistant({
-      restaurantId,
-      updatedBy: user?.uid ?? null,
-    })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        setHandoffError(
+    void (async () => {
+      let errorMessage: string | null = null;
+      try {
+        await seedSalaEditorV2DraftFromRoomsAssistant({
+          restaurantId,
+          updatedBy: user?.uid ?? null,
+        });
+      } catch (error: unknown) {
+        errorMessage =
           error instanceof Error
             ? error.message
-            : "No se pudo preparar el borrador del asistente.",
-        );
-      })
-      .finally(() => {
-        if (!cancelled) setHandoffReadyForRestaurantId(restaurantId);
-      });
+            : "No se pudo preparar el borrador del asistente.";
+      }
+      if (!cancelled) {
+        setHandoff({ restaurantId, error: errorMessage });
+      }
+    })();
 
     return () => {
       cancelled = true;

@@ -236,7 +236,9 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    void runConnectivityPing();
+    const initialPingFrame = window.requestAnimationFrame(() => {
+      void runConnectivityPing();
+    });
 
     pingIntervalRef.current = window.setInterval(() => {
       if (document.hidden || navigator.onLine === false) return;
@@ -244,6 +246,7 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
     }, CONNECTIVITY_PING_INTERVAL_MS);
 
     return () => {
+      window.cancelAnimationFrame(initialPingFrame);
       if (pingIntervalRef.current != null) {
         window.clearInterval(pingIntervalRef.current);
         pingIntervalRef.current = null;

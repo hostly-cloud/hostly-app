@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { CATEGORY_PRODUCT_FAMILY_NONE } from "@/lib/carta/category-product-family";
 import {
   PRODUCT_FAMILY_TYPE_LABELS,
@@ -25,6 +25,18 @@ export type ProductosBulkAssignFamilyModalProps = {
 };
 
 export function ProductosBulkAssignFamilyModal({
+  ...props
+}: ProductosBulkAssignFamilyModalProps) {
+  if (!props.open) return null;
+  return (
+    <ProductosBulkAssignFamilyModalContent
+      key={props.initialSelectValue}
+      {...props}
+    />
+  );
+}
+
+function ProductosBulkAssignFamilyModalContent({
   open,
   count,
   saving,
@@ -34,13 +46,9 @@ export function ProductosBulkAssignFamilyModal({
   onConfirm,
   t,
 }: ProductosBulkAssignFamilyModalProps) {
-  const [familyId, setFamilyId] = useState(CATEGORY_PRODUCT_FAMILY_NONE);
+  const [familyId, setFamilyId] = useState(initialSelectValue);
 
   const sorted = useMemo(() => sortProductFamilies([...families]), [families]);
-
-  useEffect(() => {
-    if (open) setFamilyId(initialSelectValue);
-  }, [open, initialSelectValue]);
 
   if (!open) return null;
 

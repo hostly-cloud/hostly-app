@@ -15,14 +15,16 @@ export default function RecepcionesPage() {
   const startedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const rid = restaurantId?.trim() ?? "";
+  const missingRestaurantError =
+    ready && profileReady && !rid
+      ? "No se ha podido resolver el restaurante activo."
+      : null;
+  const displayError = error ?? missingRestaurantError;
 
   useEffect(() => {
     if (!ready || !profileReady || startedRef.current) return;
-    const rid = restaurantId?.trim() ?? "";
-    if (!rid) {
-      setError("No se ha podido resolver el restaurante activo.");
-      return;
-    }
+    if (!rid) return;
 
     startedRef.current = true;
     void migrateLegacyPurchasesFromBrowser(rid)
@@ -34,7 +36,7 @@ export default function RecepcionesPage() {
         );
         startedRef.current = false;
       });
-  }, [profileReady, ready, restaurantId, retryNonce, router]);
+  }, [profileReady, ready, rid, retryNonce, router]);
 
   return (
     <ModulePageShell title="Recepciones">
@@ -47,9 +49,9 @@ export default function RecepcionesPage() {
           background: "var(--hostly-surface-card-solid)",
         }}
       >
-        {error ? (
+        {displayError ? (
           <>
-            <p style={{ margin: 0, color: "var(--hostly-danger, #b42318)" }}>{error}</p>
+            <p style={{ margin: 0, color: "var(--hostly-danger, #b42318)" }}>{displayError}</p>
             <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
               <button
                 type="button"

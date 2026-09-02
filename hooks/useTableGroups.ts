@@ -129,45 +129,64 @@ export type UseTableGroupsOptions = {
   restaurantId: string | null;
 };
 
-export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
-  const { user, role } = useAuth();
-  const restaurantIdTrimmed = restaurantId?.trim() ?? null;
-  const actorUserId = user?.uid?.trim() || undefined;
-  const actorUserName =
-    user?.displayName?.trim() ||
-    user?.email?.trim() ||
-    undefined;
-  const actorRole = role ?? undefined;
+const EMPTY_GROUPED_TABLES: Record<string, string[]> = {};
 
-  const [groupedTables, setGroupedTables] = useState<Record<string, string[]>>(
-    {},
+export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
+  const { ready: authReady } = useAuth();
+  const restaurantIdTrimmed = restaurantId?.trim() ?? null;
+
+  const [snapshot, setSnapshot] = useState<{
+    restaurantId: string;
+    groupedTables: Record<string, string[]>;
+  } | null>(null);
+  const canListen = Boolean(
+    authReady && restaurantIdTrimmed && isFirebaseConfigured && isAuthReady(),
+  );
+  const groupedTables = useMemo(
+    () =>
+      canListen && snapshot?.restaurantId === restaurantIdTrimmed
+        ? snapshot.groupedTables
+        : EMPTY_GROUPED_TABLES,
+    [canListen, restaurantIdTrimmed, snapshot],
+  );
+  const setGroupedTables = useCallback(
+    (
+      update:
+        | Record<string, string[]>
+        | ((previous: Record<string, string[]>) => Record<string, string[]>),
+    ) => {
+      if (!restaurantIdTrimmed) return;
+      setSnapshot((previousSnapshot) => {
+        const previous =
+          previousSnapshot?.restaurantId === restaurantIdTrimmed
+            ? previousSnapshot.groupedTables
+            : {};
+        return {
+          restaurantId: restaurantIdTrimmed,
+          groupedTables:
+            typeof update === "function" ? update(previous) : update,
+        };
+      });
+    },
+    [restaurantIdTrimmed],
   );
 
   useEffect(() => {
-    if (!restaurantIdTrimmed) {
-      setGroupedTables({});
-      return;
-    }
-
-    if (!isFirebaseConfigured) {
-      return;
-    }
-
-    if (!isAuthReady()) {
-      setGroupedTables({});
-      return;
-    }
+    if (!restaurantIdTrimmed || !canListen) return;
 
     const ref = tableGroupsDocRef(restaurantIdTrimmed);
     const unsub = onSnapshot(
       ref,
       async (snap) => {
         if (!snap.exists()) {
-          setGroupedTables({});
+          setSnapshot({ restaurantId: restaurantIdTrimmed, groupedTables: {} });
           return;
         }
         const data = snap.data() as Record<string, unknown>;
-        setGroupedTables(normalizeTableGroups(data.groups));
+        setSnapshot({
+          restaurantId: restaurantIdTrimmed,
+          groupedTables: normalizeTableGroups(data.groups),
+        });
       },
       (error) => {
         console.error(error);
@@ -175,7 +194,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
     );
 
     return () => unsub();
-  }, [restaurantIdTrimmed]);
+  }, [canListen, restaurantIdTrimmed]);
 
   const getMainTableId = useCallback(
     (tableId: string): string => {
@@ -260,7 +279,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
         });
       }
     },
-    [restaurantIdTrimmed],
+    [restaurantIdTrimmed, setGroupedTables],
   );
 
   const runServerSplit = useCallback(
@@ -311,7 +330,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
         );
       }
     },
-    [restaurantIdTrimmed],
+    [restaurantIdTrimmed, setGroupedTables],
   );
 
   const joinTables = useCallback(
@@ -382,7 +401,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
         return next;
       });
     },
-    [restaurantIdTrimmed, runServerMerge],
+    [restaurantIdTrimmed, runServerMerge, setGroupedTables],
   );
 
   const separateTable = useCallback(
@@ -436,7 +455,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
         return next;
       });
     },
-    [runServerSplit],
+    [runServerSplit, setGroupedTables],
   );
 
   const getGroupTableIds = useCallback(

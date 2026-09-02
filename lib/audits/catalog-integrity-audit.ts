@@ -5,6 +5,8 @@
  * No modifica datos ni comportamiento operativo.
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { normalizeProductName } from "@/lib/carta/duplicate-detection";
 import { isMenuCourse } from "@/lib/carta/menu-course";
 import { mapPreparationAreaToStation } from "@/lib/carta/map-station-to-preparation-area";
@@ -526,8 +528,6 @@ export function runCatalogIntegrityAudit(input: {
 
 function loadEnvFromDotLocal(): void {
   try {
-    const fs = require("node:fs") as typeof import("node:fs");
-    const path = require("node:path") as typeof import("node:path");
     const envPath = path.join(process.cwd(), ".env.local");
     if (!fs.existsSync(envPath)) return;
     for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {

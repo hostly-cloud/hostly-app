@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { CartaCategoria } from "@/lib/carta-categorias/types";
 import type { TranslateFn } from "@/lib/i18n";
 import {
@@ -22,6 +22,18 @@ export type ProductosBulkAssignCategoryModalProps = {
 };
 
 export function ProductosBulkAssignCategoryModal({
+  ...props
+}: ProductosBulkAssignCategoryModalProps) {
+  if (!props.open) return null;
+  return (
+    <ProductosBulkAssignCategoryModalContent
+      key={props.initialSelectValue}
+      {...props}
+    />
+  );
+}
+
+function ProductosBulkAssignCategoryModalContent({
   open,
   count,
   saving,
@@ -31,7 +43,7 @@ export function ProductosBulkAssignCategoryModal({
   onConfirm,
   t,
 }: ProductosBulkAssignCategoryModalProps) {
-  const [categoryId, setCategoryId] = useState(UNCATEGORIZED_VALUE);
+  const [categoryId, setCategoryId] = useState(initialSelectValue);
 
   const sorted = useMemo(
     () =>
@@ -42,10 +54,6 @@ export function ProductosBulkAssignCategoryModal({
       ),
     [categorias],
   );
-
-  useEffect(() => {
-    if (open) setCategoryId(initialSelectValue);
-  }, [open, initialSelectValue]);
 
   if (!open) return null;
 

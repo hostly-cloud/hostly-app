@@ -301,10 +301,7 @@ export function useSalaWallDrawing({
   }, [cancelEditSession]);
 
   useEffect(() => {
-    if (!enabled) {
-      setDraft(null);
-      return;
-    }
+    if (!enabled) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -334,30 +331,32 @@ export function useSalaWallDrawing({
   ]);
 
   useEffect(() => {
-    setDraft(null);
-    setSelectedWallId(null);
-    setEditSession(null);
+    return () => {
+      setDraft(null);
+      setSelectedWallId(null);
+      setEditSession(null);
+    };
   }, [espacioId]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled) return;
+    return () => {
       setDraft(null);
       setEditSession(null);
-    }
+    };
   }, [enabled]);
 
-  useEffect(() => {
-    if (!selectedWallId) return;
-    if (wallsInEspacio.some((wall) => wall.id === selectedWallId)) return;
-    setSelectedWallId(null);
-  }, [selectedWallId, wallsInEspacio]);
+  const visibleSelectedWallId =
+    selectedWallId && wallsInEspacio.some((wall) => wall.id === selectedWallId)
+      ? selectedWallId
+      : null;
 
   return {
     wallsInEspacio,
     draft,
     isDrawing,
     isEditing,
-    selectedWallId,
+    selectedWallId: visibleSelectedWallId,
     selectedWall,
     cancelDrawing,
     clearWallSelection,

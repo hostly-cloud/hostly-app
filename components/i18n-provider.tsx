@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import {
   createTranslator,
   DEFAULT_LOCALE,
@@ -25,18 +25,33 @@ type I18nContextValue = {
 };
 
 const I18nContext = createContext<I18nContextValue | null>(null);
+const LOCALE_CHANGE_EVENT = "hostly:locale-change";
+
+function readStoredLocale(): Locale {
+  if (typeof window === "undefined") return DEFAULT_LOCALE;
+  try {
+    const raw = localStorage.getItem(LOCALE_STORAGE_KEY);
+    return isLocale(raw) ? raw : DEFAULT_LOCALE;
+  } catch {
+    return DEFAULT_LOCALE;
+  }
+}
+
+function subscribeLocale(onStoreChange: () => void): () => void {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(LOCALE_CHANGE_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(LOCALE_CHANGE_EVENT, onStoreChange);
+  };
+}
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LOCALE_STORAGE_KEY);
-      if (isLocale(raw)) setLocaleState(raw);
-    } catch {
-      /* ignore */
-    }
-  }, []);
+  const locale = useSyncExternalStore(
+    subscribeLocale,
+    readStoredLocale,
+    () => DEFAULT_LOCALE,
+  );
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -45,9 +60,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
-    setLocaleState(next);
     try {
       localStorage.setItem(LOCALE_STORAGE_KEY, next);
+      window.dispatchEvent(new Event(LOCALE_CHANGE_EVENT));
     } catch {
       /* ignore */
     }

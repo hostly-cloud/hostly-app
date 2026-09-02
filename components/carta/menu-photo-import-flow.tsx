@@ -75,23 +75,31 @@ function asStringArray(value: unknown): string[] {
   return [];
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 function asPotentialDuplicates(value: unknown): ExtractedMenuRow["potentialDuplicates"] {
   if (!Array.isArray(value)) return [];
   const out: NonNullable<ExtractedMenuRow["potentialDuplicates"]> = [];
   for (const raw of value) {
     if (!raw || typeof raw !== "object") continue;
-    const r = raw as any;
+    const r = asRecord(raw);
     const platoId = typeof r.platoId === "string" ? r.platoId : typeof r.id === "string" ? r.id : null;
     if (!platoId) continue;
     const score = typeof r.score === "number" && Number.isFinite(r.score) ? Math.max(0, Math.min(1, r.score)) : 0;
-    const reasons = Array.isArray(r.reasons) ? r.reasons.filter((x: any) => typeof x === "string") : [];
+    const reasons = Array.isArray(r.reasons)
+      ? r.reasons.filter((x): x is string => typeof x === "string")
+      : [];
     out.push({ platoId, score, reasons });
   }
   return out;
 }
 
 function normalizeImportedRow(raw: unknown): ExtractedMenuRow {
-  const r: any = raw && typeof raw === "object" ? raw : {};
+  const r = asRecord(raw);
 
   // Compatibilidad con nombres legacy/externos.
   const legacyCandidates = r.duplicateCandidates ?? r.duplicate_candidates ?? null;
@@ -128,7 +136,12 @@ function normalizeImportedRow(raw: unknown): ExtractedMenuRow {
         : null;
 
   const potentialDuplicates = asPotentialDuplicates(r.potentialDuplicates ?? legacyCandidates);
-  const issues = Array.isArray(r.issues) ? r.issues.filter((x: any) => x === "duplicate" || x === "price_suspicious") : [];
+  const issues = Array.isArray(r.issues)
+    ? r.issues.filter(
+        (x): x is "duplicate" | "price_suspicious" =>
+          x === "duplicate" || x === "price_suspicious",
+      )
+    : [];
   const iaNotes = asStringArray(r.iaNotes ?? legacyWarnings ?? r.notes ?? null);
 
   const categoryLowConfidence = typeof r.categoryLowConfidence === "boolean" ? r.categoryLowConfidence : false;
@@ -428,12 +441,12 @@ export default function MenuPhotoImportFlow() {
         fetchModifierFamiliesForRestaurante(rid),
       ]);
       const famByMenuId = new Map(cartaFams.map((f) => [f.id, f] as const));
-      let next = [...loadPlatos(rid)];
+      const next = [...loadPlatos(rid)];
       let created = 0;
       let linked = 0;
       let updated = 0;
-      let ignoredCount = ignored.length;
-      let pendingCount = pending.length;
+      const ignoredCount = ignored.length;
+      const pendingCount = pending.length;
       for (const r of validSelected) {
         const action = r.action ?? "create_new";
         const targetId = r.targetPlatoId ?? null;

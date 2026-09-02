@@ -2,7 +2,7 @@
 
 import Script from "next/script";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 type MarketingConsent = "granted" | "denied" | null;
 
@@ -38,20 +38,23 @@ function persistConsent(value: Exclude<MarketingConsent, null>) {
   }
 }
 
+const subscribeHydration = () => () => {};
+const getClientHydrationSnapshot = () => true;
+const getServerHydrationSnapshot = () => false;
+
 export function MarketingAnalytics() {
   const pathname = usePathname();
-  const [consent, setConsent] = useState<MarketingConsent>(null);
-  const [hydrated, setHydrated] = useState(false);
-  const firstTrackedPath = useRef<string | null>(null);
-
   const isConfigured =
     analyticsEnabled && Boolean(gaMeasurementId || metaPixelId);
-
-  useEffect(() => {
-    setHydrated(true);
-    if (!isConfigured) return;
-    setConsent(readStoredConsent());
-  }, [isConfigured]);
+  const [consent, setConsent] = useState<MarketingConsent>(() =>
+    isConfigured && typeof window !== "undefined" ? readStoredConsent() : null,
+  );
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot,
+  );
+  const firstTrackedPath = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isConfigured || consent !== "granted") return;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import {
   archiveLegacyPlatosLocalStorage,
   countLegacyPlatosForRestaurant,
@@ -18,6 +18,18 @@ type LegacyPlatosArchivePanelProps = {
 
 const ARCHIVE_CONFIRM_MESSAGE =
   "Se guardará una copia local de seguridad y se retirará el catálogo antiguo de este navegador.";
+const subscribeHydration = () => () => {};
+const getClientHydrationSnapshot = () => true;
+const getServerHydrationSnapshot = () => false;
+
+function readLegacyPresence(restaurantId: string) {
+  const count = countLegacyPlatosForRestaurant(restaurantId);
+  return {
+    restaurantId: restaurantId.trim(),
+    legacyPresent: hasActiveLegacyPlatosStorage() && count > 0,
+    legacyCount: count,
+  };
+}
 
 export function LegacyPlatosArchivePanel({
   restaurantId,
@@ -25,22 +37,30 @@ export function LegacyPlatosArchivePanel({
   iceVisual = false,
   onArchived,
 }: LegacyPlatosArchivePanelProps) {
-  const [legacyPresent, setLegacyPresent] = useState(false);
-  const [legacyCount, setLegacyCount] = useState(0);
+  const [legacySnapshot, setLegacySnapshot] = useState(() =>
+    typeof window === "undefined"
+      ? { restaurantId: "", legacyPresent: false, legacyCount: 0 }
+      : readLegacyPresence(restaurantId),
+  );
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot,
+  );
+  const currentLegacySnapshot =
+    hydrated && legacySnapshot.restaurantId === restaurantId.trim()
+      ? legacySnapshot
+      : hydrated
+        ? readLegacyPresence(restaurantId)
+        : { restaurantId: "", legacyPresent: false, legacyCount: 0 };
+  const { legacyPresent, legacyCount } = currentLegacySnapshot;
   const [archiving, setArchiving] = useState(false);
   const [archived, setArchived] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refreshLegacyPresence = useCallback(() => {
-    const active = hasActiveLegacyPlatosStorage();
-    const count = countLegacyPlatosForRestaurant(restaurantId);
-    setLegacyPresent(active && count > 0);
-    setLegacyCount(count);
+    setLegacySnapshot(readLegacyPresence(restaurantId));
   }, [restaurantId]);
-
-  useEffect(() => {
-    refreshLegacyPresence();
-  }, [refreshLegacyPresence, catalogSource]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -64,8 +84,7 @@ export function LegacyPlatosArchivePanel({
     }
 
     setArchived(true);
-    setLegacyPresent(false);
-    setLegacyCount(0);
+    setLegacySnapshot(readLegacyPresence(restaurantId));
     onArchived?.();
   }, [onArchived, restaurantId]);
 

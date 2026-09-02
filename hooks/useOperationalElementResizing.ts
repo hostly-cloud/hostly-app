@@ -119,7 +119,8 @@ export function useOperationalElementResizing({
   }, [onResize, onResizeSessionEnd, syncResizing]);
 
   useEffect(() => {
-    if (!enabled) cancelResize();
+    if (!enabled) return;
+    return () => cancelResize();
   }, [cancelResize, enabled]);
 
   useEffect(() => {
