@@ -28,7 +28,7 @@ test("Productos exposes the Ultra catalog image completion action without replac
   );
   assert.match(
     managementPage,
-    /configCartaAdvancedOpen \?[\s\S]*?<nav className="hostly-productos-carta-advanced-nav[\s\S]*?<ProductCatalogImageBulkPanel \/>[\s\S]*?Importar IA[\s\S]*?<\/nav>/,
+    /configCartaAdvancedOpen \?[\s\S]*?<nav className="hostly-productos-carta-advanced-nav[\s\S]*?Importar IA[\s\S]*?<\/nav>\s*<ProductCatalogImageBulkPanel \/>\s*\{renderCatalogFoodDrinkSegment\(true\)\}/,
   );
   assert.match(
     managementPage,
