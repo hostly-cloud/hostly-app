@@ -72,7 +72,8 @@
 
 .subtitle,
 .hint,
-.error {
+.error,
+.success {
   margin: 4px 0 0;
   color: #64748b;
   font-size: 12px;
@@ -81,6 +82,10 @@
 
 .error {
   color: #b42318;
+}
+
+.success {
+  color: #166534;
 }
 
 .body {
@@ -152,26 +157,81 @@
   margin-top: 14px;
 }
 
+.reviewToolbar,
+.approvalConfirmation,
+.confirmationActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.reviewToolbar {
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.approvalConfirmation {
+  justify-content: space-between;
+  margin-top: 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #f0f7ff;
+  padding: 10px;
+  color: #40566f;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .result {
+  position: relative;
   display: grid;
   min-width: 0;
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: 72px minmax(0, 1fr);
   gap: 9px;
   align-items: center;
   border: 1px solid #e2e8f0;
   border-radius: 9px;
   padding: 8px;
   content-visibility: auto;
-  contain-intrinsic-size: 62px;
+  contain-intrinsic-size: 90px;
+}
+
+.resultSelected {
+  border-color: #8bb8dd;
+  background: #f4f9fd;
 }
 
 .resultImage,
 .resultPlaceholder {
-  width: 44px;
-  height: 44px;
+  width: 72px;
+  height: 72px;
   border-radius: 7px;
   background: #eef3f8;
   object-fit: cover;
+}
+
+.resultContent {
+  min-width: 0;
+  padding-right: 32px;
+}
+
+.resultCheckboxTarget {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  cursor: pointer;
+}
+
+.resultCheckbox {
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  accent-color: #315f87;
 }
 
 .resultPlaceholder {
@@ -263,9 +323,19 @@
   }
 
   .summaryGrid,
-  .counterGrid,
-  .results {
+  .counterGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .results {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .resultName,
+  .resultMeta {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   .footer,

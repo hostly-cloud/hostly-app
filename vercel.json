@@ -1,4 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["cdg1"]
+  "regions": ["cdg1"],
+  "functions": {
+    "app/api/queues/catalog-image-bulk/route.ts": {
+      "experimentalTriggers": [
+        { "type": "queue/v2beta", "topic": "catalog-image-bulk" }
+      ]
+    }
+  }
 }

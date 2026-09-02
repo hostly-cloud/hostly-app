@@ -49,6 +49,7 @@ type BulkClassifiedProduct = {
   productName: string;
   kind: CatalogImageBulkItemKind;
   status: CatalogImageBulkItemStatus;
+  imageUrl?: string | null;
 };
 
 type StoredJobLease = {
@@ -245,7 +246,10 @@ function summarizeClassifications(
 ): { summary: CatalogImageBulkSummary; classified: BulkClassifiedProduct[] } {
   const summary = emptySummary(products.length);
   const classified = products.map((product) =>
-    classifyCatalogImageBulkProduct(product.id, product.data, now),
+    ({
+      ...classifyCatalogImageBulkProduct(product.id, product.data, now),
+      imageUrl: readString(product.data, "imageUrl") || null,
+    }),
   );
   for (const item of classified) {
     switch (item.kind) {
@@ -446,6 +450,10 @@ function deserializeItem(
     candidateCount: readFiniteNumber(data.candidateCount),
     catalogCandidates: readCatalogCandidates(data.catalogCandidates),
     failureReason: readString(data, "failureReason") || null,
+    reviewStatus:
+      data.reviewStatus === "pending" || data.reviewStatus === "approved"
+        ? data.reviewStatus
+        : null,
   };
 }
 
@@ -565,6 +573,10 @@ export async function createCatalogImageBulkJob(params: {
           kind: item.kind,
           status: item.status,
           attempts: 0,
+          ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
+          ...(item.kind === "pending_review"
+            ? { reviewStatus: "pending" }
+            : {}),
           createdAt: now,
           updatedAt: now,
         });
@@ -829,6 +841,11 @@ async function finalizeClaim(params: {
         params.catalogCandidates == null
           ? FieldValue.delete()
           : params.catalogCandidates,
+      ...(params.status === "needs_review" &&
+      (params.claim.kind === "ai_generate" ||
+        params.claim.kind === "pending_review")
+        ? { reviewStatus: "pending" }
+        : {}),
       leaseRequestId: FieldValue.delete(),
       leaseExpiresAt: FieldValue.delete(),
       updatedAt: now,

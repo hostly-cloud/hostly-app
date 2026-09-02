@@ -37,6 +37,10 @@ test("Productos exposes the Ultra catalog image completion action without replac
   assert.doesNotMatch(managementPage, /import dynamic from "next\/dynamic"/);
   assert.match(component, /Completar imágenes/);
   assert.match(component, /Nada se publicará sin aprobación/);
+  assert.match(component, /Aprobar selección/);
+  assert.match(component, /Confirmar publicación/);
+  assert.match(component, /continúa en el servidor aunque cierres esta pantalla/);
+  assert.doesNotMatch(component, /processNextCatalogImageBulkItem/);
   assert.doesNotMatch(component, /restaurantId\s*:/);
 });
 
@@ -52,4 +56,13 @@ test("the bulk review surface has a bounded mobile layout without horizontal scr
     /@media \(max-width: 640px\)[\s\S]*?\.summaryGrid,[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/,
   );
   assert.match(styles, /min-width:\s*0/);
+  assert.match(styles, /\.resultCheckboxTarget[\s\S]*?width:\s*44px[\s\S]*?height:\s*44px/);
+  assert.match(
+    styles,
+    /@media \(max-width: 640px\)[\s\S]*?\.results \{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 640px\)[\s\S]*?\.resultName,[\s\S]*?white-space:\s*normal/,
+  );
 });

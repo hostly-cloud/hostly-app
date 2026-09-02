@@ -6,6 +6,7 @@ import type {
   CatalogImageBulkJob,
   CatalogImageBulkJobPayload,
   CatalogImageBulkPreflight,
+  CatalogImageBulkReviewResult,
 } from "@/lib/productos/catalog-image-bulk-contract";
 
 export class CatalogImageBulkApiErrorResponse extends Error {
@@ -189,4 +190,30 @@ export async function controlCatalogImageBulkJob(
     );
   }
   return body.job;
+}
+
+export async function approveCatalogImageBulkSelection(
+  jobId: string,
+  productIds: string[],
+): Promise<CatalogImageBulkReviewResult> {
+  const response = await authenticatedApiFetch(
+    `/api/catalog/product-image-bulk/jobs/${encodeURIComponent(jobId)}/review`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productIds, confirmApproval: true }),
+    },
+  );
+  const body = await readJson<
+    | { ok: true; result: CatalogImageBulkReviewResult }
+    | CatalogImageBulkApiError
+  >(response);
+  if (!response.ok || !body?.ok) {
+    throwApiError(
+      response,
+      body && !body.ok ? body : null,
+      "CATALOG_IMAGE_BULK_REVIEW_FAILED",
+    );
+  }
+  return body.result;
 }

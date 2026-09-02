@@ -49,6 +49,7 @@ export const HOSTLY_CATALOG_IMAGE_PLAN_POLICY: Readonly<
 export type HostlyCatalogImageBulkPolicy = {
   maxConcurrentItemsPerJob: number;
   maxAttemptsPerItem: number;
+  maxReviewItemsPerRequest: number;
   leaseDurationMs: number;
   aiGenerationCreditsPerItem: number | null;
   catalogSearchCreditsPerItem: number | null;
@@ -57,6 +58,7 @@ export type HostlyCatalogImageBulkPolicy = {
 export const HOSTLY_CATALOG_IMAGE_BULK_POLICY: Readonly<HostlyCatalogImageBulkPolicy> = {
   maxConcurrentItemsPerJob: 1,
   maxAttemptsPerItem: 3,
+  maxReviewItemsPerRequest: 50,
   leaseDurationMs: 2 * 60 * 1000,
   aiGenerationCreditsPerItem: null,
   catalogSearchCreditsPerItem: null,

@@ -9,13 +9,13 @@ import type {
   CatalogImageBulkPreflight,
 } from "@/lib/productos/catalog-image-bulk-contract";
 import {
+  approveCatalogImageBulkSelection,
   CatalogImageBulkApiErrorResponse,
   controlCatalogImageBulkJob,
   createCatalogImageBulkJob,
   fetchCatalogImageBulkJob,
   fetchCatalogImageBulkPreflight,
   fetchLatestCatalogImageBulkJob,
-  processNextCatalogImageBulkItem,
 } from "@/lib/productos/catalog-image-bulk-api";
 import styles from "./product-catalog-image-bulk-panel.module.css";
 
@@ -30,6 +30,7 @@ const STATUS_LABELS: Record<CatalogImageBulkJob["status"], string> = {
 };
 
 function itemMeta(item: CatalogImageBulkJobItem): string {
+  if (item.reviewStatus === "approved") return "Aprobada y publicada";
   if (item.status === "failed") return "Falló · se puede reintentar";
   if (item.kind === "catalog_search") {
     return item.candidateCount > 0
@@ -62,12 +63,16 @@ export function ProductCatalogImageBulkPanel() {
   const [preflight, setPreflight] = useState<CatalogImageBulkPreflight | null>(null);
   const [payload, setPayload] = useState<CatalogImageBulkJobPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [processingRequest, setProcessingRequest] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [controlRequest, setControlRequest] = useState(false);
+  const [approvalRequest, setApprovalRequest] = useState(false);
+  const [confirmingApproval, setConfirmingApproval] = useState(false);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setMessage(null);
     try {
       const [nextPreflight, latest] = await Promise.all([
         fetchCatalogImageBulkPreflight(),
@@ -110,6 +115,7 @@ export function ProductCatalogImageBulkPanel() {
   const start = useCallback(async () => {
     setControlRequest(true);
     setError(null);
+    setMessage(null);
     try {
       const job = await createCatalogImageBulkJob();
       await refreshJob(job.jobId);
@@ -123,6 +129,9 @@ export function ProductCatalogImageBulkPanel() {
   const prepareNewJob = useCallback(async () => {
     setControlRequest(true);
     setError(null);
+    setMessage(null);
+    setSelectedProductIds([]);
+    setConfirmingApproval(false);
     try {
       const nextPreflight = await fetchCatalogImageBulkPreflight();
       setPreflight(nextPreflight);
@@ -139,6 +148,7 @@ export function ProductCatalogImageBulkPanel() {
       if (!payload) return;
       setControlRequest(true);
       setError(null);
+      setMessage(null);
       try {
         await controlCatalogImageBulkJob(payload.job.jobId, action);
         await refreshJob(payload.job.jobId);
@@ -156,27 +166,19 @@ export function ProductCatalogImageBulkPanel() {
     if (
       !open ||
       !job ||
-      processingRequest ||
       controlRequest ||
-      (job.status !== "queued" && job.status !== "running") ||
-      (job.counters.pending <= 0 && job.counters.processing <= 0)
+      approvalRequest ||
+      (job.status !== "queued" && job.status !== "running")
     ) {
       return;
     }
-    const delayMs = job.counters.pending > 0 ? 0 : 10_000;
     const timer = window.setTimeout(() => {
-      setProcessingRequest(true);
-      void processNextCatalogImageBulkItem(job.jobId)
-        .then(() => refreshJob(job.jobId))
-        .catch((nextError) => {
-          setError(messageFromError(nextError));
-        })
-        .finally(() => {
-          setProcessingRequest(false);
-        });
-    }, delayMs);
+      void refreshJob(job.jobId).catch((nextError) => {
+        setError(messageFromError(nextError));
+      });
+    }, 2_000);
     return () => window.clearTimeout(timer);
-  }, [controlRequest, open, payload, processingRequest, refreshJob]);
+  }, [approvalRequest, controlRequest, open, payload, refreshJob]);
 
   const progress = useMemo(() => {
     const counters = payload?.job.counters;
@@ -197,6 +199,69 @@ export function ProductCatalogImageBulkPanel() {
       ) ?? [],
     [payload],
   );
+
+  const approvableProductIds = useMemo(
+    () =>
+      visibleItems
+        .filter(
+          (item) =>
+            item.status === "needs_review" &&
+            item.reviewStatus !== "approved" &&
+            Boolean(item.imageUrl) &&
+            (item.kind === "ai_generate" || item.kind === "pending_review"),
+        )
+        .map((item) => item.productId),
+    [visibleItems],
+  );
+  const approvableProductIdSet = useMemo(
+    () => new Set(approvableProductIds),
+    [approvableProductIds],
+  );
+  const validSelectedProductIds = useMemo(
+    () =>
+      selectedProductIds.filter((productId) =>
+        approvableProductIdSet.has(productId),
+      ),
+    [approvableProductIdSet, selectedProductIds],
+  );
+  const selectedProductIdSet = useMemo(
+    () => new Set(validSelectedProductIds),
+    [validSelectedProductIds],
+  );
+
+  const toggleProduct = useCallback((productId: string) => {
+    setConfirmingApproval(false);
+    setSelectedProductIds((current) =>
+      current.includes(productId)
+        ? current.filter((id) => id !== productId)
+        : [...current, productId],
+    );
+  }, []);
+
+  const approveSelection = useCallback(async () => {
+    if (!payload || validSelectedProductIds.length === 0) return;
+    setApprovalRequest(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await approveCatalogImageBulkSelection(
+        payload.job.jobId,
+        validSelectedProductIds,
+      );
+      await refreshJob(payload.job.jobId);
+      setSelectedProductIds([]);
+      setConfirmingApproval(false);
+      setMessage(
+        result.failed > 0
+          ? `${result.approved + result.alreadyApproved} imágenes aprobadas; ${result.failed} necesitan revisión individual.`
+          : `${result.approved + result.alreadyApproved} imágenes aprobadas y publicadas.`,
+      );
+    } catch (nextError) {
+      setError(messageFromError(nextError));
+    } finally {
+      setApprovalRequest(false);
+    }
+  }, [payload, refreshJob, validSelectedProductIds]);
 
   return (
     <>
@@ -242,6 +307,7 @@ export function ProductCatalogImageBulkPanel() {
             <div className={styles.body}>
               {loading ? <p className={styles.hint}>Analizando el catálogo…</p> : null}
               {error ? <p className={styles.error} role="alert">{error}</p> : null}
+              {message ? <p className={styles.success} role="status">{message}</p> : null}
 
               {!loading && preflight && !payload ? (
                 <>
@@ -273,31 +339,104 @@ export function ProductCatalogImageBulkPanel() {
                   </div>
                   <p className={styles.hint}>
                     {STATUS_LABELS[payload.job.status]} · {progress}% · El trabajo queda
-                    guardado y puede retomarse al volver a abrir esta pantalla.
+                    guardado y continúa en el servidor aunque cierres esta pantalla.
                   </p>
                   {visibleItems.length > 0 ? (
-                    <div className={styles.results} aria-label="Resultados del catálogo">
-                      {visibleItems.map((item) => (
-                        <article key={item.productId} className={styles.result}>
-                          {item.imageUrl ? (
-                            <Image
-                              className={styles.resultImage}
-                              src={item.imageUrl}
-                              alt=""
-                              width={44}
-                              height={44}
-                              unoptimized
-                            />
-                          ) : (
-                            <span className={styles.resultPlaceholder} aria-hidden="true">◌</span>
-                          )}
-                          <div>
-                            <div className={styles.resultName}>{item.productName}</div>
-                            <div className={styles.resultMeta}>{itemMeta(item)}</div>
+                    <>
+                      {approvableProductIds.length > 0 ? (
+                        <div className={styles.reviewToolbar}>
+                          <span className={styles.hint}>
+                            {validSelectedProductIds.length} seleccionadas de {approvableProductIds.length} aprobables
+                          </span>
+                          <button
+                            type="button"
+                            className={styles.buttonSecondary}
+                            disabled={approvalRequest}
+                            onClick={() => {
+                              setConfirmingApproval(false);
+                              setSelectedProductIds(
+                                validSelectedProductIds.length === approvableProductIds.length
+                                  ? []
+                                  : approvableProductIds,
+                              );
+                            }}
+                          >
+                            {validSelectedProductIds.length === approvableProductIds.length
+                              ? "Quitar selección"
+                              : "Seleccionar aprobables"}
+                          </button>
+                        </div>
+                      ) : null}
+                      {confirmingApproval ? (
+                        <div
+                          className={styles.approvalConfirmation}
+                          role="alertdialog"
+                          aria-label="Confirmar publicación de imágenes"
+                        >
+                          <span>
+                            Se publicarán {validSelectedProductIds.length} imágenes y quedarán protegidas frente a sustituciones automáticas.
+                          </span>
+                          <div className={styles.confirmationActions}>
+                            <button
+                              type="button"
+                              className={styles.buttonSecondary}
+                              disabled={approvalRequest}
+                              onClick={() => setConfirmingApproval(false)}
+                            >
+                              Volver
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.buttonPrimary}
+                              disabled={approvalRequest}
+                              onClick={() => void approveSelection()}
+                            >
+                              {approvalRequest ? "Publicando…" : "Confirmar publicación"}
+                            </button>
                           </div>
-                        </article>
-                      ))}
-                    </div>
+                        </div>
+                      ) : null}
+                      <div className={styles.results} aria-label="Resultados del catálogo">
+                        {visibleItems.map((item) => {
+                          const selectable = approvableProductIdSet.has(item.productId);
+                          const selected = selectedProductIdSet.has(item.productId);
+                          return (
+                            <article
+                              key={item.productId}
+                              className={`${styles.result}${selected ? ` ${styles.resultSelected}` : ""}`}
+                            >
+                              {selectable ? (
+                                <label className={styles.resultCheckboxTarget}>
+                                  <input
+                                    className={styles.resultCheckbox}
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={() => toggleProduct(item.productId)}
+                                    aria-label={`Seleccionar ${item.productName}`}
+                                  />
+                                </label>
+                              ) : null}
+                              {item.imageUrl ? (
+                                <Image
+                                  className={styles.resultImage}
+                                  src={item.imageUrl}
+                                  alt=""
+                                  width={72}
+                                  height={72}
+                                  unoptimized
+                                />
+                              ) : (
+                                <span className={styles.resultPlaceholder} aria-hidden="true">◌</span>
+                              )}
+                              <div className={styles.resultContent}>
+                                <div className={styles.resultName}>{item.productName}</div>
+                                <div className={styles.resultMeta}>{itemMeta(item)}</div>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </>
                   ) : null}
                 </>
               ) : null}
@@ -308,6 +447,16 @@ export function ProductCatalogImageBulkPanel() {
                 Las imágenes aprobadas y manuales se conservan siempre.
               </p>
               <div className={styles.actions}>
+                {payload && validSelectedProductIds.length > 0 && !confirmingApproval ? (
+                  <button
+                    type="button"
+                    className={styles.buttonPrimary}
+                    disabled={approvalRequest || controlRequest}
+                    onClick={() => setConfirmingApproval(true)}
+                  >
+                    Aprobar selección ({validSelectedProductIds.length})
+                  </button>
+                ) : null}
                 {!payload && preflight ? (
                   <button
                     type="button"

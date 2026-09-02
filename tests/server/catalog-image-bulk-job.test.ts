@@ -248,6 +248,40 @@ test("an interrupted preparing job is safely rebuilt with the same idempotency k
   assert.equal(state.items[0].productId, "dish-1");
 });
 
+test("an existing pending image is persisted in the review gallery", async () => {
+  const { db } = memoryFirestore({
+    "restaurants/restaurant-a/products/dish-1": {
+      ...dish("Croquetas"),
+      imageUrl: "https://example.test/pending-croquetas.webp",
+      imagePath:
+        "restaurants/restaurant-a/products/dish-1/ai/pending-croquetas.webp",
+      imageEnrichment: {
+        source: "ai_generated",
+        reviewStatus: "pending",
+        locked: false,
+      },
+    },
+  });
+  const created = await createCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    userId: "owner-a",
+    idempotencyKey: "bulk-pending-1",
+    access: ULTRA_ACCESS,
+  });
+  const state = await readCatalogImageBulkJob({
+    db,
+    restaurantId: "restaurant-a",
+    jobId: created.jobId,
+  });
+  assert.equal(state.job.status, "completed");
+  assert.equal(state.items[0].kind, "pending_review");
+  assert.equal(
+    state.items[0].imageUrl,
+    "https://example.test/pending-croquetas.webp",
+  );
+});
+
 test("partial failures persist, can be retried, and never publish automatically", async () => {
   const { db } = memoryFirestore({
     "restaurants/restaurant-a/products/dish-1": dish("Croquetas"),
