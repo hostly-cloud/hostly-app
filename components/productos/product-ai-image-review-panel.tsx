@@ -666,7 +666,7 @@ export function ProductAiImageReviewPanel({
         </p>
       ) : null}
 
-      {!loading && planAllowsSingle && savedProductId ? (
+      {!loading && planAllowsSingle && savedProductId && resolved?.canGenerate ? (
         <p className="hostly-product-commercial-modal__hint">
           Crear con IA puede consumir créditos. Toda imagen automática queda pendiente
           de revisión hasta que la apruebes.

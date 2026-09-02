@@ -58,6 +58,10 @@ describe("Product image form contract", () => {
     assert.match(reviewPanelSource, /pendiente de revisión/);
     assert.match(reviewPanelSource, /¿Regenerar la imagen aprobada\?/);
     assert.match(reviewPanelSource, /se conservará si falla/);
+    assert.match(
+      reviewPanelSource,
+      /planAllowsSingle && savedProductId && resolved\?\.canGenerate/,
+    );
   });
 
   it("keeps the individual image panel bounded on narrow screens", () => {
