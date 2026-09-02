@@ -6,13 +6,41 @@ Estado: base de narrativa de marca. No usar como biografía pública definitiva 
 
 Hostly nace desde la experiencia directa en hostelería, no desde una hipótesis de software.
 
-El fundador lleva 20 años trabajando en hostelería, ha usado distintos TPV y ha visto de primera mano cómo funcionan restaurantes, equipos, servicios, barras, salas y operaciones bajo presión.
+El fundador lleva 20 años trabajando en hostelería. Durante los últimos siete años y medio ha trabajado en un mismo restaurante, donde pasó a asumir funciones de manager y empezó a intervenir directamente en cómo se utilizaba y configuraba el TPV.
 
-La observación central es sencilla:
+El sistema estaba desordenado y poco cuidado. En lugar de resignarse a trabajar con él tal como estaba, empezó a reorganizarlo, mejorar la estructura, añadir imágenes y hacer que fuera más claro y práctico para el equipo.
+
+Ese fue el primer punto de inflexión: comprobar que una parte importante de la experiencia de trabajo podía mejorar simplemente replanteando cómo estaba organizada la herramienta.
+
+La observación central terminó siendo sencilla:
 
 > El software de hostelería ha avanzado mucho en funciones, pero demasiadas interfaces siguen sintiéndose atrasadas, complejas o poco naturales para quien trabaja en servicio real.
 
 Hostly nace para resolver esa distancia.
+
+## El momento que desencadena Hostly
+
+El origen concreto del proyecto no fue "quiero crear un TPV".
+
+Surgió de un problema cotidiano de gestión.
+
+En el restaurante estaban intentando calcular costes y precios de venta para cócteles y bebidas. El cálculo en sí no era difícil. La pregunta fue otra:
+
+> "¿Por qué algo tan habitual tiene que resultar tan poco práctico? ¿No debería existir una forma mucho más fácil de hacerlo?"
+
+La primera idea fue crear una aplicación sencilla para resolver ese problema concreto.
+
+A partir de ahí empezó una investigación más amplia. El fundador se formó mediante varios cursos de inteligencia artificial y comenzó a utilizar herramientas como ChatGPT para investigar cómo convertir problemas reales de hostelería en flujos más rápidos, claros y correctos.
+
+Mientras seguía trabajando en el restaurante ocurrió algo importante: los problemas dejaron de ser solo molestias del día a día y empezaron a convertirse en preguntas de producto.
+
+Cada vez que aparecía una fricción —un proceso lento, una acción mal ubicada, una forma confusa de gestionar información o una tarea repetitiva— surgía la misma pregunta:
+
+> "¿Cómo se podría resolver esto de una forma más fácil, rápida y correcta?"
+
+La inteligencia artificial se convirtió en una herramienta para investigar soluciones, explorar opciones técnicas y acelerar el aprendizaje. Pero el origen de las preguntas seguía estando en el restaurante y en el servicio real.
+
+Así, una aplicación que inicialmente podía haber servido para resolver un problema concreto de costes empezó a crecer hasta convertirse en Hostly.
 
 ## Diferencia de origen
 
@@ -96,6 +124,8 @@ Frases principales:
 - **No hemos actualizado el TPV de siempre. Hemos empezado otra vez.**
 - **Hecho desde el servicio, no desde una lista de funcionalidades.**
 - **20 años viendo los problemas. Ahora los estamos convirtiendo en producto.**
+- **De mejorar un TPV desde dentro a replantearlo desde cero.**
+- **Hostly empezó con una pregunta sencilla: ¿por qué esto tiene que ser tan complicado?**
 - **Nuevo por fuera. Familiar desde el primer servicio.**
 - **Moderno sin complicar lo que ya funciona.**
 - **Si sabes trabajar en un restaurante, sabes orientarte en Hostly.**
@@ -105,23 +135,27 @@ Frases principales:
 
 ## Founder-led story — versión corta
 
-> Llevo 20 años trabajando en hostelería. He trabajado con distintos TPV, he visto servicios buenos, servicios caóticos y muchas formas diferentes de gestionar un restaurante. Durante años he ido detectando las mismas fricciones: pasos que sobran, pantallas que confunden, información que llega tarde y sistemas que obligan al restaurante a adaptarse al software. Hostly nace de esa experiencia. No para añadir otra capa al TPV de siempre, sino para convertir esos problemas reales en un producto nuevo, moderno y mucho más natural para quien trabaja en servicio.
+> Llevo 20 años trabajando en hostelería. En los últimos siete años y medio he trabajado en el mismo restaurante y, cuando pasé a ser manager, empecé a ordenar y mejorar el TPV que utilizábamos porque muchas cosas no estaban bien planteadas. Añadí imágenes, reorganicé información y fui viendo que pequeños cambios podían hacer el trabajo mucho más fácil. Un día, mientras intentábamos calcular costes y precios de cócteles y bebidas, pensé que algo tan habitual no debería resultar tan poco práctico. Empecé a investigar cómo crear una herramienta sencilla, me formé en inteligencia artificial y comencé a utilizar ChatGPT para explorar cómo resolver mejor problemas que me encontraba cada día trabajando. Poco a poco, cada fricción del restaurante se fue convirtiendo en una decisión de producto. Así nació Hostly.
 
 ## Founder-led story — versión anuncio / vídeo
 
 **Hook**
 
-"Llevo 20 años trabajando en hostelería y durante todo ese tiempo he ido apuntando mentalmente las mismas cosas."
+"Hostly no empezó porque yo quisiera crear un TPV. Empezó porque estaba cansado de encontrarme problemas que deberían ser mucho más fáciles de resolver."
 
 **Desarrollo**
 
-"Pasos que sobran. Botones donde no deberían estar. Información que llega tarde. Pantallas que un camarero nuevo tarda demasiado en entender. Sistemas que funcionan, sí, pero que parecen pensados desde fuera del servicio."
+"Llevo 20 años trabajando en hostelería. En los últimos siete años y medio he estado en el mismo restaurante y, cuando me hicieron manager, empecé a arreglar el TPV que utilizábamos: ordenar cosas, poner imágenes, hacerlo más claro para trabajar."
 
-"Yo he estado al otro lado de esa pantalla. Como camarero y como responsable de restaurante."
+"Un día estábamos calculando costes y precios para cócteles y bebidas y pensé: esto no puede ser tan poco práctico. Tiene que existir una forma más fácil."
+
+"Empecé investigando cómo crear una pequeña aplicación. Me formé en inteligencia artificial y empecé a usar ChatGPT para preguntarme cómo resolver mejor cada problema que iba viendo en el restaurante."
+
+"Y ocurrió algo: cada día de trabajo me daba una nueva idea. Cada problema se convertía en una pregunta. Y cada pregunta, poco a poco, se convirtió en Hostly."
 
 **Resolución**
 
-"Por eso estamos construyendo Hostly. No hemos actualizado el TPV de siempre. Hemos empezado otra vez."
+"Por eso Hostly no nace desde fuera de un restaurante. Nace desde dentro. No hemos actualizado el TPV de siempre. Hemos empezado otra vez."
 
 **Cierre**
 
@@ -129,7 +163,25 @@ Frases principales:
 
 ## Concepto de campaña fundador
 
-### Pieza 1 — "Yo he estado al otro lado"
+### Pieza 1 — "Así empezó Hostly"
+
+Hook:
+
+**"Hostly empezó intentando resolver un problema mucho más pequeño."**
+
+Desarrollo:
+- TPV antiguo mejorado manualmente;
+- paso a manager;
+- necesidad de calcular costes y precios;
+- primera idea de una aplicación sencilla;
+- formación en IA;
+- problemas diarios convertidos en soluciones.
+
+Cierre:
+
+**"Una solución llevó a otra. Y acabamos replanteando todo el software del restaurante."**
+
+### Pieza 2 — "Yo he estado al otro lado"
 
 Hook:
 
@@ -147,7 +199,7 @@ Cierre:
 
 **"Yo he estado al otro lado de esa pantalla. Por eso hicimos Hostly."**
 
-### Pieza 2 — "Problema -> producto"
+### Pieza 3 — "Problema -> producto"
 
 Formato repetible para contenido orgánico:
 
@@ -157,6 +209,19 @@ Formato repetible para contenido orgánico:
 - enseñar la interacción real.
 
 Esta serie puede convertirse en una de las principales líneas de contenido del fundador porque demuestra experiencia sin necesidad de atacar competidores.
+
+## Uso editorial de la IA en la historia
+
+La IA forma parte de la historia de origen, pero no debe presentarse como si "la IA hubiera creado Hostly".
+
+La narrativa correcta es:
+
+- los problemas vienen de años de experiencia humana en hostelería;
+- el fundador identifica las fricciones y decide qué necesita resolver;
+- la IA y ChatGPT se utilizan como herramientas de aprendizaje, investigación, exploración técnica y aceleración del desarrollo;
+- la visión de producto y el criterio operativo siguen naciendo de la experiencia en el restaurante.
+
+Esto refuerza dos mensajes a la vez: Hostly nace desde hostelería real y utiliza tecnología de nueva generación para convertir esa experiencia en software.
 
 ## Demostración visual que debe respaldar el mensaje
 
@@ -198,6 +263,7 @@ La promesa de marketing debe condicionar producto:
 - No usar futurismo visual que haga parecer Hostly experimental o poco fiable.
 - No insinuar que todos los TPV actuales son malos.
 - No decir que "los programadores no entienden hostelería"; la comparación debe ser entre origen del producto y problema vivido, no entre profesiones.
+- No decir que ChatGPT creó Hostly; fue una herramienta dentro del proceso.
 - No atacar competidores.
 
 ## Concepto de campaña 2027
