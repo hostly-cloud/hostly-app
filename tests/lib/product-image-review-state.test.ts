@@ -57,7 +57,7 @@ test("a pending AI image can be approved, regenerated or rejected", () => {
   ]);
 });
 
-test("an approved automatic image is locked and exposes no destructive actions", () => {
+test("an approved AI image exposes only explicitly confirmed regeneration", () => {
   const pending = buildPendingAutomaticProductImageEnrichment({
     source: "ai_generated",
   });
@@ -76,8 +76,13 @@ test("an approved automatic image is locked and exposes no destructive actions",
 
   assert.equal(state.locked, true);
   assert.equal(state.reviewStatus, "approved");
-  assert.equal(state.canGenerate, false);
-  assert.deepEqual(buildProductImageReviewView(state).actions, []);
+  assert.equal(state.canGenerate, true);
+  assert.equal(state.requiresApprovedImageReplacementConfirmation, true);
+  assert.deepEqual(buildProductImageReviewView(state).actions, ["regenerate"]);
+  assert.match(
+    buildProductImageReviewView(state).guidance ?? "",
+    /confirmas expresamente/,
+  );
 });
 
 test("a rejected automatic image remains eligible only for regeneration", () => {
@@ -125,6 +130,39 @@ test("manual and legacy images remain protected in the UI", () => {
   assert.deepEqual(buildProductImageReviewView(legacy).actions, []);
   assert.equal(legacy.source, "legacy");
   assert.equal(legacy.reviewStatus, "protected");
+});
+
+test("brands are routed only to real catalog search", () => {
+  const state = buildProductImageReviewStateFromDocument(
+    "product-1",
+    importedDish({
+      name: "Coca-Cola Zero 33 cl",
+      categoryName: "Refrescos",
+      tipoVenta: "bebida",
+      productFamilyType: "drink",
+      barcode: "5449000131805",
+    }),
+    1_000,
+  );
+
+  assert.equal(state.recommendedAction, "catalog_search");
+  assert.equal(state.canGenerate, false);
+  assert.equal(state.canSearchCatalog, true);
+  assert.deepEqual(buildProductImageReviewView(state).actions, []);
+  assert.match(buildProductImageReviewView(state).guidance ?? "", /catálogo/);
+});
+
+test("ambiguous products remain manual instead of choosing a provider", () => {
+  const state = buildProductImageReviewStateFromDocument(
+    "product-1",
+    importedDish({ tipoVenta: "otro", name: "Especial de la casa" }),
+    1_000,
+  );
+
+  assert.equal(state.recommendedAction, "manual_review");
+  assert.equal(state.canGenerate, false);
+  assert.equal(state.canSearchCatalog, false);
+  assert.match(buildProductImageReviewView(state).guidance ?? "", /manual/);
 });
 
 test("an active generation lock suppresses a second paid request", () => {

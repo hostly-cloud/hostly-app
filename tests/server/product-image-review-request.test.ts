@@ -53,6 +53,8 @@ function resolvedState(): ProductImageReviewResolvedState {
     canApprove: true,
     canReject: true,
     canSearchCatalog: true,
+    recommendedAction: "ai_generate",
+    requiresApprovedImageReplacementConfirmation: false,
     catalogProvenance: null,
     generationReason: null,
   };

@@ -192,6 +192,7 @@ test("generator receives the server-resolved tenant and authenticated user", asy
       userId: string;
       idempotencyKey: string;
       description?: string;
+      allowApprovedAiReplacement?: boolean;
       }
     | undefined;
 
@@ -200,6 +201,7 @@ test("generator receives the server-resolved tenant and authenticated user", asy
       productId: " product-1 ",
       idempotencyKey: "request-generation-success",
       confirmGeneration: true,
+      confirmReplaceApprovedImage: true,
       description: "  Lubina con patata y verduras  ",
     }),
     {
@@ -212,6 +214,8 @@ test("generator receives the server-resolved tenant and authenticated user", asy
           userId: params.userId,
           idempotencyKey: params.idempotencyKey,
           description: params.description,
+          allowApprovedAiReplacement:
+            params.allowApprovedAiReplacement,
         };
         return {
           outcome: "generated",
@@ -232,6 +236,7 @@ test("generator receives the server-resolved tenant and authenticated user", asy
     userId: "owner-1",
     idempotencyKey: "request-generation-success",
     description: "Lubina con patata y verduras",
+    allowApprovedAiReplacement: true,
   });
   const body = await json(response);
   assert.equal(body.ok, true);
@@ -315,5 +320,36 @@ test("invalid description types are rejected before generation", async () => {
 
   assert.equal(response.status, 400);
   assert.equal((await json(response)).error, "INVALID_PRODUCT_DESCRIPTION");
+  assert.equal(generated, false);
+});
+
+test("invalid approved-image replacement confirmation is rejected", async () => {
+  let generated = false;
+  const response = await handleGenerateImportedProductImageRequest(
+    request({
+      productId: "product-1",
+      idempotencyKey: "request-invalid-replacement",
+      confirmGeneration: true,
+      confirmReplaceApprovedImage: "yes",
+    }),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
+      generate: async () => {
+        generated = true;
+        return {
+          outcome: "skipped",
+          productId: "product-1",
+          reason: "protected_existing_image",
+        };
+      },
+    },
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(
+    (await json(response)).error,
+    "INVALID_IMAGE_REPLACEMENT_CONFIRMATION",
+  );
   assert.equal(generated, false);
 });

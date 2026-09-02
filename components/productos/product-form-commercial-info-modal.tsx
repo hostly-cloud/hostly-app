@@ -218,7 +218,6 @@ export function ProductFormCommercialInfoModal({
             <>
               <ProductCommercialIdentityPanel
                 productId={productId}
-                productName={productName}
                 disabled={disabled}
                 inputClassName={drawerInputClass}
                 onExactImageAttached={handleExactImageAttached}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
+  ConfigBtnDanger,
   ConfigBtnPrimary,
   ConfigBtnSecondary,
 } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
@@ -17,12 +18,12 @@ import {
   searchCatalogProductImagesForReview,
 } from "@/lib/productos/catalog-product-image-api";
 import type {
+  ProductImageContentStrategy,
   ProductImageReviewAction,
   ProductImageReviewResolution,
 } from "@/lib/productos/product-image-review-contract";
 import {
   ProductImageReviewApiError,
-  fetchProductImageReviewState,
   fetchProductImageReviewStateById,
   generateProductImageForReview,
   submitProductImageReview,
@@ -44,7 +45,11 @@ export type ProductAiImageReviewPanelProps = {
 };
 
 type PendingConfirmation =
-  | { kind: "generate" }
+  | {
+      kind: "generate";
+      hasExistingImage: boolean;
+      replaceApprovedImage: boolean;
+    }
   | { kind: "attach"; candidate: CatalogProductImageCandidate };
 
 function ProductImageActionConfirmDialog({
@@ -61,6 +66,10 @@ function ProductImageActionConfirmDialog({
   const cancelRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const isGeneration = confirmation.kind === "generate";
+  const isApprovedReplacement =
+    confirmation.kind === "generate" && confirmation.replaceApprovedImage;
+  const isRegeneration =
+    confirmation.kind === "generate" && confirmation.hasExistingImage;
 
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null;
@@ -115,11 +124,19 @@ function ProductImageActionConfirmDialog({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <h2 id={titleId} className="hostly-productos-bulk-course-modal__title">
-          {isGeneration ? "¿Crear imagen con IA?" : "¿Usar esta imagen de catálogo?"}
+          {isApprovedReplacement
+            ? "¿Regenerar la imagen aprobada?"
+            : isRegeneration
+              ? "¿Regenerar imagen con IA?"
+              : isGeneration
+                ? "¿Crear imagen con IA?"
+                : "¿Usar esta imagen de catálogo?"}
         </h2>
         <p id={messageId} className="hostly-productos-bulk-course-modal__hint">
-          {isGeneration
-            ? "La generación puede consumir créditos. La imagen quedará pendiente de revisión y no sustituirá una imagen aprobada."
+          {isApprovedReplacement
+            ? "La generación puede consumir créditos. La imagen actual se conservará si falla; si termina, se sustituirá por una nueva propuesta pendiente de revisión."
+            : isGeneration
+              ? "La generación puede consumir créditos. El resultado quedará pendiente de revisión y no se publicará automáticamente."
             : `Se copiará la imagen de “${confirmation.candidate.productName}” y quedará pendiente de aprobación.`}
         </p>
         <div className="hostly-productos-bulk-course-modal__actions">
@@ -137,7 +154,11 @@ function ProductImageActionConfirmDialog({
             className="hostly-button-primary hostly-button-compact"
             onClick={onConfirm}
           >
-            {isGeneration ? "Crear imagen" : "Usar imagen"}
+            {isRegeneration
+              ? "Regenerar imagen"
+              : isGeneration
+                ? "Crear imagen"
+                : "Usar imagen"}
           </button>
         </div>
       </div>
@@ -212,6 +233,14 @@ function skippedGenerationMessage(reason: string): string {
     default:
       return "Hostly no ha generado una imagen para este producto.";
   }
+}
+
+function recommendationLabel(
+  action: ProductImageContentStrategy,
+): string {
+  if (action === "ai_generate") return "Recomendado: crear con IA";
+  if (action === "catalog_search") return "Recomendado: catálogo real";
+  return "Necesita revisión manual";
 }
 
 function badgeTone(
@@ -380,15 +409,12 @@ export function ProductAiImageReviewPanel({
 
   useEffect(() => {
     const id = productId?.trim() ?? "";
-    const name = productName.trim();
-    if (!open || (!id && !name)) return;
+    if (!open || !id) return;
 
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const request = id
-      ? fetchProductImageReviewStateById(id)
-      : fetchProductImageReviewState(name);
+    const request = fetchProductImageReviewStateById(id);
     void request
       .then((payload) => {
         if (!cancelled) {
@@ -422,7 +448,7 @@ export function ProductAiImageReviewPanel({
     [resolved, localImageDraftDirty],
   );
 
-  const runGeneration = useCallback(async () => {
+  const runGeneration = useCallback(async (replaceApprovedImage: boolean) => {
     if (!resolved || disabled || busyAction || catalogAttachingReference) return;
 
     const action: ProductImageReviewUiAction = resolved.hasImage
@@ -435,6 +461,7 @@ export function ProductAiImageReviewPanel({
       const result = await generateProductImageForReview(
         resolved.productId,
         productDescription,
+        { confirmReplaceApprovedImage: replaceApprovedImage },
       );
       if (result.outcome === "generated") {
         lastAutomaticAppliedUrlRef.current = result.imageUrl;
@@ -542,7 +569,9 @@ export function ProductAiImageReviewPanel({
     [resolved, localImageDraftDirty, disabled, catalogAttachingReference, onImageUrlChange, refresh],
   );
 
-  if (!open || (!productId?.trim() && !productName.trim())) return null;
+  if (!open) return null;
+
+  const savedProductId = productId?.trim() ?? "";
 
   const buttonDisabled =
     disabled || busyAction != null || catalogSearching || catalogAttachingReference != null;
@@ -558,7 +587,7 @@ export function ProductAiImageReviewPanel({
     setPendingConfirmation(null);
     if (!confirmation) return;
     if (confirmation.kind === "generate") {
-      void runGeneration();
+      void runGeneration(confirmation.replaceApprovedImage);
       return;
     }
     void runCatalogAttach(confirmation.candidate);
@@ -570,21 +599,35 @@ export function ProductAiImageReviewPanel({
       style={{
         display: "flex",
         flexDirection: "column",
+        minWidth: 0,
         gap: 10,
         padding: 12,
         borderRadius: 12,
         border: "1px solid rgba(56,189,248,.22)",
         background: "linear-gradient(180deg,rgba(240,249,255,.9),rgba(248,250,252,.75))",
+        overflowWrap: "anywhere",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-        <div>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
           <h3 style={{ margin: 0, color: "#0f172a", fontSize: 13, fontWeight: 780 }}>
             Imagen del producto
           </h3>
           <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: 11 }}>
             IA para platos genéricos; catálogo real para marcas, formatos y vinos.
           </p>
+          {resolved ? (
+            <p className="hostly-product-commercial-modal__hint">
+              {recommendationLabel(resolved.recommendedAction)}
+            </p>
+          ) : null}
           {access ? (
             <p className="hostly-product-commercial-modal__hint">
               Plan {catalogImagePlanLabel(access.effectivePlan)}
@@ -597,9 +640,16 @@ export function ProductAiImageReviewPanel({
         {loading ? <span style={{ color: "#64748b", fontSize: 11 }}>Comprobando…</span> : null}
       </div>
 
-      {!loading && state?.resolution === "not_found" ? (
+      {!savedProductId ? (
+        <p style={{ margin: 0, color: "#475569", fontSize: 11, lineHeight: 1.45 }}>
+          Guarda primero el producto. Hostly necesita su identificador para crear,
+          buscar y revisar imágenes sin confundirlo con otro producto del catálogo.
+        </p>
+      ) : null}
+
+      {savedProductId && !loading && state?.resolution === "not_found" ? (
         <p style={{ margin: 0, color: "#64748b", fontSize: 11, lineHeight: 1.45 }}>
-          Guarda primero el producto para activar esta función.
+          Este producto ya no está disponible. Cierra la ficha y actualiza el catálogo.
         </p>
       ) : null}
 
@@ -613,6 +663,13 @@ export function ProductAiImageReviewPanel({
         <p className="hostly-product-commercial-modal__hint" role="status">
           Tu plan Básico mantiene la subida manual. Crear imágenes con IA y buscar
           imágenes reales de catálogo está disponible desde Pro.
+        </p>
+      ) : null}
+
+      {!loading && planAllowsSingle && savedProductId ? (
+        <p className="hostly-product-commercial-modal__hint">
+          Crear con IA puede consumir créditos. Toda imagen automática queda pendiente
+          de revisión hasta que la apruebes.
         </p>
       ) : null}
 
@@ -734,26 +791,14 @@ export function ProductAiImageReviewPanel({
                 }
                 if (action === "reject") {
                   return (
-                    <button
+                    <ConfigBtnDanger
                       key={action}
                       type="button"
                       disabled={buttonDisabled}
                       onClick={() => void runReview("reject")}
-                      style={{
-                        minHeight: 34,
-                        padding: "6px 11px",
-                        borderRadius: 8,
-                        border: "1px solid rgba(239,68,68,.3)",
-                        background: "#fef2f2",
-                        color: "#b91c1c",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        opacity: buttonDisabled ? 0.55 : 1,
-                        cursor: buttonDisabled ? "not-allowed" : "pointer",
-                      }}
                     >
                       {busy ? "Rechazando…" : "Rechazar"}
-                    </button>
+                    </ConfigBtnDanger>
                   );
                 }
                 return (
@@ -761,7 +806,14 @@ export function ProductAiImageReviewPanel({
                     key={action}
                     type="button"
                     disabled={buttonDisabled}
-                    onClick={() => setPendingConfirmation({ kind: "generate" })}
+                    onClick={() =>
+                      setPendingConfirmation({
+                        kind: "generate",
+                        hasExistingImage: resolved.hasImage,
+                        replaceApprovedImage:
+                          resolved.requiresApprovedImageReplacementConfirmation,
+                      })
+                    }
                   >
                     {busy
                       ? "Generando…"
@@ -861,6 +913,7 @@ export function ProductAiImageReviewPanel({
           role="alert"
           style={{
             display: "flex",
+            flexWrap: "wrap",
             justifyContent: "space-between",
             gap: 10,
             padding: "7px 9px",
@@ -871,7 +924,7 @@ export function ProductAiImageReviewPanel({
             fontSize: 11,
           }}
         >
-          <span>{error}</span>
+          <span style={{ minWidth: 0 }}>{error}</span>
           <button
             type="button"
             disabled={buttonDisabled}

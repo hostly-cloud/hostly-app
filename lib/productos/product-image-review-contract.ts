@@ -4,6 +4,11 @@ import type {
 } from "@/lib/carta/product-image-enrichment";
 import type { CatalogImageAccess } from "@/lib/productos/catalog-image-plan";
 
+export type ProductImageContentStrategy =
+  | "ai_generate"
+  | "catalog_search"
+  | "manual_review";
+
 export type ProductImageCatalogProvenance = {
   externalReference: string | null;
   sourceUrl: string | null;
@@ -38,6 +43,8 @@ export type ProductImageReviewResolvedState = {
   canApprove: boolean;
   canReject: boolean;
   canSearchCatalog: boolean;
+  recommendedAction: ProductImageContentStrategy;
+  requiresApprovedImageReplacementConfirmation: boolean;
   catalogProvenance: ProductImageCatalogProvenance | null;
   generationReason:
     | "not_food"

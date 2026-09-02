@@ -11,6 +11,14 @@ describe("Product image form contract", () => {
     "components/productos/product-form-commercial-info-modal.tsx",
     "utf8",
   );
+  const reviewPanelSource = readFileSync(
+    "components/productos/product-ai-image-review-panel.tsx",
+    "utf8",
+  );
+  const identityPanelSource = readFileSync(
+    "components/productos/product-commercial-identity-panel.tsx",
+    "utf8",
+  );
   const spanishLocale = readFileSync("locales/es.ts", "utf8");
 
   it("passes the edited product id to identity and image review flows", () => {
@@ -31,5 +39,30 @@ describe("Product image form contract", () => {
     assert.match(spanishLocale, /fieldFotoChange: "Elegir otra imagen"/);
     assert.match(spanishLocale, /pulsa Guardar para subirla/);
     assert.match(modalSource, /doneLabel = "Volver a la ficha"/);
+  });
+
+  it("never resolves an unsaved editor draft by product name", () => {
+    assert.doesNotMatch(reviewPanelSource, /fetchProductImageReviewState\(/);
+    assert.match(reviewPanelSource, /Guarda primero el producto/);
+    assert.match(reviewPanelSource, /necesita su identificador/);
+  });
+
+  it("commercial identity also requires the saved product id", () => {
+    assert.doesNotMatch(identityPanelSource, /fetchProductImageReviewState/);
+    assert.match(identityPanelSource, /if \(!explicitId\)/);
+    assert.match(identityPanelSource, /Guarda primero el producto/);
+  });
+
+  it("explains cost, review and approved-image replacement before generating", () => {
+    assert.match(reviewPanelSource, /puede consumir créditos/);
+    assert.match(reviewPanelSource, /pendiente de revisión/);
+    assert.match(reviewPanelSource, /¿Regenerar la imagen aprobada\?/);
+    assert.match(reviewPanelSource, /se conservará si falla/);
+  });
+
+  it("keeps the individual image panel bounded on narrow screens", () => {
+    assert.match(reviewPanelSource, /minWidth: 0/);
+    assert.match(reviewPanelSource, /flexWrap: "wrap"/);
+    assert.match(reviewPanelSource, /overflowWrap: "anywhere"/);
   });
 });

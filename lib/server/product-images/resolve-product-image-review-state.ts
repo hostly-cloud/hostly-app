@@ -2,6 +2,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { normalizeProductName } from "@/lib/carta/duplicate-detection";
 import {
   canAutomaticallyReplaceProductImage,
+  canExplicitlyReplaceApprovedAiProductImage,
   readProductImageEnrichment,
 } from "@/lib/carta/product-image-enrichment";
 import type {
@@ -10,6 +11,7 @@ import type {
   ProductImageReviewResolvedState,
 } from "@/lib/productos/product-image-review-contract";
 import { evaluateImportedProductImageEligibility } from "@/lib/server/product-images/generate-imported-product-image";
+import { classifyProductImageContentStrategy } from "@/lib/server/product-images/product-image-content-strategy";
 
 const GENERATION_LOCK_MS = 3 * 60 * 1000;
 const CATALOG_ATTACH_LOCK_MS = 2 * 60 * 1000;
@@ -97,15 +99,22 @@ export function buildProductImageReviewStateFromDocument(
   );
 
   const imageState = { imageUrl, imagePath, imageEnrichment: enrichment };
+  const recommendedAction = classifyProductImageContentStrategy(data);
+  const canReplaceApprovedAi =
+    canExplicitlyReplaceApprovedAiProductImage(imageState);
   const canSearchCatalog =
+    recommendedAction === "catalog_search" &&
     !generationInProgress &&
     !catalogAttachInProgress &&
     canAutomaticallyReplaceProductImage(imageState);
-  const canGenerate = eligibility.eligible && !generationInProgress;
+  const canGenerate =
+    recommendedAction === "ai_generate" &&
+    (eligibility.eligible || canReplaceApprovedAi) &&
+    !generationInProgress;
   const generationReason =
-    generationInProgress && eligibility.eligible
+    generationInProgress && (eligibility.eligible || canReplaceApprovedAi)
       ? "generation_in_progress"
-      : eligibility.eligible
+      : eligibility.eligible || canReplaceApprovedAi
         ? null
         : eligibility.reason;
 
@@ -127,6 +136,9 @@ export function buildProductImageReviewStateFromDocument(
     canApprove: canReviewAutomatic,
     canReject: canReviewAutomatic,
     canSearchCatalog,
+    recommendedAction,
+    requiresApprovedImageReplacementConfirmation:
+      canGenerate && canReplaceApprovedAi,
     catalogProvenance: catalogProvenanceFromEnrichment(enrichment),
     generationReason,
   };

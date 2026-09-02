@@ -4,10 +4,6 @@ import {
   readProductImageEnrichment,
 } from "@/lib/carta/product-image-enrichment";
 import {
-  inferTipoVentaFromCartaText,
-  parseTipoVentaLoose,
-} from "@/lib/carta/product-sale-contract";
-import {
   HOSTLY_CATALOG_IMAGE_BULK_POLICY,
   type CatalogImageAccess,
 } from "@/lib/productos/catalog-image-plan";
@@ -26,13 +22,12 @@ import type {
 import {
   evaluateImportedProductImageEligibility,
   generateImportedProductImage,
-  looksLikeBrandedOrBeverageProduct,
   type GenerateImportedProductImageResult,
 } from "@/lib/server/product-images/generate-imported-product-image";
 import {
-  catalogMatchContextFromProduct,
   searchCatalogProductImages,
 } from "@/lib/server/product-images/search-catalog-product-images";
+import { classifyProductImageContentStrategy } from "@/lib/server/product-images/product-image-content-strategy";
 
 const JOBS_COLLECTION = "catalogImageJobs";
 const JOB_ITEMS_COLLECTION = "items";
@@ -116,24 +111,6 @@ function hasActiveLock(value: unknown, now: number, ttlMs: number): boolean {
   return Boolean(requestId && startedAt >= 0 && now - startedAt < ttlMs);
 }
 
-function hasCommercialCatalogSignals(data: Record<string, unknown>): boolean {
-  const context = catalogMatchContextFromProduct(data);
-  const categoryName = context.categoryName ?? "";
-  const tipoVenta =
-    parseTipoVentaLoose(data.tipoVenta) ??
-    inferTipoVentaFromCartaText(categoryName, context.name);
-  return Boolean(
-    context.barcode ||
-      context.brand ||
-      context.wineProducer ||
-      context.wineAppellation ||
-      context.wineVintage ||
-      data.productFamilyType === "drink" ||
-      tipoVenta === "bebida" ||
-      looksLikeBrandedOrBeverageProduct(context.name, categoryName),
-  );
-}
-
 export function classifyCatalogImageBulkProduct(
   productId: string,
   data: Record<string, unknown>,
@@ -188,7 +165,8 @@ export function classifyCatalogImageBulkProduct(
     };
   }
 
-  if (hasCommercialCatalogSignals(data)) {
+  const strategy = classifyProductImageContentStrategy(data);
+  if (strategy === "catalog_search") {
     return {
       productId: normalizedId,
       productName,
@@ -197,10 +175,7 @@ export function classifyCatalogImageBulkProduct(
     };
   }
 
-  if (
-    typeof data.tipoVenta === "string" &&
-    data.tipoVenta.trim().toLowerCase() === "otro"
-  ) {
+  if (strategy === "manual_review") {
     return {
       productId: normalizedId,
       productName,
