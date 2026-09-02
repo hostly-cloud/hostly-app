@@ -36,8 +36,17 @@ import {
 
 const JOBS_COLLECTION = "catalogImageJobs";
 const JOB_ITEMS_COLLECTION = "items";
+const JOB_CONTROLS_COLLECTION = "catalogImageJobControls";
+const ACTIVE_JOB_CONTROL_ID = "active";
 const JOB_SCHEMA_VERSION = 1;
 const WRITE_BATCH_SIZE = 400;
+
+const ACTIVE_JOB_STATUSES = new Set<CatalogImageBulkJobStatus>([
+  "preparing",
+  "queued",
+  "running",
+  "paused",
+]);
 
 type FirestoreProduct = {
   id: string;
@@ -371,6 +380,47 @@ function jobRef(db: Firestore, restaurantId: string, jobId: string) {
     .doc(jobId);
 }
 
+function activeJobControlRef(db: Firestore, restaurantId: string) {
+  return db
+    .collection("restaurants")
+    .doc(restaurantId)
+    .collection(JOB_CONTROLS_COLLECTION)
+    .doc(ACTIVE_JOB_CONTROL_ID);
+}
+
+function isActiveJobStatus(status: CatalogImageBulkJobStatus): boolean {
+  return ACTIVE_JOB_STATUSES.has(status);
+}
+
+async function readLegacyActiveJobId(params: {
+  db: Firestore;
+  restaurantId: string;
+}): Promise<string | null> {
+  const jobs = params.db
+    .collection("restaurants")
+    .doc(params.restaurantId)
+    .collection(JOBS_COLLECTION);
+  const snapshots = await Promise.all(
+    [...ACTIVE_JOB_STATUSES].map((status) =>
+      jobs.where("status", "==", status).limit(1).get(),
+    ),
+  );
+  return snapshots.find((snapshot) => !snapshot.empty)?.docs[0]?.id ?? null;
+}
+
+function activeJobControlData(params: {
+  restaurantId: string;
+  jobId: string;
+  now: number;
+}) {
+  return {
+    schemaVersion: JOB_SCHEMA_VERSION,
+    restaurantId: params.restaurantId,
+    activeJobId: params.jobId,
+    updatedAt: params.now,
+  };
+}
+
 function jobStatus(value: unknown): CatalogImageBulkJobStatus {
   return value === "preparing" ||
     value === "queued" ||
@@ -531,18 +581,115 @@ export async function createCatalogImageBulkJob(params: {
     throw new CatalogImageBulkError("UNAUTHORIZED", "Usuario requerido", 401);
   }
   const jobId = assertIdempotencyKey(params.idempotencyKey);
-  const ref = jobRef(params.db, restaurantId, jobId);
+  const requestedRef = jobRef(params.db, restaurantId, jobId);
+  const controlRef = activeJobControlRef(params.db, restaurantId);
+  const existingControl = await controlRef.get();
+  const legacyActiveJobId = existingControl.exists
+    ? null
+    : await readLegacyActiveJobId({
+        db: params.db,
+        restaurantId,
+      });
   const now = Date.now();
 
   const acquired = await params.db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    if (snapshot.exists) {
+    const [requestedSnapshot, controlSnapshot] = await Promise.all([
+      transaction.get(requestedRef),
+      transaction.get(controlRef),
+    ]);
+    const requestedJob = requestedSnapshot.exists
+      ? deserializeJob(
+          jobId,
+          requestedSnapshot.data() as Record<string, unknown>,
+        )
+      : null;
+    const controlData = controlSnapshot.exists
+      ? (controlSnapshot.data() as Record<string, unknown>)
+      : null;
+    const controlledJobId = controlData
+      ? readString(controlData, "activeJobId")
+      : "";
+    const candidateActiveJobId = controlledJobId || legacyActiveJobId || "";
+    const candidateActiveRef = candidateActiveJobId
+      ? jobRef(params.db, restaurantId, candidateActiveJobId)
+      : null;
+    const candidateActiveSnapshot =
+      candidateActiveJobId === jobId
+        ? requestedSnapshot
+        : candidateActiveRef
+          ? await transaction.get(candidateActiveRef)
+          : null;
+    const candidateActiveJob =
+      candidateActiveSnapshot?.exists && candidateActiveJobId
+        ? deserializeJob(
+            candidateActiveJobId,
+            candidateActiveSnapshot.data() as Record<string, unknown>,
+          )
+        : null;
+
+    if (requestedJob && requestedJob.status !== "preparing") {
       return {
-        created: false as const,
-        job: deserializeJob(jobId, snapshot.data() as Record<string, unknown>),
+        prepare: false as const,
+        job: requestedJob,
       };
     }
-    transaction.create(ref, {
+
+    if (candidateActiveJob && isActiveJobStatus(candidateActiveJob.status)) {
+      transaction.set(
+        controlRef,
+        activeJobControlData({
+          restaurantId,
+          jobId: candidateActiveJob.jobId,
+          now,
+        }),
+      );
+      const preparationLeaseExpiresAt = readFiniteNumber(
+        candidateActiveSnapshot?.get("preparationLeaseExpiresAt"),
+        candidateActiveJob.updatedAt +
+          HOSTLY_CATALOG_IMAGE_BULK_POLICY.preparationLeaseMs,
+      );
+      if (
+        candidateActiveJob.status === "preparing" &&
+        preparationLeaseExpiresAt <= now &&
+        candidateActiveRef
+      ) {
+        transaction.update(candidateActiveRef, {
+          preparationLeaseExpiresAt:
+            now + HOSTLY_CATALOG_IMAGE_BULK_POLICY.preparationLeaseMs,
+          recoveredAt: now,
+          recoveredBy: userId,
+          updatedAt: now,
+        });
+        return {
+          prepare: true as const,
+          jobId: candidateActiveJob.jobId,
+        };
+      }
+      return {
+        prepare: false as const,
+        job: candidateActiveJob,
+      };
+    }
+
+    transaction.set(
+      controlRef,
+      activeJobControlData({ restaurantId, jobId, now }),
+    );
+    if (requestedJob) {
+      transaction.update(requestedRef, {
+        preparationLeaseExpiresAt:
+          now + HOSTLY_CATALOG_IMAGE_BULK_POLICY.preparationLeaseMs,
+        recoveredAt: now,
+        recoveredBy: userId,
+        updatedAt: now,
+      });
+      return {
+        prepare: true as const,
+        jobId,
+      };
+    }
+
+    transaction.create(requestedRef, {
       schemaVersion: JOB_SCHEMA_VERSION,
       restaurantId,
       jobId,
@@ -554,6 +701,8 @@ export async function createCatalogImageBulkJob(params: {
       planSource: params.access.source,
       capability: "catalog.image.ai.bulk",
       confirmedAt: now,
+      preparationLeaseExpiresAt:
+        now + HOSTLY_CATALOG_IMAGE_BULK_POLICY.preparationLeaseMs,
       counters: {
         total: 0,
         pending: 0,
@@ -565,12 +714,15 @@ export async function createCatalogImageBulkJob(params: {
         cancelled: 0,
       },
     });
-    return { created: true as const };
+    return { prepare: true as const, jobId };
   });
 
-  if (!acquired.created && acquired.job.status !== "preparing") {
+  if (!acquired.prepare) {
     return acquired.job;
   }
+
+  const activeJobId = acquired.jobId;
+  const ref = jobRef(params.db, restaurantId, activeJobId);
 
   try {
     const analysis = await analyzeCatalogImageBulk({
@@ -589,7 +741,7 @@ export async function createCatalogImageBulkJob(params: {
         batch.set(ref.collection(JOB_ITEMS_COLLECTION).doc(item.productId), {
           schemaVersion: JOB_SCHEMA_VERSION,
           restaurantId,
-          jobId,
+          jobId: activeJobId,
           productId: item.productId,
           productName: item.productName,
           kind: item.kind,
@@ -613,16 +765,21 @@ export async function createCatalogImageBulkJob(params: {
       summary: analysis.summary,
       estimate: analysis.estimate,
       counters,
+      preparationLeaseExpiresAt: FieldValue.delete(),
       updatedAt: Date.now(),
       ...(status === "completed" ? { completedAt: Date.now() } : {}),
     });
     const snapshot = await ref.get();
-    return deserializeJob(jobId, snapshot.data() as Record<string, unknown>);
+    return deserializeJob(
+      activeJobId,
+      snapshot.data() as Record<string, unknown>,
+    );
   } catch (error) {
     const failureReason = errorCode(error, "BULK_JOB_PREPARATION_FAILED");
     await ref.update({
       status: "failed",
       failureReason,
+      preparationLeaseExpiresAt: FieldValue.delete(),
       updatedAt: Date.now(),
       completedAt: Date.now(),
     });

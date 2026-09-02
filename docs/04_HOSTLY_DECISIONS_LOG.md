@@ -292,6 +292,27 @@ explícita y obtiene siempre `restaurantId` del perfil del servidor. Ninguna de 
 rutas permite asignar saldo ni recibir un tenant desde el navegador. Tanto el uso como
 el libro de créditos permanecen sin acceso directo en Firestore Rules.
 
+### H-021 - Un único trabajo masivo de imágenes activo por restaurante
+
+**Estado:** aceptada.
+
+“Completar imágenes del catálogo” admite como máximo un trabajo activo por tenant,
+incluidos los estados `preparing`, `queued`, `running` y `paused`. La clave idempotente
+de la petición sigue identificando un trabajo, pero la exclusión mutua se resuelve en
+servidor mediante el puntero transaccional y server-only
+`restaurants/{restaurantId}/catalogImageJobControls/active`. Dos confirmaciones
+simultáneas con claves distintas reciben el mismo trabajo activo y no duplican llamadas
+a proveedores ni consumo de créditos.
+
+El puntero conserva el último trabajo para poder comprobar su estado. Cuando ese
+trabajo ya es terminal (`completed`, `cancelled` o `failed`), la siguiente confirmación
+puede sustituir el puntero y crear un trabajo nuevo. Durante la transición, si todavía
+no existe el control, el servidor adopta antes cualquier trabajo legacy activo del
+mismo restaurante. Una preparación interrumpida conserva un lease configurable: otra
+confirmación devuelve el trabajo mientras el lease siga vivo y recupera ese mismo
+`jobId`, sin crear otro, cuando haya caducado. El control nunca se recibe del navegador,
+no cruza tenants y no amplía el acceso directo permitido por Firestore Rules.
+
 ---
 
 ## Decisiones pendientes de cierre
