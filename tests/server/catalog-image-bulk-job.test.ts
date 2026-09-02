@@ -425,6 +425,7 @@ test("a legacy active job is adopted before creating a replacement", async () =>
 
   assert.equal(adopted.jobId, "bulk-legacy-paused");
   assert.equal(adopted.status, "paused");
+  assert.equal(adopted.queueRevision, 0);
   assert.equal(
     store.has("restaurants/restaurant-a/catalogImageJobs/bulk-new-request"),
     false,
@@ -471,6 +472,7 @@ test("an expired legacy preparation is recovered under its original job id", asy
 
   assert.equal(recovered.jobId, "bulk-legacy-stale");
   assert.equal(recovered.status, "queued");
+  assert.equal(recovered.queueRevision, 1);
   assert.equal(
     store.has(
       "restaurants/restaurant-a/catalogImageJobs/bulk-new-after-stale",
@@ -593,12 +595,14 @@ test("an existing pending image is persisted in the review gallery", async () =>
     idempotencyKey: "bulk-pending-1",
     access: ULTRA_ACCESS,
   });
+  assert.equal(created.queueRevision, 1);
   const state = await readCatalogImageBulkJob({
     db,
     restaurantId: "restaurant-a",
     jobId: created.jobId,
   });
   assert.equal(state.job.status, "completed");
+  assert.equal(state.job.queueRevision, 1);
   assert.equal(state.items[0].kind, "pending_review");
   assert.equal(
     state.items[0].imageUrl,
@@ -618,6 +622,7 @@ test("partial failures persist, can be retried, and never publish automatically"
     idempotencyKey: "bulk-partial-1",
     access: ULTRA_ACCESS,
   });
+  assert.equal(created.queueRevision, 1);
 
   await processNextCatalogImageBulkItem({
     db,
@@ -661,6 +666,7 @@ test("partial failures persist, can be retried, and never publish automatically"
     jobId: created.jobId,
   });
   assert.equal(state.job.status, "completed");
+  assert.equal(state.job.queueRevision, 3);
   assert.equal(state.job.counters.failed, 1);
   assert.equal(state.job.counters.needsReview, 1);
   assert.equal(state.items.find((item) => item.productId === "dish-2")?.status, "needs_review");
@@ -677,6 +683,7 @@ test("partial failures persist, can be retried, and never publish automatically"
     jobId: created.jobId,
   });
   assert.equal(state.job.status, "queued");
+  assert.equal(state.job.queueRevision, 4);
   assert.equal(state.job.counters.failed, 0);
   assert.equal(state.job.counters.pending, 1);
 
@@ -700,6 +707,7 @@ test("partial failures persist, can be retried, and never publish automatically"
     jobId: created.jobId,
   });
   assert.equal(state.job.status, "completed");
+  assert.equal(state.job.queueRevision, 5);
   assert.equal(state.job.counters.failed, 0);
   assert.equal(state.job.counters.needsReview, 2);
 });
@@ -719,6 +727,7 @@ test("catalog search results are recorded as reviewable usage, not attached blin
     idempotencyKey: "bulk-catalog-1",
     access: ULTRA_ACCESS,
   });
+  assert.equal(created.queueRevision, 1);
   await processNextCatalogImageBulkItem({
     db,
     restaurantId: "restaurant-a",
@@ -907,6 +916,7 @@ test("jobs can pause, resume and cancel without losing persisted pending work", 
     idempotencyKey: "bulk-control-1",
     access: ULTRA_ACCESS,
   });
+  assert.equal(created.queueRevision, 1);
   const paused = await controlCatalogImageBulkJob({
     db,
     restaurantId: "restaurant-a",
@@ -914,6 +924,7 @@ test("jobs can pause, resume and cancel without losing persisted pending work", 
     action: "pause",
   });
   assert.equal(paused.status, "paused");
+  assert.equal(paused.queueRevision, 1);
 
   const whilePaused = await processNextCatalogImageBulkItem({
     db,
@@ -935,6 +946,7 @@ test("jobs can pause, resume and cancel without losing persisted pending work", 
     action: "resume",
   });
   assert.equal(resumed.status, "queued");
+  assert.equal(resumed.queueRevision, 2);
   const cancelled = await controlCatalogImageBulkJob({
     db,
     restaurantId: "restaurant-a",
@@ -942,6 +954,7 @@ test("jobs can pause, resume and cancel without losing persisted pending work", 
     action: "cancel",
   });
   assert.equal(cancelled.status, "cancelled");
+  assert.equal(cancelled.queueRevision, 2);
   assert.equal(cancelled.counters.pending, 0);
   assert.equal(cancelled.counters.cancelled, 1);
 });

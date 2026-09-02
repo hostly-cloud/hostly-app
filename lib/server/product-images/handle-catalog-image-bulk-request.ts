@@ -177,7 +177,7 @@ export async function handleCreateCatalogImageBulkJobRequest(
     await enqueueJob({
       restaurantId: context.auth.restaurantId,
       jobId: job.jobId,
-      revision: job.updatedAt,
+      revision: job.queueRevision,
     });
   }
   return NextResponse.json({ ok: true as const, job, access: context.access });
@@ -318,7 +318,7 @@ export async function handleControlCatalogImageBulkJobRequest(
     await enqueueJob({
       restaurantId: context.auth.restaurantId,
       jobId: job.jobId,
-      revision: job.updatedAt,
+      revision: job.queueRevision,
     });
   }
   return NextResponse.json({ ok: true as const, job });

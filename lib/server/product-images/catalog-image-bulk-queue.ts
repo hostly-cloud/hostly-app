@@ -145,7 +145,7 @@ export async function processCatalogImageBulkQueueMessage(
     await enqueue({
       restaurantId,
       jobId,
-      revision: result.job.updatedAt,
+      revision: result.job.queueRevision,
     });
   }
   return {

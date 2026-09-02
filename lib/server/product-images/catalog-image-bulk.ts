@@ -485,10 +485,15 @@ function readCounters(value: unknown): CatalogImageBulkJobCounters {
   };
 }
 
+function readQueueRevision(value: unknown): number {
+  return Math.max(0, Math.floor(readFiniteNumber(value)));
+}
+
 function deserializeJob(jobId: string, data: Record<string, unknown>): CatalogImageBulkJob {
   return {
     jobId,
     status: jobStatus(data.status),
+    queueRevision: readQueueRevision(data.queueRevision),
     createdAt: readFiniteNumber(data.createdAt),
     updatedAt: readFiniteNumber(data.updatedAt),
     createdBy: readString(data, "createdBy"),
@@ -694,6 +699,7 @@ export async function createCatalogImageBulkJob(params: {
       restaurantId,
       jobId,
       status: "preparing",
+      queueRevision: 0,
       createdAt: now,
       updatedAt: now,
       createdBy: userId,
@@ -762,6 +768,7 @@ export async function createCatalogImageBulkJob(params: {
       counters.pending > 0 ? "queued" : "completed";
     await ref.update({
       status,
+      queueRevision: 1,
       summary: analysis.summary,
       estimate: analysis.estimate,
       counters,
@@ -993,6 +1000,7 @@ async function finalizeClaim(params: {
       return;
     }
     const counters = readCounters(jobData.counters);
+    const queueRevision = readQueueRevision(jobData.queueRevision) + 1;
     const nextCounters = {
       ...counters,
       processing: Math.max(0, counters.processing - 1),
@@ -1032,6 +1040,7 @@ async function finalizeClaim(params: {
     });
     transaction.update(ref, {
       status: nextStatus,
+      queueRevision,
       counters: nextCounters,
       activeProductId: FieldValue.delete(),
       processingLease: FieldValue.delete(),
@@ -1303,7 +1312,11 @@ export async function controlCatalogImageBulkJob(params: {
     }
   } else if (params.action === "resume") {
     if (current.status === "paused") {
-      await ref.update({ status: "queued", updatedAt: now });
+      await ref.update({
+        status: "queued",
+        queueRevision: current.queueRevision + 1,
+        updatedAt: now,
+      });
     }
   } else if (params.action === "retry_failed") {
     if (current.counters.failed > 0 && current.status !== "cancelled") {
@@ -1317,6 +1330,7 @@ export async function controlCatalogImageBulkJob(params: {
       });
       await ref.update({
         status: "queued",
+        queueRevision: current.queueRevision + (reset > 0 ? 1 : 0),
         counters: {
           ...current.counters,
           pending: current.counters.pending + reset,
