@@ -329,6 +329,103 @@ test("bulk approval is Ultra-only, explicitly confirmed and tenant-scoped", asyn
   assert.equal((await json(crossTenant)).error, "RESTAURANT_ID_NOT_ALLOWED");
 });
 
+test("bulk catalog approval forwards only server-validated references and rejects client URLs", async () => {
+  let received:
+    | {
+        restaurantId: string;
+        productIds: string[];
+        catalogSelections: Array<{
+          productId: string;
+          externalReference: string;
+        }>;
+      }
+    | undefined;
+  const accepted = await handleReviewCatalogImageBulkSelectionRequest(
+    request("/api/catalog/product-image-bulk/jobs/bulk-job-123/review", {
+      productIds: [],
+      catalogSelections: [
+        { productId: "brand-1", externalReference: "5449000054227" },
+      ],
+      confirmApproval: true,
+    }),
+    "bulk-job-123",
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => ULTRA_ACCESS,
+      reviewSelection: async (params) => {
+        received = {
+          restaurantId: params.restaurantId,
+          productIds: params.productIds,
+          catalogSelections: params.catalogSelections ?? [],
+        };
+        return {
+          requested: 1,
+          approved: 1,
+          alreadyApproved: 0,
+          failed: 0,
+          results: [],
+        };
+      },
+    },
+  );
+  assert.equal(accepted.status, 200);
+  assert.deepEqual(received, {
+    restaurantId: "restaurant-server",
+    productIds: [],
+    catalogSelections: [
+      { productId: "brand-1", externalReference: "5449000054227" },
+    ],
+  });
+
+  const clientUrl = await handleReviewCatalogImageBulkSelectionRequest(
+    request("/api/catalog/product-image-bulk/jobs/bulk-job-123/review", {
+      productIds: [],
+      catalogSelections: [
+        {
+          productId: "brand-1",
+          externalReference: "5449000054227",
+          imageUrl: "https://attacker.test/fake.webp",
+        },
+      ],
+      confirmApproval: true,
+    }),
+    "bulk-job-123",
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => ULTRA_ACCESS,
+    },
+  );
+  assert.equal(clientUrl.status, 400);
+  assert.equal(
+    (await json(clientUrl)).error,
+    "CATALOG_IMAGE_BULK_CLIENT_REFERENCE_NOT_ALLOWED",
+  );
+
+  const bulkWithoutCatalogSearch = {
+    ...ULTRA_ACCESS,
+    capabilities: ["catalog.image.ai.bulk"] as typeof ULTRA_ACCESS.capabilities,
+  };
+  const missingCapability = await handleReviewCatalogImageBulkSelectionRequest(
+    request("/api/catalog/product-image-bulk/jobs/bulk-job-123/review", {
+      productIds: [],
+      catalogSelections: [
+        { productId: "brand-1", externalReference: "5449000054227" },
+      ],
+      confirmApproval: true,
+    }),
+    "bulk-job-123",
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => bulkWithoutCatalogSearch,
+    },
+  );
+  assert.equal(missingCapability.status, 403);
+  assert.equal(
+    (await json(missingCapability)).error,
+    "CATALOG_IMAGE_SEARCH_PLAN_REQUIRED",
+  );
+});
+
 test("only settings.manage can inspect or mutate bulk jobs", async () => {
   let created = false;
   const response = await handleCreateCatalogImageBulkJobRequest(

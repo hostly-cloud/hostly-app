@@ -202,6 +202,10 @@
   background: #f4f9fd;
 }
 
+.resultCatalog {
+  grid-column: 1 / -1;
+}
+
 .resultImage,
 .resultPlaceholder {
   width: 72px;
@@ -258,6 +262,103 @@
   margin-top: 3px;
   color: #64748b;
   font-size: 10px;
+}
+
+.candidateList {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.candidateLegend {
+  margin-bottom: 2px;
+  color: #405166;
+  font-size: 10px;
+  font-weight: 720;
+}
+
+.candidateOption {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #fff;
+  padding: 6px;
+}
+
+.candidateOptionSelected {
+  border-color: #8bb8dd;
+  background: #f4f9fd;
+}
+
+.candidateChoice {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 260px;
+  grid-template-columns: 24px 54px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.candidateChoice > input {
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  accent-color: #315f87;
+}
+
+.candidateImage {
+  width: 54px;
+  height: 54px;
+  border: 1px solid #e5edf5;
+  border-radius: 7px;
+  background: #fff;
+  object-fit: contain;
+}
+
+.candidateContent {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  color: #64748b;
+  font-size: 9px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.candidateContent strong {
+  color: #26364a;
+  font-size: 11px;
+}
+
+.candidateWarning {
+  color: #92400e;
+}
+
+.candidateSource {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 8px;
+  color: #315f87;
+  font-size: 10px;
+  font-weight: 680;
+  text-decoration: none;
+}
+
+.candidateAttribution {
+  margin: 0;
+  color: #789;
+  font-size: 9px;
+  line-height: 1.35;
 }
 
 .actions {

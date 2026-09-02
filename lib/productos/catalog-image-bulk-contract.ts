@@ -94,9 +94,17 @@ export type CatalogImageBulkCatalogCandidate = {
   brand: string | null;
   quantity: string | null;
   thumbnailUrl: string;
+  sourceUrl: string;
   confidence: number;
   matchLevel: "strong" | "review";
   warnings: string[];
+  license: string;
+  attribution: string;
+};
+
+export type CatalogImageBulkCatalogSelection = {
+  productId: string;
+  externalReference: string;
 };
 
 export type CatalogImageBulkJobItem = {

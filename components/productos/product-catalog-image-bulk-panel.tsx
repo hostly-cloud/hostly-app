@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import type {
+  CatalogImageBulkCatalogSelection,
   CatalogImageBulkJob,
   CatalogImageBulkJobItem,
   CatalogImageBulkJobPayload,
@@ -17,6 +18,7 @@ import {
   fetchCatalogImageBulkPreflight,
   fetchLatestCatalogImageBulkJob,
 } from "@/lib/productos/catalog-image-bulk-api";
+import { ProductCatalogImageCandidateOptions } from "./product-catalog-image-candidate-options";
 import styles from "./product-catalog-image-bulk-panel.module.css";
 
 const STATUS_LABELS: Record<CatalogImageBulkJob["status"], string> = {
@@ -68,6 +70,9 @@ export function ProductCatalogImageBulkPanel() {
   const [approvalRequest, setApprovalRequest] = useState(false);
   const [confirmingApproval, setConfirmingApproval] = useState(false);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [selectedCatalogReferences, setSelectedCatalogReferences] = useState<
+    Record<string, string>
+  >({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,6 +136,7 @@ export function ProductCatalogImageBulkPanel() {
     setError(null);
     setMessage(null);
     setSelectedProductIds([]);
+    setSelectedCatalogReferences({});
     setConfirmingApproval(false);
     try {
       const nextPreflight = await fetchCatalogImageBulkPreflight();
@@ -208,7 +214,10 @@ export function ProductCatalogImageBulkPanel() {
             item.status === "needs_review" &&
             item.reviewStatus !== "approved" &&
             Boolean(item.imageUrl) &&
-            (item.kind === "ai_generate" || item.kind === "pending_review"),
+            (item.kind === "ai_generate" ||
+              item.kind === "pending_review" ||
+              (item.kind === "catalog_search" &&
+                item.reviewStatus === "pending")),
         )
         .map((item) => item.productId),
     [visibleItems],
@@ -228,6 +237,29 @@ export function ProductCatalogImageBulkPanel() {
     () => new Set(validSelectedProductIds),
     [validSelectedProductIds],
   );
+  const validCatalogSelections = useMemo<CatalogImageBulkCatalogSelection[]>(
+    () =>
+      visibleItems.flatMap((item) => {
+        if (
+          item.kind !== "catalog_search" ||
+          item.status !== "needs_review" ||
+          item.reviewStatus === "approved" ||
+          item.reviewStatus === "pending"
+        ) {
+          return [];
+        }
+        const externalReference = selectedCatalogReferences[item.productId];
+        return item.catalogCandidates.some(
+          (candidate) =>
+            candidate.externalReference === externalReference,
+        )
+          ? [{ productId: item.productId, externalReference }]
+          : [];
+      }),
+    [selectedCatalogReferences, visibleItems],
+  );
+  const reviewSelectionCount =
+    validSelectedProductIds.length + validCatalogSelections.length;
 
   const toggleProduct = useCallback((productId: string) => {
     setConfirmingApproval(false);
@@ -238,8 +270,19 @@ export function ProductCatalogImageBulkPanel() {
     );
   }, []);
 
+  const selectCatalogCandidate = useCallback(
+    (productId: string, externalReference: string) => {
+      setConfirmingApproval(false);
+      setSelectedCatalogReferences((current) => ({
+        ...current,
+        [productId]: externalReference,
+      }));
+    },
+    [],
+  );
+
   const approveSelection = useCallback(async () => {
-    if (!payload || validSelectedProductIds.length === 0) return;
+    if (!payload || reviewSelectionCount === 0) return;
     setApprovalRequest(true);
     setError(null);
     setMessage(null);
@@ -247,9 +290,11 @@ export function ProductCatalogImageBulkPanel() {
       const result = await approveCatalogImageBulkSelection(
         payload.job.jobId,
         validSelectedProductIds,
+        validCatalogSelections,
       );
       await refreshJob(payload.job.jobId);
       setSelectedProductIds([]);
+      setSelectedCatalogReferences({});
       setConfirmingApproval(false);
       setMessage(
         result.failed > 0
@@ -261,7 +306,13 @@ export function ProductCatalogImageBulkPanel() {
     } finally {
       setApprovalRequest(false);
     }
-  }, [payload, refreshJob, validSelectedProductIds]);
+  }, [
+    payload,
+    refreshJob,
+    reviewSelectionCount,
+    validCatalogSelections,
+    validSelectedProductIds,
+  ]);
 
   return (
     <>
@@ -346,7 +397,7 @@ export function ProductCatalogImageBulkPanel() {
                       {approvableProductIds.length > 0 ? (
                         <div className={styles.reviewToolbar}>
                           <span className={styles.hint}>
-                            {validSelectedProductIds.length} seleccionadas de {approvableProductIds.length} aprobables
+                            {reviewSelectionCount} seleccionadas · {approvableProductIds.length} ya preparadas
                           </span>
                           <button
                             type="button"
@@ -374,7 +425,7 @@ export function ProductCatalogImageBulkPanel() {
                           aria-label="Confirmar publicación de imágenes"
                         >
                           <span>
-                            Se publicarán {validSelectedProductIds.length} imágenes y quedarán protegidas frente a sustituciones automáticas.
+                            Hostly adjuntará las coincidencias de catálogo elegidas y publicará {reviewSelectionCount} imágenes. Quedarán protegidas frente a sustituciones automáticas.
                           </span>
                           <div className={styles.confirmationActions}>
                             <button
@@ -403,7 +454,11 @@ export function ProductCatalogImageBulkPanel() {
                           return (
                             <article
                               key={item.productId}
-                              className={`${styles.result}${selected ? ` ${styles.resultSelected}` : ""}`}
+                              className={`${styles.result}${
+                                item.kind === "catalog_search"
+                                  ? ` ${styles.resultCatalog}`
+                                  : ""
+                              }${selected ? ` ${styles.resultSelected}` : ""}`}
                             >
                               {selectable ? (
                                 <label className={styles.resultCheckboxTarget}>
@@ -431,6 +486,23 @@ export function ProductCatalogImageBulkPanel() {
                               <div className={styles.resultContent}>
                                 <div className={styles.resultName}>{item.productName}</div>
                                 <div className={styles.resultMeta}>{itemMeta(item)}</div>
+                                {item.kind === "catalog_search" &&
+                                item.reviewStatus == null ? (
+                                  <ProductCatalogImageCandidateOptions
+                                    productId={item.productId}
+                                    productName={item.productName}
+                                    candidates={item.catalogCandidates}
+                                    selectedReference={
+                                      selectedCatalogReferences[item.productId]
+                                    }
+                                    onSelect={(externalReference) =>
+                                      selectCatalogCandidate(
+                                        item.productId,
+                                        externalReference,
+                                      )
+                                    }
+                                  />
+                                ) : null}
                               </div>
                             </article>
                           );
@@ -447,14 +519,14 @@ export function ProductCatalogImageBulkPanel() {
                 Las imágenes aprobadas y manuales se conservan siempre.
               </p>
               <div className={styles.actions}>
-                {payload && validSelectedProductIds.length > 0 && !confirmingApproval ? (
+                {payload && reviewSelectionCount > 0 && !confirmingApproval ? (
                   <button
                     type="button"
                     className={styles.buttonPrimary}
                     disabled={approvalRequest || controlRequest}
                     onClick={() => setConfirmingApproval(true)}
                   >
-                    Aprobar selección ({validSelectedProductIds.length})
+                    Aprobar selección ({reviewSelectionCount})
                   </button>
                 ) : null}
                 {!payload && preflight ? (
