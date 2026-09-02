@@ -179,10 +179,17 @@ export type CatalogImageBulkQueueWorkerDependencies = {
   reconcileExpiredReservations?: typeof reconcileExpiredCatalogImageCreditReservations;
 };
 
+export type CatalogImageBulkQueueProcessResult = {
+  processed: boolean;
+  requeued: boolean;
+  status: string;
+  recoveryStatus?: "reconciled" | "superseded";
+};
+
 export async function processCatalogImageBulkQueueMessage(
   message: unknown,
   dependencies?: CatalogImageBulkQueueWorkerDependencies,
-): Promise<{ processed: boolean; requeued: boolean; status: string }> {
+): Promise<CatalogImageBulkQueueProcessResult> {
   if (!message || typeof message !== "object" || Array.isArray(message)) {
     throw new CatalogImageBulkQueueMessageError(
       "INVALID_CATALOG_IMAGE_BULK_QUEUE_MESSAGE",
@@ -229,6 +236,9 @@ export async function processCatalogImageBulkQueueMessage(
       processed: false,
       requeued: shouldContinue,
       status: recovery.job.status,
+      ...(recovery.status === "reconciled" || recovery.status === "superseded"
+        ? { recoveryStatus: recovery.status }
+        : {}),
     };
   }
 

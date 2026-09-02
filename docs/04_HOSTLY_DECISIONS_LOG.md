@@ -371,6 +371,26 @@ convertirse después en completada por una escritura antigua.
 dentro del trabajo aislado por `restaurantId`, permanece inaccesible por Firestore
 Rules y no modifica los controles de plan, permisos, créditos o revisión humana.
 
+### H-025 - Observabilidad estructurada de la cola masiva de imágenes
+
+**Estado:** aceptada.
+
+Cada entrega del consumidor de Vercel Queues emite eventos JSON correlacionables por
+`restaurantId`, `jobId` y `messageId`: inicio, finalización, reintento programado,
+descarte definitivo y proximidad al vencimiento de la retención. Los eventos incluyen
+intento, consumidor, región, antigüedad, tiempo restante, duración y resultado del
+trabajo. Una recuperación de control distingue si fue aplicada o si una operación más
+nueva la dejó obsoleta.
+
+La telemetría no serializa el mensaje completo ni registra nombres de producto, URLs,
+resultados del proveedor o el token interno de la operación de control. Los IDs se
+aceptan para logs únicamente si cumplen el formato seguro del dominio. Un fallo del
+destino de logs nunca bloquea, reintenta ni confirma una operación de negocio.
+
+Firestore continúa siendo la fuente de verdad del trabajo y Vercel Queues conserva la
+entrega durable. La observabilidad describe lo ocurrido, pero no concede permisos, no
+modifica estados y no sustituye los controles de tenant, plan, créditos o revisión.
+
 ---
 
 ## Decisiones pendientes de cierre

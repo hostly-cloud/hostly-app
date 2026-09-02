@@ -285,6 +285,7 @@ test("a recovered retry schedules normal processing with its new revision", asyn
     processed: false,
     requeued: true,
     status: "queued",
+    recoveryStatus: "reconciled",
   });
 });
 
@@ -314,6 +315,7 @@ test("superseded control recovery messages are acknowledged without touching the
     processed: false,
     requeued: false,
     status: "paused",
+    recoveryStatus: "superseded",
   });
 });
 
@@ -343,5 +345,6 @@ test("a delayed control message repairs a missing process enqueue idempotently",
     processed: false,
     requeued: true,
     status: "queued",
+    recoveryStatus: "superseded",
   });
 });
