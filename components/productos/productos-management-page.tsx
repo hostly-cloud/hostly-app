@@ -5574,7 +5574,6 @@ export default function ProductosManagementPage({
               {t("carta.ctaModifiers")}
               </button>
               <Link href="/dashboard/configuracion/carta/escandallos">Escandallos</Link>
-              <ProductCatalogImageBulkPanel />
               <button
               type="button"
               onClick={(e) => {
@@ -5586,6 +5585,7 @@ export default function ProductosManagementPage({
               Importar IA
               </button>
               </nav>
+              <ProductCatalogImageBulkPanel />
               {renderCatalogFoodDrinkSegment(true)}
               </div>
               <div className="hostly-productos-v3__advanced-controls-row">
