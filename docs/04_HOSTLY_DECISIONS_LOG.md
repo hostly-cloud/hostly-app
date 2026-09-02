@@ -391,6 +391,24 @@ Firestore continúa siendo la fuente de verdad del trabajo y Vercel Queues conse
 entrega durable. La observabilidad describe lo ocurrido, pero no concede permisos, no
 modifica estados y no sustituye los controles de tenant, plan, créditos o revisión.
 
+### H-026 - Cuarentena recuperable de entregas masivas agotadas
+
+**Estado:** aceptada.
+
+Los fallos recuperables de un mensaje normal de procesamiento se reintentan hasta el
+límite operativo centralizado de la cola. Al alcanzarlo, el consumidor solo confirma
+la entrega si antes consigue pausar de forma transaccional el trabajo correspondiente.
+La pausa conserva elementos, contadores, leases, resultados y reservas de créditos;
+registra el motivo `CATALOG_IMAGE_BULK_QUEUE_RETRY_EXHAUSTED` y permite al usuario
+reanudar el mismo trabajo con una nueva `queueRevision`.
+
+Si Firestore no permite persistir la cuarentena, el mensaje no se confirma y continúa
+intentándose hasta su retención. Las recuperaciones de controles no se ponen en
+cuarentena mediante este mecanismo porque deben completar o quedar sustituidas por su
+propia barrera durable. La transición solo usa `restaurantId` y `jobId` validados del
+mensaje privado de Vercel; no acepta autoridad del navegador, no altera imágenes y no
+consume créditos.
+
 ---
 
 ## Decisiones pendientes de cierre

@@ -3,6 +3,9 @@ import type {
   CatalogImageMeteringMode,
 } from "@/lib/productos/catalog-image-plan";
 
+export const CATALOG_IMAGE_BULK_QUEUE_RETRY_EXHAUSTED =
+  "CATALOG_IMAGE_BULK_QUEUE_RETRY_EXHAUSTED";
+
 export const CATALOG_IMAGE_BULK_ITEM_KINDS = [
   "ai_generate",
   "catalog_search",

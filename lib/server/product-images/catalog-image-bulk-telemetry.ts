@@ -1,7 +1,9 @@
 import type { MessageMetadata } from "@vercel/queue";
+import { HOSTLY_CATALOG_IMAGE_BULK_POLICY } from "@/lib/productos/catalog-image-plan";
 import {
   catalogImageBulkQueueRetryDecision,
   processCatalogImageBulkQueueMessage,
+  quarantineCatalogImageBulkQueueMessage,
   type CatalogImageBulkQueueProcessResult,
 } from "@/lib/server/product-images/catalog-image-bulk-queue";
 
@@ -12,6 +14,7 @@ export type CatalogImageBulkQueueLogEvent =
   | "delivery_completed"
   | "delivery_retry_scheduled"
   | "delivery_expiring"
+  | "delivery_quarantined"
   | "delivery_discarded";
 
 export type CatalogImageBulkQueueLogEntry = {
@@ -45,6 +48,7 @@ export type CatalogImageBulkQueueLogWriter = (
 ) => void;
 
 type ProcessMessage = typeof processCatalogImageBulkQueueMessage;
+type QuarantineMessage = typeof quarantineCatalogImageBulkQueueMessage;
 
 function safeLogId(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -157,6 +161,7 @@ export async function handleCatalogImageBulkQueueDelivery(
   metadata: MessageMetadata,
   options?: {
     processMessage?: ProcessMessage;
+    quarantineMessage?: QuarantineMessage;
     writeLog?: CatalogImageBulkQueueLogWriter;
     now?: () => number;
   },
@@ -164,6 +169,8 @@ export async function handleCatalogImageBulkQueueDelivery(
   const processMessage =
     options?.processMessage ?? processCatalogImageBulkQueueMessage;
   const writeLog = options?.writeLog ?? writeCatalogImageBulkQueueLog;
+  const quarantineMessage =
+    options?.quarantineMessage ?? quarantineCatalogImageBulkQueueMessage;
   const now = options?.now ?? Date.now;
   const startedAt = now();
   emitSafely(
@@ -220,6 +227,36 @@ export async function handleCatalogImageBulkQueueDelivery(
         acknowledged: true,
       });
     } else {
+      if (
+        metadata.deliveryCount >=
+        HOSTLY_CATALOG_IMAGE_BULK_POLICY.maxQueueDeliveryAttempts
+      ) {
+        const parked = await quarantineMessage(
+          message,
+          metadata.deliveryCount,
+        ).catch(() => null);
+        if (parked) {
+          const parkedAt = now();
+          emitSafely(writeLog, {
+            ...baseEntry({
+              message,
+              metadata,
+              now: parkedAt,
+              event: parked.quarantined
+                ? "delivery_quarantined"
+                : "delivery_discarded",
+              level: "warning",
+            }),
+            durationMs: Math.max(0, parkedAt - startedAt),
+            errorCode: common.errorCode,
+            processed: parked.processed,
+            requeued: parked.requeued,
+            jobStatus: parked.status,
+            acknowledged: true,
+          });
+          return parked;
+        }
+      }
       const expiresInMs = remainingMilliseconds(metadata.expiresAt, failedAt);
       const expiring = expiresInMs <= decision.afterSeconds * 1000 + 1_000;
       emitSafely(writeLog, {

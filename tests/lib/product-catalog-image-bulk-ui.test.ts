@@ -59,6 +59,8 @@ test("Productos exposes the Ultra catalog image completion action without replac
     /Hostly adjuntará las coincidencias de catálogo elegidas y publicará/,
   );
   assert.match(component, /continúa en el servidor aunque cierres esta pantalla/);
+  assert.match(component, /Pausado de forma segura tras varios fallos de conexión/);
+  assert.match(component, /Reanuda cuando el servicio vuelva a estar disponible/);
   assert.doesNotMatch(component, /processNextCatalogImageBulkItem/);
   assert.doesNotMatch(component, /restaurantId\s*:/);
   assert.match(apiClient, /catalogSelections/);

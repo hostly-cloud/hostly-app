@@ -257,9 +257,15 @@ investigar un trabajo, soporte debe filtrar los Runtime Logs de Vercel por
 | `delivery_started` | Vercel entregó el mensaje al consumidor | Buscar el cierre con el mismo `messageId` e intento |
 | `delivery_completed` | El trabajo terminó esa entrega sin error | Revisar `jobStatus`, `requeued` y `recoveryStatus` |
 | `delivery_retry_scheduled` | El error es recuperable y habrá reentrega | Vigilar que el siguiente intento avance |
+| `delivery_quarantined` | Se agotó el límite y el trabajo quedó pausado de forma segura | Corregir la incidencia y pedir al restaurante que pulse `Reanudar` |
 | `delivery_discarded` | El mensaje es inválido o el trabajo ya no existe | No reinyectar; comprobar origen si se repite |
 | `delivery_expiring` | El siguiente reintento roza el fin de retención | Investigar de inmediato Firestore, proveedor y estado del job |
 
 Los logs nunca son autoridad para cambiar el trabajo. Firestore conserva el estado,
 los contadores y los leases; las acciones de soporte deben utilizar los endpoints
 autenticados y acotados al tenant.
+
+Una cuarentena no borra ni reinicia resultados. El panel muestra el motivo de la pausa
+y `Reanudar` crea una revisión nueva de cola sobre el mismo trabajo. Si no aparece
+`delivery_quarantined`, no debe asumirse que el mensaje agotado quedó aparcado: hay que
+seguir investigando la disponibilidad de Firestore y la entrega de Vercel.

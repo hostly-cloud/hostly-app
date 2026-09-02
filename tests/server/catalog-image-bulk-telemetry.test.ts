@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { MessageMetadata } from "@vercel/queue";
+import { HOSTLY_CATALOG_IMAGE_BULK_POLICY } from "@/lib/productos/catalog-image-plan";
 import {
   CatalogImageBulkQueueMessageError,
   CatalogImageBulkQueueRetryError,
@@ -168,6 +169,7 @@ test("queue telemetry raises a final expiry signal before retention is exhausted
         processMessage: async () => {
           throw new Error("FIRESTORE_UNAVAILABLE");
         },
+        quarantineMessage: async () => null,
       },
     ),
     /FIRESTORE_UNAVAILABLE/,
@@ -175,6 +177,71 @@ test("queue telemetry raises a final expiry signal before retention is exhausted
   assert.equal(recorded.entries[1].event, "delivery_expiring");
   assert.equal(recorded.entries[1].retryAfterSeconds, 60);
   assert.equal(recorded.entries[1].expiresInMs, 54_000);
+});
+
+test("queue telemetry parks an exhausted process message before acknowledging it", async () => {
+  const recorded = recorder();
+  let quarantinedDelivery = 0;
+  const result = await handleCatalogImageBulkQueueDelivery(
+    { restaurantId: "restaurant-a", jobId: "bulk-job-123" },
+    metadata({
+      deliveryCount:
+        HOSTLY_CATALOG_IMAGE_BULK_POLICY.maxQueueDeliveryAttempts,
+    }),
+    {
+      now: () => 11_000,
+      writeLog: recorded.writeLog,
+      processMessage: async () => {
+        throw new Error("FIRESTORE_UNAVAILABLE");
+      },
+      quarantineMessage: async (_message, deliveryCount) => {
+        quarantinedDelivery = deliveryCount;
+        return {
+          processed: false,
+          requeued: false,
+          status: "paused",
+          quarantined: true,
+        };
+      },
+    },
+  );
+  assert.equal(
+    quarantinedDelivery,
+    HOSTLY_CATALOG_IMAGE_BULK_POLICY.maxQueueDeliveryAttempts,
+  );
+  assert.equal(result.status, "paused");
+  assert.equal(result.quarantined, true);
+  assert.equal(recorded.entries[1]?.event, "delivery_quarantined");
+  assert.equal(recorded.entries[1]?.acknowledged, true);
+  assert.equal(recorded.entries[1]?.errorCode, "Error");
+  assert.equal(recorded.entries[1]?.jobStatus, "paused");
+});
+
+test("queue telemetry keeps retrying when an exhausted delivery cannot be parked", async () => {
+  const recorded = recorder();
+  const original = new Error("FIRESTORE_UNAVAILABLE");
+  await assert.rejects(
+    handleCatalogImageBulkQueueDelivery(
+      { restaurantId: "restaurant-a", jobId: "bulk-job-123" },
+      metadata({
+        deliveryCount:
+          HOSTLY_CATALOG_IMAGE_BULK_POLICY.maxQueueDeliveryAttempts,
+      }),
+      {
+        now: () => 11_000,
+        writeLog: recorded.writeLog,
+        processMessage: async () => {
+          throw original;
+        },
+        quarantineMessage: async () => {
+          throw new Error("QUARANTINE_UNAVAILABLE");
+        },
+      },
+    ),
+    (actual) => actual === original,
+  );
+  assert.equal(recorded.entries[1]?.event, "delivery_retry_scheduled");
+  assert.equal(recorded.entries[1]?.acknowledged, false);
 });
 
 test("queue telemetry failures never change business processing", async () => {

@@ -8,6 +8,7 @@ import {
   CatalogImageBulkQueueRetryError,
   catalogImageBulkQueueRetryDecision,
   processCatalogImageBulkQueueMessage,
+  quarantineCatalogImageBulkQueueMessage,
 } from "@/lib/server/product-images/catalog-image-bulk-queue";
 
 const ULTRA_ACCESS = resolveCatalogImageAccessFromRestaurant({
@@ -178,6 +179,51 @@ test("queue retry policy acknowledges malformed messages and backs off recoverab
   assert.deepEqual(
     catalogImageBulkQueueRetryDecision(new Error("FIRESTORE_UNAVAILABLE"), 20),
     { afterSeconds: 60 },
+  );
+});
+
+test("queue quarantine is tenant-scoped and only handles normal processing messages", async () => {
+  let received:
+    | { restaurantId: string; jobId: string; deliveryCount: number }
+    | undefined;
+  const result = await quarantineCatalogImageBulkQueueMessage(
+    { restaurantId: "restaurant-a", jobId: "bulk-job-123" },
+    12,
+    {
+      db,
+      quarantineJob: async (params) => {
+        received = {
+          restaurantId: params.restaurantId,
+          jobId: params.jobId,
+          deliveryCount: params.deliveryCount,
+        };
+        return { quarantined: true, job: job({ status: "paused" }) };
+      },
+    },
+  );
+  assert.deepEqual(received, {
+    restaurantId: "restaurant-a",
+    jobId: "bulk-job-123",
+    deliveryCount: 12,
+  });
+  assert.deepEqual(result, {
+    processed: false,
+    requeued: false,
+    status: "paused",
+    quarantined: true,
+  });
+  assert.equal(
+    await quarantineCatalogImageBulkQueueMessage(
+      {
+        kind: "control_recovery",
+        restaurantId: "restaurant-a",
+        jobId: "bulk-job-123",
+        operationId: "control-operation-123",
+      },
+      12,
+      { db },
+    ),
+    null,
   );
 });
 

@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import type {
-  CatalogImageBulkCatalogSelection,
-  CatalogImageBulkJob,
-  CatalogImageBulkJobItem,
-  CatalogImageBulkJobPayload,
-  CatalogImageBulkPreflight,
+import {
+  CATALOG_IMAGE_BULK_QUEUE_RETRY_EXHAUSTED,
+  type CatalogImageBulkCatalogSelection,
+  type CatalogImageBulkJob,
+  type CatalogImageBulkJobItem,
+  type CatalogImageBulkJobPayload,
+  type CatalogImageBulkPreflight,
 } from "@/lib/productos/catalog-image-bulk-contract";
 import {
   approveCatalogImageBulkSelection,
@@ -56,6 +57,16 @@ function messageFromError(error: unknown): string {
     return error.message;
   }
   return error instanceof Error ? error.message : "No se pudo completar la operación";
+}
+
+function progressMessage(job: CatalogImageBulkJob, progress: number): string {
+  if (
+    job.status === "paused" &&
+    job.failureReason === CATALOG_IMAGE_BULK_QUEUE_RETRY_EXHAUSTED
+  ) {
+    return `Pausado de forma segura tras varios fallos de conexión · ${progress}% · Reanuda cuando el servicio vuelva a estar disponible.`;
+  }
+  return `${STATUS_LABELS[job.status]} · ${progress}% · El trabajo queda guardado y continúa en el servidor aunque cierres esta pantalla.`;
 }
 
 export function ProductCatalogImageBulkPanel() {
@@ -389,8 +400,7 @@ export function ProductCatalogImageBulkPanel() {
                     <div className={styles.progressBar} style={{ width: `${progress}%` }} />
                   </div>
                   <p className={styles.hint}>
-                    {STATUS_LABELS[payload.job.status]} · {progress}% · El trabajo queda
-                    guardado y continúa en el servidor aunque cierres esta pantalla.
+                    {progressMessage(payload.job, progress)}
                   </p>
                   {visibleItems.length > 0 ? (
                     <>

@@ -10,6 +10,7 @@ import {
 import {
   controlCatalogImageBulkJob,
   processNextCatalogImageBulkItem,
+  quarantineCatalogImageBulkJob,
   readCatalogImageBulkJob,
   reconcileCatalogImageBulkControlOperation,
 } from "@/lib/server/product-images/catalog-image-bulk";
@@ -177,6 +178,7 @@ export type CatalogImageBulkQueueWorkerDependencies = {
   enqueue?: typeof enqueueCatalogImageBulkJob;
   reconcileControl?: typeof reconcileCatalogImageBulkControlOperation;
   reconcileExpiredReservations?: typeof reconcileExpiredCatalogImageCreditReservations;
+  quarantineJob?: typeof quarantineCatalogImageBulkJob;
 };
 
 export type CatalogImageBulkQueueProcessResult = {
@@ -184,7 +186,45 @@ export type CatalogImageBulkQueueProcessResult = {
   requeued: boolean;
   status: string;
   recoveryStatus?: "reconciled" | "superseded";
+  quarantined?: boolean;
 };
+
+export async function quarantineCatalogImageBulkQueueMessage(
+  message: unknown,
+  deliveryCount: number,
+  dependencies?: Pick<CatalogImageBulkQueueWorkerDependencies, "db" | "quarantineJob">,
+): Promise<CatalogImageBulkQueueProcessResult | null> {
+  if (!message || typeof message !== "object" || Array.isArray(message)) {
+    return null;
+  }
+  const raw = message as Record<string, unknown>;
+  if (raw.kind != null && raw.kind !== "process") return null;
+  const restaurantId = assertSimpleId(raw.restaurantId, "restaurant_id");
+  const jobId = assertSimpleId(raw.jobId, "job_id");
+  const db = dependencies?.db ?? getHostlyFirestore();
+  if (!db) throw new Error("ADMIN_NOT_CONFIGURED");
+  const quarantineJob = dependencies?.quarantineJob ?? quarantineCatalogImageBulkJob;
+  const result = await quarantineJob({
+    db,
+    restaurantId,
+    jobId,
+    deliveryCount,
+  });
+  if (
+    !result.quarantined &&
+    (result.job.status === "preparing" ||
+      result.job.status === "queued" ||
+      result.job.status === "running")
+  ) {
+    return null;
+  }
+  return {
+    processed: false,
+    requeued: false,
+    status: result.job.status,
+    quarantined: result.quarantined,
+  };
+}
 
 export async function processCatalogImageBulkQueueMessage(
   message: unknown,
