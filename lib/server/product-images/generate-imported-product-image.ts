@@ -19,6 +19,7 @@ import type {
 import {
   evaluateCatalogImageCreditDecision,
   hasCatalogImageCapability,
+  HOSTLY_CATALOG_IMAGE_CREDIT_POLICY,
 } from "@/lib/productos/catalog-image-plan";
 import { resolveCatalogImageAccessFromRestaurant } from "@/lib/server/product-images/resolve-catalog-image-access";
 import { looksLikeBrandedOrBeverageProduct } from "@/lib/server/product-images/product-image-content-strategy";
@@ -37,6 +38,7 @@ export type ProductImageGenerationSkipReason =
   | "invalid_product_name"
   | "protected_existing_image"
   | "generation_in_progress"
+  | "credit_reservation_expired"
   | "duplicate_request";
 
 export type ProductImageGenerationEligibility =
@@ -50,7 +52,7 @@ export type ProductImageGenerationEligibility =
       eligible: false;
       reason: Exclude<
         ProductImageGenerationSkipReason,
-        "generation_in_progress" | "duplicate_request"
+        "generation_in_progress" | "credit_reservation_expired" | "duplicate_request"
       >;
     };
 
@@ -100,6 +102,7 @@ type CatalogImageUsageStatus =
 function creditFailure(
   code:
     | "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED"
+    | "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE"
     | "CATALOG_IMAGE_CREDITS_EXHAUSTED",
 ): GenerateImportedProductImageError {
   return code === "CATALOG_IMAGE_CREDITS_EXHAUSTED"
@@ -108,7 +111,13 @@ function creditFailure(
         "No quedan créditos suficientes para generar esta imagen",
         402,
       )
-    : new GenerateImportedProductImageError(
+    : code === "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE"
+      ? new GenerateImportedProductImageError(
+          code,
+          "El periodo de créditos no está activo",
+          402,
+        )
+      : new GenerateImportedProductImageError(
         code,
         "La configuración de créditos de imágenes está incompleta",
         503,
@@ -168,6 +177,9 @@ function usageRecordBase(params: {
     effectivePlan: params.access.effectivePlan,
     planSource: params.access.source,
     meteringMode: params.access.meteringMode,
+    ...(params.access.creditPeriod
+      ? { creditPeriodId: params.access.creditPeriod.id }
+      : {}),
     provider: IMAGE_PROVIDER,
     status: params.status,
     createdAt: params.now,
@@ -698,13 +710,17 @@ export async function generateImportedProductImage(params: {
     );
     if (
       creditDecision.status === "configuration_required" ||
+      creditDecision.status === "period_inactive" ||
       creditDecision.status === "insufficient"
     ) {
       const failureReason:
         | "CATALOG_IMAGE_CREDITS_EXHAUSTED"
+        | "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE"
         | "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED" =
         creditDecision.status === "insufficient"
           ? "CATALOG_IMAGE_CREDITS_EXHAUSTED"
+          : creditDecision.status === "period_inactive"
+            ? "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE"
           : "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED";
       transaction.create(usageRef, {
         ...usageRecordBase({
@@ -774,6 +790,8 @@ export async function generateImportedProductImage(params: {
               creditCost: creditDecision.creditCost,
               creditBalanceBefore: creditDecision.creditBalanceBefore,
               creditBalanceAfter: creditDecision.creditBalanceAfter,
+              creditLeaseExpiresAt:
+                now + HOSTLY_CATALOG_IMAGE_CREDIT_POLICY.reservationLeaseMs,
             }
           : {}),
       },
@@ -786,6 +804,7 @@ export async function generateImportedProductImage(params: {
     if (
       "creditError" in acquisition &&
       (acquisition.creditError === "CATALOG_IMAGE_CREDITS_EXHAUSTED" ||
+        acquisition.creditError === "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE" ||
         acquisition.creditError ===
           "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED")
     ) {
@@ -858,6 +877,23 @@ export async function generateImportedProductImage(params: {
       const data = productSnap.data() as Record<string, unknown>;
       const usageData = usageSnap.data() as Record<string, unknown>;
       const lock = readGenerationLock(data.imageGenerationInProgress);
+      if (
+        usageData.meteringMode === "credit_balance" &&
+        usageData.creditStatus === "released" &&
+        usageData.failureReason === "CREDIT_RESERVATION_EXPIRED"
+      ) {
+        if (lock?.requestId === requestId) {
+          transaction.update(productRef, {
+            imageGenerationInProgress: FieldValue.delete(),
+            updatedAt: Date.now(),
+            updatedBy: userId,
+          });
+        }
+        return {
+          attached: false as const,
+          reason: "credit_reservation_expired" as const,
+        };
+      }
       if (!lock || lock.requestId !== requestId) {
         const now = Date.now();
         const releasedCredit = releaseReservedCredits(

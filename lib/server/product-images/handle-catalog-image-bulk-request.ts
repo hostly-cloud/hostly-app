@@ -7,6 +7,7 @@ import {
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import {
   hasCatalogImageCapability,
+  isCatalogImageCreditPeriodActive,
   type CatalogImageAccess,
 } from "@/lib/productos/catalog-image-plan";
 import {
@@ -20,6 +21,7 @@ import {
 import { resolveCatalogImageAccess } from "@/lib/server/product-images/resolve-catalog-image-access";
 import { enqueueCatalogImageBulkJob } from "@/lib/server/product-images/catalog-image-bulk-queue";
 import { reviewCatalogImageBulkSelection } from "@/lib/server/product-images/review-catalog-image-bulk-selection";
+import { reconcileExpiredCatalogImageCreditReservations } from "@/lib/server/product-images/reconcile-catalog-image-credits";
 
 type Authenticate = (
   req: Request,
@@ -46,6 +48,7 @@ export type CatalogImageBulkRequestDependencies = {
   controlJob?: typeof controlCatalogImageBulkJob;
   enqueueJob?: typeof enqueueCatalogImageBulkJob;
   reviewSelection?: typeof reviewCatalogImageBulkSelection;
+  reconcileExpiredReservations?: typeof reconcileExpiredCatalogImageCreditReservations;
 };
 
 function jsonError(status: number, error: string, details?: string) {
@@ -148,6 +151,13 @@ export async function handleCreateCatalogImageBulkJobRequest(
       "Confirma el resumen antes de iniciar operaciones que pueden consumir créditos",
     );
   }
+  if (!isCatalogImageCreditPeriodActive(context.access)) {
+    return jsonError(
+      402,
+      "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE",
+      "El periodo de créditos no está activo",
+    );
+  }
   const idempotencyKey =
     typeof body.idempotencyKey === "string" ? body.idempotencyKey.trim() : "";
   if (!idempotencyKey) {
@@ -226,6 +236,30 @@ export async function handleProcessCatalogImageBulkJobRequest(
       400,
       "RESTAURANT_ID_NOT_ALLOWED",
       "restaurantId se resuelve en servidor",
+    );
+  }
+  const reconcileExpiredReservations = dependencies
+    ? dependencies.reconcileExpiredReservations
+    : reconcileExpiredCatalogImageCreditReservations;
+  if (
+    context.access.meteringMode === "credit_balance" &&
+    reconcileExpiredReservations
+  ) {
+    await reconcileExpiredReservations({
+      db: context.auth.db,
+      restaurantId: context.auth.restaurantId,
+      actorId: context.auth.uid,
+    }).catch((error) => {
+      console.error("[catalog-image-credits/reconcile-before-bulk-process]", {
+        message: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+      });
+    });
+  }
+  if (!isCatalogImageCreditPeriodActive(context.access)) {
+    return jsonError(
+      402,
+      "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE",
+      "El periodo de créditos no está activo",
     );
   }
   const processNext = dependencies?.processNext ?? processNextCatalogImageBulkItem;

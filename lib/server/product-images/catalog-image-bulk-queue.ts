@@ -2,13 +2,17 @@ import { createHash } from "node:crypto";
 import { send } from "@vercel/queue";
 import type { Firestore } from "firebase-admin/firestore";
 import { getHostlyFirestore } from "@/lib/firebase/admin";
-import { hasCatalogImageCapability } from "@/lib/productos/catalog-image-plan";
+import {
+  hasCatalogImageCapability,
+  isCatalogImageCreditPeriodActive,
+} from "@/lib/productos/catalog-image-plan";
 import {
   controlCatalogImageBulkJob,
   processNextCatalogImageBulkItem,
   readCatalogImageBulkJob,
 } from "@/lib/server/product-images/catalog-image-bulk";
 import { resolveCatalogImageAccess } from "@/lib/server/product-images/resolve-catalog-image-access";
+import { reconcileExpiredCatalogImageCreditReservations } from "@/lib/server/product-images/reconcile-catalog-image-credits";
 
 export const CATALOG_IMAGE_BULK_QUEUE_TOPIC = "catalog-image-bulk";
 
@@ -67,6 +71,7 @@ export type CatalogImageBulkQueueWorkerDependencies = {
   processNext?: typeof processNextCatalogImageBulkItem;
   controlJob?: typeof controlCatalogImageBulkJob;
   enqueue?: typeof enqueueCatalogImageBulkJob;
+  reconcileExpiredReservations?: typeof reconcileExpiredCatalogImageCreditReservations;
 };
 
 export async function processCatalogImageBulkQueueMessage(
@@ -95,7 +100,24 @@ export async function processCatalogImageBulkQueueMessage(
 
   const resolveAccess = dependencies?.resolveAccess ?? resolveCatalogImageAccess;
   const access = await resolveAccess({ db, restaurantId });
-  if (!hasCatalogImageCapability(access, "catalog.image.ai.bulk")) {
+  const reconcileExpiredReservations = dependencies
+    ? dependencies.reconcileExpiredReservations
+    : reconcileExpiredCatalogImageCreditReservations;
+  if (access.meteringMode === "credit_balance" && reconcileExpiredReservations) {
+    await reconcileExpiredReservations({
+      db,
+      restaurantId,
+      actorId: current.job.createdBy,
+    }).catch((error) => {
+      console.error("[catalog-image-credits/reconcile-before-bulk]", {
+        message: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+      });
+    });
+  }
+  if (
+    !hasCatalogImageCapability(access, "catalog.image.ai.bulk") ||
+    !isCatalogImageCreditPeriodActive(access)
+  ) {
     const controlJob = dependencies?.controlJob ?? controlCatalogImageBulkJob;
     const paused = await controlJob({
       db,

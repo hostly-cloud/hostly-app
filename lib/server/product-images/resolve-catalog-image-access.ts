@@ -4,6 +4,7 @@ import {
   HOSTLY_CATALOG_IMAGE_PLANS,
   type CatalogImageAccess,
   type CatalogImageCreditCosts,
+  type CatalogImageCreditPeriod,
   type HostlyCatalogImagePlan,
 } from "@/lib/productos/catalog-image-plan";
 
@@ -34,6 +35,24 @@ const UNCONFIGURED_CREDIT_COSTS: CatalogImageCreditCosts = {
   aiBulk: null,
   catalogSearch: null,
 };
+
+function readCreditPeriod(value: unknown): CatalogImageCreditPeriod | null {
+  const period = readObject(value);
+  const id = typeof period?.id === "string" ? period.id.trim() : "";
+  const startsAt = readNonNegativeInteger(period?.startsAt);
+  const endsAt = readNonNegativeInteger(period?.endsAt);
+  const allocation = readNonNegativeInteger(period?.allocation);
+  if (
+    !/^[A-Za-z0-9_-]{1,120}$/.test(id) ||
+    startsAt == null ||
+    endsAt == null ||
+    allocation == null ||
+    startsAt >= endsAt
+  ) {
+    return null;
+  }
+  return { id, startsAt, endsAt, allocation };
+}
 
 /**
  * `subscription.plan` es el contrato canónico futuro. `billing.plan` y `plan`
@@ -77,6 +96,10 @@ export function resolveCatalogImageAccessFromRestaurant(
             catalogSearch: readNonNegativeInteger(creditCosts?.catalogSearch),
           }
         : { ...UNCONFIGURED_CREDIT_COSTS },
+    creditPeriod:
+      meteringMode === "credit_balance"
+        ? readCreditPeriod(catalogImages?.creditPeriod)
+        : null,
   };
 }
 

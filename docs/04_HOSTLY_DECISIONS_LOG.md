@@ -258,6 +258,40 @@ persistida en el propio trabajo. El servidor vuelve a resolver y copiar la image
 el tenant, rechaza URLs o `restaurantId` aportados por el cliente y exige una
 confirmación humana antes de aprobarla y protegerla.
 
+### H-020 - Periodos, libro de créditos y reconciliación de reservas
+
+**Estado:** aceptada.
+
+La administración comercial de créditos no se concede a los roles del restaurante.
+Aunque owner/admin pueden consultar su consumo y solicitar la reconciliación de
+reservas caducadas, no pueden fijar asignaciones, abrir periodos ni aumentar saldos.
+Esas operaciones se ejecutan únicamente con Firebase Admin mediante
+`npm run admin:catalog-image-credits`, requieren una clave idempotente, operador,
+motivo y `--apply`, y escriben un asiento append-only en
+`restaurants/{restaurantId}/catalogImageCreditLedger/{idempotencyKey}`. La herramienta
+arranca siempre en modo de vista previa y nunca acepta un ajuste que deje saldo
+negativo o que no coincida con el periodo activo.
+
+El periodo opcional vive dentro de la autoridad server-only en
+`subscription.catalogImages.creditPeriod` con `id`, `startsAt`, `endsAt` y
+`allocation`. No se define aquí ninguna asignación o precio: todos esos valores se
+proporcionan como configuración comercial explícita. Los tenants sin periodo siguen
+funcionando con el contrato de transición anterior.
+
+Cada nueva reserva de crédito persiste `creditLeaseExpiresAt` y, si existe,
+`creditPeriodId`. Las generaciones individuales, búsquedas y workers masivos intentan
+reconciliar reservas vencidas antes de una nueva operación. La reconciliación vuelve a
+leer el uso dentro de una transacción, exige el mismo tenant, estado `processing`,
+crédito `reserved` y lease vencido; después devuelve el importe una sola vez, marca el
+uso como `released` y crea su asiento de auditoría. Registros antiguos sin lease no se
+liberan automáticamente.
+
+`GET /api/catalog/product-image-credits` expone al owner/admin autenticado únicamente
+el resumen de su restaurante. `POST` admite solo `reconcile_expired` con confirmación
+explícita y obtiene siempre `restaurantId` del perfil del servidor. Ninguna de las dos
+rutas permite asignar saldo ni recibir un tenant desde el navegador. Tanto el uso como
+el libro de créditos permanecen sin acceso directo en Firestore Rules.
+
 ---
 
 ## Decisiones pendientes de cierre

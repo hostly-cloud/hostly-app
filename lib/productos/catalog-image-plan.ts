@@ -25,6 +25,13 @@ export type CatalogImageCreditCosts = {
   catalogSearch: number | null;
 };
 
+export type CatalogImageCreditPeriod = {
+  id: string;
+  startsAt: number;
+  endsAt: number;
+  allocation: number;
+};
+
 export type CatalogImageAccess = {
   effectivePlan: HostlyCatalogImagePlan;
   source: CatalogImagePlanSource;
@@ -32,6 +39,7 @@ export type CatalogImageAccess = {
   meteringMode: CatalogImageMeteringMode;
   creditBalance: number | null;
   creditCosts: CatalogImageCreditCosts;
+  creditPeriod: CatalogImageCreditPeriod | null;
 };
 
 export type CatalogImageCreditDecision =
@@ -43,6 +51,13 @@ export type CatalogImageCreditDecision =
       creditBalanceAfter: number;
     }
   | { status: "configuration_required"; creditCost: number | null }
+  | {
+      status: "period_inactive";
+      creditCost: number | null;
+      periodId: string;
+      startsAt: number;
+      endsAt: number;
+    }
   | {
       status: "insufficient";
       creditCost: number;
@@ -83,6 +98,17 @@ export const HOSTLY_CATALOG_IMAGE_BULK_POLICY: Readonly<HostlyCatalogImageBulkPo
   leaseDurationMs: 2 * 60 * 1000,
 };
 
+/**
+ * Política operativa del saldo. No contiene precios ni asignaciones comerciales.
+ * La caducidad permite recuperar de forma segura reservas abandonadas tras una
+ * interrupción de infraestructura.
+ */
+export const HOSTLY_CATALOG_IMAGE_CREDIT_POLICY = {
+  reservationLeaseMs: 15 * 60 * 1000,
+  reconciliationBatchSize: 50,
+  usageSummaryLimit: 100,
+} as const;
+
 export function hasCatalogImageCapability(
   access: CatalogImageAccess,
   capability: CatalogImageCapability,
@@ -104,11 +130,24 @@ export function catalogImageCreditCost(
 export function evaluateCatalogImageCreditDecision(
   access: CatalogImageAccess,
   capability: CatalogImageCapability,
+  now = Date.now(),
 ): CatalogImageCreditDecision {
   if (access.meteringMode === "usage_recorded") {
     return { status: "unmetered", creditCost: null };
   }
   const creditCost = catalogImageCreditCost(access, capability);
+  if (
+    access.creditPeriod &&
+    (now < access.creditPeriod.startsAt || now >= access.creditPeriod.endsAt)
+  ) {
+    return {
+      status: "period_inactive",
+      creditCost,
+      periodId: access.creditPeriod.id,
+      startsAt: access.creditPeriod.startsAt,
+      endsAt: access.creditPeriod.endsAt,
+    };
+  }
   if (creditCost == null || access.creditBalance == null) {
     return { status: "configuration_required", creditCost };
   }
@@ -125,6 +164,14 @@ export function evaluateCatalogImageCreditDecision(
     creditBalanceBefore: access.creditBalance,
     creditBalanceAfter: access.creditBalance - creditCost,
   };
+}
+
+export function isCatalogImageCreditPeriodActive(
+  access: CatalogImageAccess,
+  now = Date.now(),
+): boolean {
+  return !access.creditPeriod ||
+    (now >= access.creditPeriod.startsAt && now < access.creditPeriod.endsAt);
 }
 
 export function catalogImagePlanLabel(

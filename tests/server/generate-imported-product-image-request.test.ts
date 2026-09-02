@@ -18,6 +18,16 @@ const BASIC_ACCESS = resolveCatalogImageAccessFromRestaurant({
 const ULTRA_ACCESS = resolveCatalogImageAccessFromRestaurant({
   subscription: { plan: "ultra" },
 });
+const METERED_PRO_ACCESS = resolveCatalogImageAccessFromRestaurant({
+  subscription: {
+    plan: "pro",
+    catalogImages: {
+      meteringMode: "credit_balance",
+      creditBalance: 8,
+      creditCosts: { aiSingle: 1, catalogSearch: 1 },
+    },
+  },
+});
 
 function authContext(
   overrides: Partial<AuthenticatedRestaurantContext> = {},
@@ -182,6 +192,35 @@ test("the Ultra plan can use the individual generation endpoint", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(generated, true);
+});
+
+test("metered generation reconciles expired reservations before the provider", async () => {
+  const calls: string[] = [];
+  const response = await handleGenerateImportedProductImageRequest(
+    request({
+      productId: "product-1",
+      idempotencyKey: "request-metered-reconcile",
+      confirmGeneration: true,
+    }),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => METERED_PRO_ACCESS,
+      reconcileExpiredReservations: async (params) => {
+        calls.push(`reconcile:${params.restaurantId}:${params.actorId}`);
+        return { scanned: 1, released: 1, creditsReleased: 1, skipped: 0 };
+      },
+      generate: async () => {
+        calls.push("generate");
+        return {
+          outcome: "skipped",
+          productId: "product-1",
+          reason: "not_food",
+        };
+      },
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, ["reconcile:restaurant-server:owner-1", "generate"]);
 });
 
 test("generator receives the server-resolved tenant and authenticated user", async () => {

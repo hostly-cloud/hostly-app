@@ -23,6 +23,7 @@ const PRO_ACCESS: CatalogImageAccess = {
   ],
   meteringMode: "usage_recorded",
   creditBalance: null,
+  creditPeriod: null,
   creditCosts: { aiSingle: null, aiBulk: null, catalogSearch: null },
 };
 
@@ -36,6 +37,7 @@ const ULTRA_ACCESS: CatalogImageAccess = {
   ],
   meteringMode: "usage_recorded",
   creditBalance: null,
+  creditPeriod: null,
   creditCosts: { aiSingle: null, aiBulk: null, catalogSearch: null },
 };
 
@@ -519,6 +521,71 @@ test("a successful generation consumes one atomic configured credit reservation"
   assert.equal(duplicate.reason, "duplicate_request");
   assert.equal(providerCalls, 1);
   assert.equal(catalogImages.creditBalance, 3);
+});
+
+test("a generated file is discarded when its credit reservation expired in flight", async () => {
+  const fake = fakeGenerationDb({
+    productData: importedDish(),
+    restaurantData: {
+      subscription: {
+        plan: "pro",
+        catalogImages: {
+          meteringMode: "credit_balance",
+          creditBalance: 5,
+          creditCosts: { aiSingle: 2 },
+        },
+      },
+    },
+  });
+  let deletedPath = "";
+  const result = await generateImportedProductImage(
+    {
+      db: fake.db,
+      restaurantId: "restaurant-1",
+      productId: "product-1",
+      userId: "owner-1",
+      idempotencyKey: "request-credit-expired-in-flight",
+      access: PRO_ACCESS,
+    },
+    {
+      generateImage: async () => ({
+        bytes: Buffer.from([1, 2, 3]),
+        model: "test-model",
+        mediaType: "image/webp",
+      }),
+      saveImage: async () => {
+        const usage = fake.documents.get(
+          "restaurants/restaurant-1/catalogImageUsage/request-credit-expired-in-flight",
+        )!;
+        usage.creditStatus = "released";
+        usage.status = "failed";
+        usage.failureReason = "CREDIT_RESERVATION_EXPIRED";
+        const restaurant = fake.documents.get("restaurants/restaurant-1")!;
+        const subscription = restaurant.subscription as Record<string, unknown>;
+        const catalogImages = subscription.catalogImages as Record<string, unknown>;
+        catalogImages.creditBalance = 5;
+        return {
+          imagePath:
+            "restaurants/restaurant-1/products/product-1/ai/generated.webp",
+          imageUrl: "https://example.test/generated.webp",
+        };
+      },
+      deleteImage: async (_restaurantId, _productId, imagePath) => {
+        deletedPath = imagePath ?? "";
+      },
+    },
+  );
+
+  assert.equal(result.outcome, "skipped");
+  assert.equal(result.reason, "credit_reservation_expired");
+  assert.equal(
+    deletedPath,
+    "restaurants/restaurant-1/products/product-1/ai/generated.webp",
+  );
+  const product = fake.documents.get(
+    "restaurants/restaurant-1/products/product-1",
+  );
+  assert.equal(product?.imageUrl, undefined);
 });
 
 test("a provider failure releases a configured credit reservation", async () => {

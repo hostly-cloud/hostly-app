@@ -21,6 +21,12 @@ function meteringDb(balance: number) {
             meteringMode: "credit_balance",
             creditBalance: balance,
             creditCosts: { catalogSearch: 2 },
+            creditPeriod: {
+              id: "2026-09",
+              startsAt: 1,
+              endsAt: 9_999_999_999_999,
+              allocation: 20,
+            },
           },
         },
       },
@@ -138,6 +144,12 @@ test("metering reserves and consumes credits inside the authenticated tenant", a
   );
   assert.equal(usage?.creditStatus, "consumed");
   assert.equal(usage?.creditCost, 2);
+  assert.equal(usage?.creditPeriodId, "2026-09");
+  assert.equal(
+    typeof usage?.creditLeaseExpiresAt === "number" &&
+      usage.creditLeaseExpiresAt > Number(usage.createdAt),
+    true,
+  );
   assert.equal(usage?.candidateCount, 1);
 });
 
@@ -188,4 +200,59 @@ test("metering blocks insufficient credit without touching another tenant", asyn
   );
   assert.equal(usage?.creditStatus, "blocked");
   assert.equal(usage?.result, "blocked");
+});
+
+test("metering blocks an expired period before changing the balance", async () => {
+  const fake = meteringDb(5);
+  const restaurant = fake.store.get("restaurants/restaurant-a") as Stored;
+  const subscription = restaurant.subscription as Stored;
+  const catalogImages = subscription.catalogImages as Stored;
+  catalogImages.creditPeriod = {
+    id: "expired-period",
+    startsAt: 1,
+    endsAt: 2,
+    allocation: 5,
+  };
+  await assert.rejects(
+    reserveCatalogImageOperation({
+      db: fake.db,
+      ...operation,
+      idempotencyKey: "catalog-meter-expired-period",
+    }),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE",
+  );
+  assert.equal(fake.balanceAt(), 5);
+});
+
+test("a late result cannot consume a reservation already reconciled as expired", async () => {
+  const fake = meteringDb(5);
+  const idempotencyKey = "catalog-meter-late-result";
+  await reserveCatalogImageOperation({
+    db: fake.db,
+    ...operation,
+    idempotencyKey,
+  });
+  const usagePath = `restaurants/restaurant-a/catalogImageUsage/${idempotencyKey}`;
+  const usage = fake.store.get(usagePath) as Stored;
+  usage.creditStatus = "released";
+  usage.status = "failed";
+  usage.failureReason = "CREDIT_RESERVATION_EXPIRED";
+  await assert.rejects(
+    finalizeCatalogImageOperation({
+      db: fake.db,
+      restaurantId: operation.restaurantId,
+      idempotencyKey,
+      result: "candidates",
+      succeeded: true,
+    }),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "CATALOG_IMAGE_CREDIT_RESERVATION_EXPIRED",
+  );
+  assert.equal(usage.creditStatus, "released");
+  assert.equal(usage.status, "failed");
 });

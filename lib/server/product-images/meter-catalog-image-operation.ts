@@ -2,6 +2,7 @@ import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import {
   evaluateCatalogImageCreditDecision,
   hasCatalogImageCapability,
+  HOSTLY_CATALOG_IMAGE_CREDIT_POLICY,
   type CatalogImageCapability,
 } from "@/lib/productos/catalog-image-plan";
 import { resolveCatalogImageAccessFromRestaurant } from "@/lib/server/product-images/resolve-catalog-image-access";
@@ -81,16 +82,20 @@ export async function reserveCatalogImageOperation(params: {
       effectivePlan: access.effectivePlan,
       planSource: access.source,
       meteringMode: access.meteringMode,
+      ...(access.creditPeriod ? { creditPeriodId: access.creditPeriod.id } : {}),
       createdAt: now,
       updatedAt: now,
     };
     if (
       decision.status === "configuration_required" ||
+      decision.status === "period_inactive" ||
       decision.status === "insufficient"
     ) {
       const failureReason =
         decision.status === "insufficient"
           ? "CATALOG_IMAGE_CREDITS_EXHAUSTED"
+          : decision.status === "period_inactive"
+            ? "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE"
           : "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED";
       transaction.create(usageRef, {
         ...base,
@@ -123,6 +128,8 @@ export async function reserveCatalogImageOperation(params: {
             creditCost: decision.creditCost,
             creditBalanceBefore: decision.creditBalanceBefore,
             creditBalanceAfter: decision.creditBalanceAfter,
+            creditLeaseExpiresAt:
+              now + HOSTLY_CATALOG_IMAGE_CREDIT_POLICY.reservationLeaseMs,
           }
         : {}),
     });
@@ -134,8 +141,11 @@ export async function reserveCatalogImageOperation(params: {
       acquisition.failureReason,
       acquisition.failureReason === "CATALOG_IMAGE_CREDITS_EXHAUSTED"
         ? "No quedan créditos suficientes para esta operación"
+        : acquisition.failureReason === "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE"
+          ? "El periodo de créditos no está activo"
         : "La configuración de créditos de imágenes está incompleta",
-      acquisition.failureReason === "CATALOG_IMAGE_CREDITS_EXHAUSTED"
+      acquisition.failureReason === "CATALOG_IMAGE_CREDITS_EXHAUSTED" ||
+      acquisition.failureReason === "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE"
         ? 402
         : 503,
     );
@@ -166,10 +176,18 @@ export async function finalizeCatalogImageOperation(params: {
   const usageRef = restaurantRef
     .collection("catalogImageUsage")
     .doc(idempotencyKey);
-  await params.db.runTransaction(async (transaction) => {
+  const result = await params.db.runTransaction(async (transaction) => {
     const usageSnapshot = await transaction.get(usageRef);
-    if (!usageSnapshot.exists) return;
+    if (!usageSnapshot.exists) return { reservationExpired: false };
     const usage = usageSnapshot.data() as Record<string, unknown>;
+    if (
+      params.succeeded &&
+      usage.meteringMode === "credit_balance" &&
+      usage.creditStatus === "released" &&
+      usage.failureReason === "CREDIT_RESERVATION_EXPIRED"
+    ) {
+      return { reservationExpired: true };
+    }
     const reservedCost =
       usage.creditStatus === "reserved" &&
       typeof usage.creditCost === "number" &&
@@ -195,5 +213,13 @@ export async function finalizeCatalogImageOperation(params: {
       updatedAt: now,
       completedAt: now,
     });
+    return { reservationExpired: false };
   });
+  if (result.reservationExpired) {
+    throw new CatalogImageMeteringError(
+      "CATALOG_IMAGE_CREDIT_RESERVATION_EXPIRED",
+      "La reserva de créditos caducó antes de completar la operación",
+      409,
+    );
+  }
 }
