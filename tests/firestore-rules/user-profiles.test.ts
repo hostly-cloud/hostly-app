@@ -1456,6 +1456,7 @@ describe("Rules: autoridad canónica, mirrors y status", () => {
     const jobPath = `restaurants/${RESTAURANT_A}/catalogImageJobs/bulk-job-rules`;
     const itemPath = `${jobPath}/items/product-a`;
     const usagePath = `restaurants/${RESTAURANT_A}/catalogImageUsage/bulk-usage-rules`;
+    const ledgerPath = `restaurants/${RESTAURANT_A}/catalogImageCreditLedger/credit-ledger-rules`;
     await Promise.all([
       adminDb.doc(jobPath).set({
         restaurantId: RESTAURANT_A,
@@ -1471,11 +1472,16 @@ describe("Rules: autoridad canónica, mirrors y status", () => {
         productId: "product-a",
         status: "succeeded",
       }),
+      adminDb.doc(ledgerPath).set({
+        restaurantId: RESTAURANT_A,
+        type: "balance_adjusted",
+        delta: 2,
+      }),
     ]);
 
     const ownerDb = rulesDb(OWNER_A);
     const otherDb = rulesDb(OWNER_B);
-    for (const path of [jobPath, itemPath, usagePath]) {
+    for (const path of [jobPath, itemPath, usagePath, ledgerPath]) {
       await assertFails(getDoc(doc(ownerDb, path)));
       await assertFails(getDoc(doc(otherDb, path)));
       await assertFails(setDoc(doc(ownerDb, `${path}-client`), { status: "queued" }));

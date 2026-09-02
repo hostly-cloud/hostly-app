@@ -21,6 +21,17 @@ const PRO_ACCESS = resolveCatalogImageAccessFromRestaurant({
 const ULTRA_ACCESS = resolveCatalogImageAccessFromRestaurant({
   subscription: { plan: "ultra" },
 });
+const EXPIRED_METERED_ULTRA_ACCESS = resolveCatalogImageAccessFromRestaurant({
+  subscription: {
+    plan: "ultra",
+    catalogImages: {
+      meteringMode: "credit_balance",
+      creditBalance: 10,
+      creditCosts: { aiBulk: 1, catalogSearch: 1 },
+      creditPeriod: { id: "expired", startsAt: 1, endsAt: 2, allocation: 10 },
+    },
+  },
+});
 
 function authContext(
   overrides: Partial<AuthenticatedRestaurantContext> = {},
@@ -156,6 +167,30 @@ test("bulk creation requires explicit confirmation before any job is written", a
   assert.equal(
     (await json(response)).error,
     "BULK_GENERATION_CONFIRMATION_REQUIRED",
+  );
+  assert.equal(created, false);
+});
+
+test("bulk creation does not start when the configured credit period is inactive", async () => {
+  let created = false;
+  const response = await handleCreateCatalogImageBulkJobRequest(
+    request("/api/catalog/product-image-bulk/jobs", {
+      idempotencyKey: "bulk-expired-period",
+      confirmBulkGeneration: true,
+    }),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => EXPIRED_METERED_ULTRA_ACCESS,
+      createJob: async () => {
+        created = true;
+        return job();
+      },
+    },
+  );
+  assert.equal(response.status, 402);
+  assert.equal(
+    (await json(response)).error,
+    "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE",
   );
   assert.equal(created, false);
 });

@@ -14,6 +14,7 @@ import {
   type GenerateImportedProductImageResult,
 } from "@/lib/server/product-images/generate-imported-product-image";
 import { resolveCatalogImageAccess } from "@/lib/server/product-images/resolve-catalog-image-access";
+import { reconcileExpiredCatalogImageCreditReservations } from "@/lib/server/product-images/reconcile-catalog-image-credits";
 
 type Authenticate = (
   req: Request,
@@ -39,6 +40,7 @@ export type GenerateImportedProductImageRequestDependencies = {
   authenticate?: Authenticate;
   generate?: Generate;
   resolveAccess?: ResolveAccess;
+  reconcileExpiredReservations?: typeof reconcileExpiredCatalogImageCreditReservations;
 };
 
 function jsonError(status: number, error: string, details?: string) {
@@ -126,6 +128,21 @@ export async function handleGenerateImportedProductImageRequest(
       "GENERATION_CONFIRMATION_REQUIRED",
       "Envía confirmGeneration: true; la generación puede tener coste",
     );
+  }
+
+  const reconcileExpiredReservations = dependencies
+    ? dependencies.reconcileExpiredReservations
+    : reconcileExpiredCatalogImageCreditReservations;
+  if (access.meteringMode === "credit_balance" && reconcileExpiredReservations) {
+    await reconcileExpiredReservations({
+      db: authCtx.db,
+      restaurantId: authCtx.restaurantId,
+      actorId: authCtx.uid,
+    }).catch((error) => {
+      console.error("[catalog-image-credits/reconcile-before-generate]", {
+        message: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+      });
+    });
   }
 
   const generate = dependencies?.generate ?? generateImportedProductImage;

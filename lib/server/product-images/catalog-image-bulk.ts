@@ -5,6 +5,7 @@ import {
 } from "@/lib/carta/product-image-enrichment";
 import {
   HOSTLY_CATALOG_IMAGE_BULK_POLICY,
+  isCatalogImageCreditPeriodActive,
   type CatalogImageAccess,
 } from "@/lib/productos/catalog-image-plan";
 import type {
@@ -280,6 +281,16 @@ function estimateFromSummary(
       mode: "usage_recorded",
       note:
         "Hostly registrará cada uso completado. Este restaurante aún no tiene un saldo de créditos configurado.",
+    };
+  }
+  if (!isCatalogImageCreditPeriodActive(access)) {
+    return {
+      aiGenerationRequests: summary.aiGenerable,
+      catalogSearchRequests: summary.catalogSearchable,
+      credits: null,
+      costUsd: null,
+      mode: "credit_balance",
+      note: "El periodo de créditos no está activo. Hostly no iniciará operaciones con coste.",
     };
   }
   const complete =

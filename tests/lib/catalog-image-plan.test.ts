@@ -124,6 +124,12 @@ test("an explicit credit balance centralizes per-capability costs", () => {
         meteringMode: "credit_balance",
         creditBalance: 7,
         creditCosts: { aiSingle: 2, aiBulk: 3, catalogSearch: 1 },
+        creditPeriod: {
+          id: "2026-09",
+          startsAt: 1_788_220_800_000,
+          endsAt: 1_790_812_800_000,
+          allocation: 10,
+        },
       },
     },
   });
@@ -135,6 +141,12 @@ test("an explicit credit balance centralizes per-capability costs", () => {
     aiBulk: 3,
     catalogSearch: 1,
   });
+  assert.deepEqual(access.creditPeriod, {
+    id: "2026-09",
+    startsAt: 1_788_220_800_000,
+    endsAt: 1_790_812_800_000,
+    allocation: 10,
+  });
   assert.deepEqual(
     evaluateCatalogImageCreditDecision(access, "catalog.image.ai.bulk"),
     {
@@ -142,6 +154,51 @@ test("an explicit credit balance centralizes per-capability costs", () => {
       creditCost: 3,
       creditBalanceBefore: 7,
       creditBalanceAfter: 4,
+    },
+  );
+});
+
+test("an invalid credit period is ignored without weakening metering", () => {
+  const access = resolveCatalogImageAccessFromRestaurant({
+    subscription: {
+      plan: "pro",
+      catalogImages: {
+        meteringMode: "credit_balance",
+        creditBalance: 4,
+        creditCosts: { aiSingle: 1 },
+        creditPeriod: { id: "../../other", startsAt: 200, endsAt: 100, allocation: 9 },
+      },
+    },
+  });
+  assert.equal(access.meteringMode, "credit_balance");
+  assert.equal(access.creditBalance, 4);
+  assert.equal(access.creditPeriod, null);
+});
+
+test("an expired configured period blocks paid operations", () => {
+  const access = resolveCatalogImageAccessFromRestaurant({
+    subscription: {
+      plan: "pro",
+      catalogImages: {
+        meteringMode: "credit_balance",
+        creditBalance: 4,
+        creditCosts: { aiSingle: 1 },
+        creditPeriod: { id: "expired", startsAt: 100, endsAt: 200, allocation: 5 },
+      },
+    },
+  });
+  assert.deepEqual(
+    evaluateCatalogImageCreditDecision(
+      access,
+      "catalog.image.ai.single",
+      201,
+    ),
+    {
+      status: "period_inactive",
+      creditCost: 1,
+      periodId: "expired",
+      startsAt: 100,
+      endsAt: 200,
     },
   );
 });

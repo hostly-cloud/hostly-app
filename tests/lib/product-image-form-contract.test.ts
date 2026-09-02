@@ -64,6 +64,7 @@ describe("Product image form contract", () => {
     assert.match(reviewPanelSource, /pendiente de revisión/);
     assert.match(reviewPanelSource, /¿Regenerar la imagen aprobada\?/);
     assert.match(reviewPanelSource, /se conservará si falla/);
+    assert.match(reviewPanelSource, /El periodo de créditos no está activo/);
     assert.match(
       reviewPanelSource,
       /planAllowsSingle && savedProductId && resolved\?\.canGenerate/,
@@ -74,5 +75,11 @@ describe("Product image form contract", () => {
     assert.match(reviewPanelSource, /minWidth: 0/);
     assert.match(reviewPanelSource, /flexWrap: "wrap"/);
     assert.match(reviewPanelSource, /overflowWrap: "anywhere"/);
+  });
+
+  it("loads the tenant-scoped credit account only when the user asks", () => {
+    assert.match(reviewPanelSource, /Ver consumo de créditos/);
+    assert.match(reviewPanelSource, /fetchCatalogImageCreditSummary\(\)/);
+    assert.match(reviewPanelSource, /Consumo de créditos de imágenes/);
   });
 });

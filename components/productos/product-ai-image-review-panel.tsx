@@ -7,6 +7,8 @@ import {
   ConfigBtnSecondary,
 } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
 import type { CatalogProductImageCandidate } from "@/lib/productos/catalog-product-image-contract";
+import { fetchCatalogImageCreditSummary } from "@/lib/productos/catalog-image-credit-api";
+import type { CatalogImageCreditAccountSummary } from "@/lib/productos/catalog-image-credit-contract";
 import {
   catalogImagePlanLabel,
   evaluateCatalogImageCreditDecision,
@@ -186,6 +188,8 @@ function friendlyError(error: unknown): string {
         return "Ya se está adjuntando una imagen de catálogo para este producto.";
       case "CATALOG_IMAGE_SEARCH_PLAN_REQUIRED":
         return "La búsqueda de catálogo está disponible en los planes Pro y Ultra.";
+      case "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE":
+        return "El periodo de créditos no está activo. Puedes subir una imagen manual.";
       case "PRODUCT_IMAGE_PROTECTED":
         return "La imagen actual está protegida y no se puede sustituir.";
       default:
@@ -212,6 +216,9 @@ function friendlyError(error: unknown): string {
         return "No quedan créditos suficientes para crear esta imagen.";
       case "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED":
         return "La configuración de créditos de imágenes está incompleta. Contacta con soporte de Hostly.";
+      case "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE":
+      case "CATALOG_IMAGE_CREDIT_RESERVATION_EXPIRED":
+        return "El periodo o la reserva de créditos ya no está activo. Puedes volver a intentarlo o subir una imagen manual.";
       case "PRODUCT_IMAGE_PROTECTED":
         return "La imagen actual está protegida y no se puede modificar desde esta revisión.";
       case "PRODUCT_IMAGE_REVIEW_STATE_INVALID":
@@ -229,6 +236,8 @@ function skippedGenerationMessage(reason: string): string {
       return "Ya hay una generación en curso para este producto.";
     case "duplicate_request":
       return "La misma solicitud ya se procesó. Actualiza el estado antes de volver a intentarlo.";
+    case "credit_reservation_expired":
+      return "La reserva de créditos caducó antes de terminar. No se publicó la imagen; puedes volver a intentarlo.";
     case "protected_existing_image":
       return "La imagen quedó protegida antes de terminar la generación y no se sustituyó.";
     case "branded_or_beverage":
@@ -250,6 +259,17 @@ function recommendationLabel(
 
 function creditLabel(value: number): string {
   return `${value} crédito${value === 1 ? "" : "s"}`;
+}
+
+function creditPeriodLabel(summary: CatalogImageCreditAccountSummary): string {
+  if (!summary.period) return "Sin periodo asignado";
+  const formatter = new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "Europe/Madrid",
+  });
+  return `${formatter.format(summary.period.startsAt)} – ${formatter.format(summary.period.endsAt)}`;
 }
 
 function badgeTone(
@@ -391,6 +411,8 @@ export function ProductAiImageReviewPanel({
   const [busyAction, setBusyAction] = useState<ProductImageReviewUiAction | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creditSummary, setCreditSummary] = useState<CatalogImageCreditAccountSummary | null>(null);
+  const [creditSummaryLoading, setCreditSummaryLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [catalogQuery, setCatalogQuery] = useState(productName);
   const [catalogCandidates, setCatalogCandidates] = useState<CatalogProductImageCandidate[]>([]);
@@ -408,6 +430,8 @@ export function ProductAiImageReviewPanel({
     setAccess(null);
     setMessage(null);
     setError(null);
+    setCreditSummary(null);
+    setCreditSummaryLoading(false);
     setCatalogQuery(productName);
     setCatalogCandidates([]);
     setCatalogSearched(false);
@@ -444,6 +468,18 @@ export function ProductAiImageReviewPanel({
   }, [open, productId, productName, refreshKey]);
 
   const resolved = state?.resolution === "resolved" ? state : null;
+
+  const loadCreditSummary = useCallback(async () => {
+    setCreditSummaryLoading(true);
+    setError(null);
+    try {
+      setCreditSummary(await fetchCatalogImageCreditSummary());
+    } catch (cause) {
+      setError(friendlyError(cause));
+    } finally {
+      setCreditSummaryLoading(false);
+    }
+  }, []);
   const fallbackIsLocalBlob = fallbackImageUrl?.startsWith("blob:") === true;
   const localImageDraftDirty = Boolean(
     fallbackIsLocalBlob ||
@@ -599,6 +635,7 @@ export function ProductAiImageReviewPanel({
     : null;
   const generationBlockedByCredits =
     singleCreditDecision?.status === "insufficient" ||
+    singleCreditDecision?.status === "period_inactive" ||
     singleCreditDecision?.status === "configuration_required";
   const catalogSearchCreditDecision = access
     ? evaluateCatalogImageCreditDecision(
@@ -608,6 +645,7 @@ export function ProductAiImageReviewPanel({
     : null;
   const catalogSearchBlockedByCredits =
     catalogSearchCreditDecision?.status === "insufficient" ||
+    catalogSearchCreditDecision?.status === "period_inactive" ||
     catalogSearchCreditDecision?.status === "configuration_required";
 
   const confirmPendingAction = () => {
@@ -668,9 +706,49 @@ export function ProductAiImageReviewPanel({
                 : ""}
             </p>
           ) : null}
+          {access?.meteringMode === "credit_balance" ? (
+            <div style={{ marginTop: 8 }}>
+              <ConfigBtnSecondary
+                type="button"
+                disabled={creditSummaryLoading}
+                onClick={() => void loadCreditSummary()}
+              >
+                {creditSummaryLoading
+                  ? "Consultando consumo…"
+                  : creditSummary
+                    ? "Actualizar consumo"
+                    : "Ver consumo de créditos"}
+              </ConfigBtnSecondary>
+            </div>
+          ) : null}
         </div>
         {loading ? <span style={{ color: "#64748b", fontSize: 11 }}>Comprobando…</span> : null}
       </div>
+
+      {creditSummary ? (
+        <div
+          style={{
+            display: "flex",
+            minWidth: 0,
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "6px 12px",
+            borderTop: "1px solid rgba(148,163,184,.2)",
+            paddingTop: 9,
+            color: "#64748b",
+            fontSize: 10,
+            lineHeight: 1.4,
+          }}
+          aria-label="Consumo de créditos de imágenes"
+        >
+          <strong style={{ color: "#334155" }}>
+            {creditPeriodLabel(creditSummary)}
+          </strong>
+          <span>{creditLabel(creditSummary.usage.consumedCredits)} consumidos</span>
+          <span>{creditLabel(creditSummary.usage.reservedCredits)} reservados</span>
+          <span>{creditSummary.usage.succeeded} operaciones completadas</span>
+        </div>
+      ) : null}
 
       {!savedProductId ? (
         <p style={{ margin: 0, color: "#475569", fontSize: 11, lineHeight: 1.45 }}>
@@ -711,6 +789,8 @@ export function ProductAiImageReviewPanel({
         <p className="hostly-product-commercial-modal__hint" role="status">
           {singleCreditDecision?.status === "insufficient"
             ? "No hay saldo suficiente para crear esta imagen. La subida manual sigue disponible."
+            : singleCreditDecision?.status === "period_inactive"
+              ? "El periodo de créditos no está activo. La subida manual sigue disponible."
             : "La configuración de créditos está incompleta. La subida manual sigue disponible."}
         </p>
       ) : null}
@@ -923,6 +1003,8 @@ export function ProductAiImageReviewPanel({
                 <p className="hostly-product-commercial-modal__hint" role="status">
                   {catalogSearchCreditDecision?.status === "insufficient"
                     ? "No hay saldo suficiente para buscar en catálogo. Puedes subir una imagen manual."
+                    : catalogSearchCreditDecision?.status === "period_inactive"
+                      ? "El periodo de créditos no está activo. Puedes subir una imagen manual."
                     : "La configuración de créditos está incompleta. Puedes subir una imagen manual."}
                 </p>
               ) : null}

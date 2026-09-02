@@ -16,6 +16,7 @@ import {
   finalizeCatalogImageOperation,
   reserveCatalogImageOperation,
 } from "@/lib/server/product-images/meter-catalog-image-operation";
+import { reconcileExpiredCatalogImageCreditReservations } from "@/lib/server/product-images/reconcile-catalog-image-credits";
 
 type Authenticate = (
   req: Request,
@@ -37,6 +38,7 @@ export type SearchCatalogProductImagesRequestDependencies = {
   authenticate?: Authenticate;
   searchCatalog?: SearchCatalog;
   resolveAccess?: ResolveAccess;
+  reconcileExpiredReservations?: typeof reconcileExpiredCatalogImageCreditReservations;
 };
 
 function jsonError(status: number, error: string, details?: string) {
@@ -112,6 +114,20 @@ export async function handleSearchCatalogProductImagesRequest(
         "CATALOG_SEARCH_CONFIRMATION_REQUIRED",
         "Confirma la búsqueda; puede consumir créditos",
       );
+    }
+    const reconcileExpiredReservations = dependencies
+      ? dependencies.reconcileExpiredReservations
+      : reconcileExpiredCatalogImageCreditReservations;
+    if (reconcileExpiredReservations) {
+      await reconcileExpiredReservations({
+        db: authCtx.db,
+        restaurantId: authCtx.restaurantId,
+        actorId: authCtx.uid,
+      }).catch((error) => {
+        console.error("[catalog-image-credits/reconcile-before-search]", {
+          message: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+        });
+      });
     }
     await reserveCatalogImageOperation({
       db: authCtx.db,
