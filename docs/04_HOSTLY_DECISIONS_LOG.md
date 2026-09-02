@@ -195,6 +195,27 @@ servidor en `restaurants/{restaurantId}/catalogImageUsage/{idempotencyKey}` con 
 producto, usuario, plan efectivo, proveedor, resultado, coste disponible y motivo de
 fallo. La colección no amplía el acceso del cliente ni cambia las reglas del catálogo.
 
+### H-019 - Cola masiva de imágenes persistente y acotada
+
+**Estado:** aceptada.
+
+La primera fase de “Completar imágenes del catálogo” usa documentos server-only en
+`restaurants/{restaurantId}/catalogImageJobs/{jobId}` y su subcolección `items`. El
+navegador solo solicita que el servidor avance un elemento; el estado, los intentos,
+el leasing, los resultados y los fallos permanecen en Firestore y sobreviven a una
+recarga o desconexión.
+
+Cada trabajo exige `settings.manage`, plan Ultra y confirmación explícita. Solo se
+procesa un elemento por trabajo a la vez, con clave idempotente por producto. Los
+platos genéricos usan IA, las marcas y bebidas consultan catálogo real y los casos
+ambiguos quedan para revisión manual. Ningún resultado se aprueba ni publica
+automáticamente.
+
+Esta base evita introducir una dependencia de cola externa antes de necesitar
+procesamiento autónomo sin navegador. Si el volumen operativo lo exige, el consumidor
+puede migrarse a Workflow o Queues manteniendo el contrato Firestore, los permisos y
+la galería de revisión.
+
 ---
 
 ## Decisiones pendientes de cierre

@@ -1400,6 +1400,36 @@ describe("Rules: autoridad canónica, mirrors y status", () => {
     );
     await assertFails(deleteDoc(aliasRef));
   });
+
+  test("trabajos y consumo de imágenes masivas son server-only incluso dentro del mismo tenant", async () => {
+    const jobPath = `restaurants/${RESTAURANT_A}/catalogImageJobs/bulk-job-rules`;
+    const itemPath = `${jobPath}/items/product-a`;
+    const usagePath = `restaurants/${RESTAURANT_A}/catalogImageUsage/bulk-usage-rules`;
+    await Promise.all([
+      adminDb.doc(jobPath).set({
+        restaurantId: RESTAURANT_A,
+        status: "queued",
+      }),
+      adminDb.doc(itemPath).set({
+        restaurantId: RESTAURANT_A,
+        productId: "product-a",
+        status: "pending",
+      }),
+      adminDb.doc(usagePath).set({
+        restaurantId: RESTAURANT_A,
+        productId: "product-a",
+        status: "succeeded",
+      }),
+    ]);
+
+    const ownerDb = rulesDb(OWNER_A);
+    const otherDb = rulesDb(OWNER_B);
+    for (const path of [jobPath, itemPath, usagePath]) {
+      await assertFails(getDoc(doc(ownerDb, path)));
+      await assertFails(getDoc(doc(otherDb, path)));
+      await assertFails(setDoc(doc(ownerDb, `${path}-client`), { status: "queued" }));
+    }
+  });
 });
 
 const PNG_BYTES = new Uint8Array([

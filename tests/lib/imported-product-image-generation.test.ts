@@ -23,6 +23,17 @@ const PRO_ACCESS: CatalogImageAccess = {
   meteringMode: "usage_recorded",
 };
 
+const ULTRA_ACCESS: CatalogImageAccess = {
+  effectivePlan: "ultra",
+  source: "subscription",
+  capabilities: [
+    "catalog.image.ai.single",
+    "catalog.image.ai.bulk",
+    "catalog.image.catalogSearch",
+  ],
+  meteringMode: "usage_recorded",
+};
+
 function fakeGenerationDb(params: {
   productData: Record<string, unknown>;
   usageData?: Record<string, unknown>;
@@ -340,4 +351,31 @@ test("an ineligible branded item records a tenant-scoped skipped usage", async (
       failureReason: "branded_or_beverage",
     },
   );
+});
+
+test("bulk generation usage records the bulk capability and durable job id", async () => {
+  const fake = fakeGenerationDb({
+    productData: importedDish({
+      name: "Coca-Cola Zero",
+      categoryName: "Refrescos",
+    }),
+  });
+
+  await generateImportedProductImage({
+    db: fake.db,
+    restaurantId: "restaurant-1",
+    productId: "product-1",
+    userId: "owner-1",
+    idempotencyKey: "bulk-request-brand-1",
+    access: ULTRA_ACCESS,
+    usageOperation: "catalog_image_ai_bulk",
+    usageCapability: "catalog.image.ai.bulk",
+    jobId: "bulk-job-1",
+  });
+
+  assert.equal(fake.creates.length, 1);
+  assert.equal(fake.creates[0]?.data.operation, "catalog_image_ai_bulk");
+  assert.equal(fake.creates[0]?.data.capability, "catalog.image.ai.bulk");
+  assert.equal(fake.creates[0]?.data.jobId, "bulk-job-1");
+  assert.equal(fake.creates[0]?.data.effectivePlan, "ultra");
 });

@@ -1,0 +1,279 @@
+.trigger {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a5f;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.planBadge {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgb(15 23 42 / 42%);
+}
+
+.dialog {
+  display: flex;
+  width: min(760px, 100%);
+  max-height: min(780px, calc(100dvh - 36px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #dbe4ee;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 20%);
+}
+
+.header,
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.header {
+  border-bottom: 1px solid #e5edf5;
+}
+
+.footer {
+  border-top: 1px solid #e5edf5;
+}
+
+.title {
+  margin: 0;
+  color: #172033;
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.subtitle,
+.hint,
+.error {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.error {
+  color: #b42318;
+}
+
+.body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.summaryGrid,
+.counterGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.metric {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.metricValue {
+  display: block;
+  color: #172033;
+  font-size: 18px;
+  font-weight: 760;
+}
+
+.metricLabel {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.notice {
+  margin-top: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 9px;
+  background: #f0f7ff;
+  padding: 10px 12px;
+  color: #40566f;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.progressTrack {
+  height: 8px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef5;
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: inherit;
+  background: #4f7fa8;
+  transition: width 180ms ease;
+}
+
+.results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.result {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 8px;
+  content-visibility: auto;
+  contain-intrinsic-size: 62px;
+}
+
+.resultImage,
+.resultPlaceholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 7px;
+  background: #eef3f8;
+  object-fit: cover;
+}
+
+.resultPlaceholder {
+  display: grid;
+  place-items: center;
+  color: #789;
+  font-size: 16px;
+}
+
+.resultName,
+.resultMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resultName {
+  color: #26364a;
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.resultMeta {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.buttonPrimary,
+.buttonSecondary,
+.buttonDanger,
+.closeButton {
+  min-height: 36px;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.buttonPrimary {
+  border: 1px solid #315f87;
+  background: #315f87;
+  color: #fff;
+}
+
+.buttonSecondary,
+.closeButton {
+  border: 1px solid #d5dee8;
+  background: #fff;
+  color: #405166;
+}
+
+.buttonDanger {
+  border: 1px solid #fecaca;
+  background: #fff;
+  color: #b42318;
+}
+
+.closeButton {
+  min-width: 36px;
+  padding-inline: 9px;
+}
+
+.buttonPrimary:disabled,
+.buttonSecondary:disabled,
+.buttonDanger:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 640px) {
+  .backdrop {
+    place-items: end center;
+    padding: 0;
+  }
+
+  .dialog {
+    width: 100%;
+    max-height: 92dvh;
+    border-radius: 14px 14px 0 0;
+  }
+
+  .summaryGrid,
+  .counterGrid,
+  .results {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .footer,
+  .actions {
+    width: 100%;
+  }
+
+  .actions > button {
+    flex: 1 1 130px;
+  }
+}
