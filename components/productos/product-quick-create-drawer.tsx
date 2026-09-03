@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useCallback, useState } from "react";
 import { ConfigBtnPrimary, ConfigBtnSecondary } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
+import { HostlyButton } from "@/components/ui/hostly";
 import type {
   ProductQuickCreateSubmitMode,
   UseProductQuickCreateResult,
@@ -101,24 +102,24 @@ function ProductQuickCreateDiscardConfirm({
           Perderás los cambios que todavía no has guardado.
         </p>
         <div className="hostly-productos-bulk-course-modal__actions">
-          <button
+          <HostlyButton
             ref={keepEditingRef}
-            type="button"
-            className="hostly-button-secondary hostly-button-compact"
+            variant="secondary"
+            size="compact"
             disabled={saving}
             onClick={onKeepEditing}
           >
             Seguir editando
-          </button>
-          <button
+          </HostlyButton>
+          <HostlyButton
             ref={discardRef}
-            type="button"
-            className="hostly-button-danger hostly-button-compact"
+            variant="destructive"
+            size="compact"
             disabled={saving}
             onClick={onDiscard}
           >
             Descartar
-          </button>
+          </HostlyButton>
         </div>
       </div>
     </div>
@@ -277,14 +278,14 @@ export function ProductQuickCreateDrawer({
               </span>
             ) : null}
           </div>
-          <button
-            type="button"
+          <HostlyButton
+            variant="icon"
             className="hostly-product-quick-create-v3__close"
             onClick={requestClose}
-            aria-label={t("common.cancel")}
+            iconOnlyLabel={t("common.cancel")}
           >
             ×
-          </button>
+          </HostlyButton>
         </header>
 
         <form
@@ -334,16 +335,16 @@ export function ProductQuickCreateDrawer({
                   ))}
                 </select>
                 {onOpenAddCategory ? (
-                  <button
-                    type="button"
+                  <HostlyButton
+                    variant="icon"
                     className="hostly-product-quick-create-v3__category-add"
                     disabled={isSubmitting}
-                    aria-label={t("cartaCategories.addFromForm")}
+                    iconOnlyLabel={t("cartaCategories.addFromForm")}
                     title="Nueva categoría"
                     onClick={onOpenAddCategory}
                   >
                     +
-                  </button>
+                  </HostlyButton>
                 ) : null}
               </div>
             </div>
@@ -394,8 +395,9 @@ export function ProductQuickCreateDrawer({
               </ConfigBtnSecondary>
             </div>
             {onOpenAdvancedConfig ? (
-              <button
-                type="button"
+              <HostlyButton
+                variant="ghost"
+                size="compact"
                 className="hostly-product-quick-create-v3__more-options"
                 disabled={isSubmitting}
                 onClick={() =>
@@ -403,7 +405,7 @@ export function ProductQuickCreateDrawer({
                 }
               >
                 Más opciones
-              </button>
+              </HostlyButton>
             ) : null}
           </footer>
         </form>
