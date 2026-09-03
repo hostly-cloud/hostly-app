@@ -5,7 +5,7 @@ import {
   type CatalogImageCreditCosts,
   type CatalogImageCreditPeriod,
 } from "@/lib/productos/catalog-image-plan";
-import { resolveHostlyPlanFromRestaurant } from "@/lib/subscription/hostly-plan";
+import { resolveHostlySubscriptionAccessFromRestaurant } from "@/lib/server/subscription/resolve-hostly-subscription-access";
 
 function readObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -49,7 +49,8 @@ export function resolveCatalogImageAccessFromRestaurant(
   restaurant: Record<string, unknown> | null,
 ): CatalogImageAccess {
   const subscription = readObject(restaurant?.subscription);
-  const { effectivePlan, source } = resolveHostlyPlanFromRestaurant(restaurant);
+  const { effectivePlan, source } =
+    resolveHostlySubscriptionAccessFromRestaurant(restaurant);
   const catalogImages = readObject(subscription?.catalogImages);
   const creditCosts = readObject(catalogImages?.creditCosts);
   const meteringMode =
