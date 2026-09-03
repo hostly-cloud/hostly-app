@@ -9,6 +9,8 @@ import {
   CatalogProductImageApiError,
   searchCatalogProductImagesForReview,
 } from "@/lib/productos/catalog-product-image-api";
+import { resolveCatalogImageSubscriptionUiAccess } from "@/lib/productos/catalog-image-subscription-ui";
+import { fetchHostlySubscriptionAccess } from "@/lib/subscription/hostly-subscription-access-api";
 
 function friendlyCatalogError(error: unknown): string {
   if (error instanceof CatalogProductImageApiError) {
@@ -21,6 +23,8 @@ function friendlyCatalogError(error: unknown): string {
         return "La imagen actual está protegida y no se puede sustituir.";
       case "CATALOG_BARCODE_MISMATCH":
         return "El código de barras guardado ya no coincide con esta referencia.";
+      case "CATALOG_IMAGE_SEARCH_PLAN_REQUIRED":
+        return "La búsqueda de catálogo está disponible en los planes Pro y Ultra.";
       default:
         return error.message || error.code;
     }
@@ -41,15 +45,34 @@ export function ProductExactCatalogImageSuggestion({
   refreshKey?: number;
   onAttached?: (imageUrl: string) => void;
 }) {
+  const [catalogAllowed, setCatalogAllowed] = useState<boolean | null>(null);
   const [candidate, setCandidate] = useState<CatalogProductImageCandidate | null>(null);
   const [loading, setLoading] = useState(false);
   const [attaching, setAttaching] = useState(false);
   const [attached, setAttached] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    setCatalogAllowed(null);
+    void fetchHostlySubscriptionAccess()
+      .then((access) => {
+        if (cancelled) return;
+        setCatalogAllowed(
+          resolveCatalogImageSubscriptionUiAccess(access).canSearchCatalog,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogAllowed(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const resolve = useCallback(async () => {
     const gtin = barcode.trim();
-    if (!productId || !gtin) {
+    if (!catalogAllowed || !productId || !gtin) {
       setCandidate(null);
       setMessage(null);
       return;
@@ -70,14 +93,15 @@ export function ProductExactCatalogImageSuggestion({
     } finally {
       setLoading(false);
     }
-  }, [barcode, productId]);
+  }, [barcode, catalogAllowed, productId]);
 
   useEffect(() => {
+    if (catalogAllowed !== true) return;
     void resolve();
-  }, [resolve, refreshKey]);
+  }, [catalogAllowed, resolve, refreshKey]);
 
   const attach = useCallback(async () => {
-    if (!candidate || attaching) return;
+    if (!catalogAllowed || !candidate || attaching) return;
     setAttaching(true);
     setMessage(null);
     try {
@@ -93,9 +117,9 @@ export function ProductExactCatalogImageSuggestion({
     } finally {
       setAttaching(false);
     }
-  }, [attaching, candidate, onAttached, productId]);
+  }, [attaching, candidate, catalogAllowed, onAttached, productId]);
 
-  if (!barcode.trim()) return null;
+  if (!barcode.trim() || catalogAllowed !== true) return null;
 
   return (
     <section
