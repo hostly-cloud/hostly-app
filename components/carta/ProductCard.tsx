@@ -1,20 +1,10 @@
 "use client";
 
-import { type CSSProperties } from "react";
 import Image from "next/image";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { Product } from "@/types/product";
 
-const cardBtnBase: CSSProperties = {
-  padding: 6,
-  borderRadius: 6,
-  marginRight: 6,
-  border: "none",
-  color: "white",
-  cursor: "pointer",
-  fontSize: 13,
-};
-
-const thumbBox: CSSProperties = {
+const thumbBox = {
   width: 72,
   height: 72,
   borderRadius: 8,
@@ -27,7 +17,7 @@ const thumbBox: CSSProperties = {
   fontSize: 12,
   flexShrink: 0,
   overflow: "hidden",
-};
+} as const;
 
 export type ProductCardProps = {
   product: Product;
@@ -100,34 +90,28 @@ export function ProductCard({
         >
           {precioLabel}
         </div>
-        <div style={{ display: "flex", marginTop: 10 }}>
-          <button
-            type="button"
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          <HostlyButton
+            variant="secondary"
+            size="compact"
             onClick={(e) => {
               e.stopPropagation();
               onEdit(product);
             }}
-            style={{
-              ...cardBtnBase,
-              backgroundColor: "#2563eb",
-            }}
           >
             Editar
-          </button>
+          </HostlyButton>
           {canDelete ? (
-            <button
-              type="button"
+            <HostlyButton
+              variant="destructive"
+              size="compact"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(product.id);
               }}
-              style={{
-                ...cardBtnBase,
-                backgroundColor: "#dc2626",
-              }}
             >
               Eliminar
-            </button>
+            </HostlyButton>
           ) : null}
         </div>
       </div>
