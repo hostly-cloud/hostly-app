@@ -4,6 +4,7 @@ import { Timestamp, collection, onSnapshot, query, where } from "firebase/firest
 import { useEffect, useMemo, useState } from "react";
 import ModulePageShell from "@/components/module-page-shell";
 import {
+  HostlyButton,
   HostlyKpiCard,
   HostlySegmentedControl,
   HostlySurface,
@@ -536,24 +537,26 @@ export default function AnalisisVentasPage() {
           </div>
 
           <div className="hostly-analytics-toolbar__actions">
-            <button
+            <HostlyButton
               type="button"
+              variant="secondary"
+              size="compact"
               disabled={paymentsState !== "ready"}
               onClick={() => {
                 window.requestAnimationFrame(() => window.print());
               }}
-              className="hostly-button-secondary hostly-button-compact"
             >
               Imprimir cierre
-            </button>
-            <button
+            </HostlyButton>
+            <HostlyButton
               type="button"
+              variant="secondary"
+              size="compact"
               disabled={paymentsState !== "ready"}
               onClick={handleExportCSV}
-              className="hostly-button-secondary hostly-button-compact"
             >
               Exportar CSV
-            </button>
+            </HostlyButton>
           </div>
         </div>
 
