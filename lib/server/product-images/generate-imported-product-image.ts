@@ -47,6 +47,7 @@ export type ProductImageGenerationEligibility =
       name: string;
       categoryName: string;
       description?: string;
+      contentMode?: "dish" | "generic_product";
     }
   | {
       eligible: false;
@@ -118,10 +119,10 @@ function creditFailure(
           402,
         )
       : new GenerateImportedProductImageError(
-        code,
-        "La configuración de créditos de imágenes está incompleta",
-        503,
-      );
+          code,
+          "La configuración de créditos de imágenes está incompleta",
+          503,
+        );
 }
 
 function readReservedCreditCost(data: Record<string, unknown>): number | null {
@@ -142,9 +143,7 @@ function releaseReservedCredits(
   if (creditCost == null) return false;
   if (creditCost > 0) {
     transaction.update(restaurantRef, {
-      "subscription.catalogImages.creditBalance": FieldValue.increment(
-        creditCost,
-      ),
+      "subscription.catalogImages.creditBalance": FieldValue.increment(creditCost),
     });
   }
   return true;
@@ -212,8 +211,7 @@ function readImageState(data: Record<string, unknown>) {
 function readGenerationLock(value: unknown): ProductImageGenerationLock | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
-  const requestId =
-    typeof raw.requestId === "string" ? raw.requestId.trim() : "";
+  const requestId = typeof raw.requestId === "string" ? raw.requestId.trim() : "";
   const startedAt =
     typeof raw.startedAt === "number" && Number.isFinite(raw.startedAt)
       ? raw.startedAt
@@ -227,16 +225,18 @@ function readGenerationLock(value: unknown): ProductImageGenerationLock | null {
 }
 
 /**
- * Generación deliberadamente conservadora:
- * - solo `tipoVenta: plato`;
- * - excluye bebidas/marcas aunque hayan sido clasificadas incorrectamente;
- * - nunca sustituye imágenes manuales, de catálogo o legacy protegidas;
- * - una imagen IA aprobada solo se sustituye con confirmación explícita.
+ * Por defecto la generación sigue siendo conservadora para automatizaciones/lote.
+ * `allowCatalogFallback` solo se usa desde la acción individual confirmada: permite
+ * una representación genérica y sin marcas cuando el catálogo real no resuelve una
+ * bebida/producto comercial. Nunca desbloquea imágenes protegidas.
  */
 export function evaluateImportedProductImageEligibility(
   data: Record<string, unknown>,
   descriptionOverride?: string,
-  options?: { allowApprovedAiReplacement?: boolean },
+  options?: {
+    allowApprovedAiReplacement?: boolean;
+    allowCatalogFallback?: boolean;
+  },
 ): ProductImageGenerationEligibility {
   const name = readString(data, "name") ?? "";
   if (name.length < 3) {
@@ -247,12 +247,20 @@ export function evaluateImportedProductImageEligibility(
   const tipoVenta =
     parseTipoVentaLoose(data.tipoVenta) ??
     inferTipoVentaFromCartaText(categoryName, name);
-  if (tipoVenta !== "plato" || data.productFamilyType === "drink") {
-    return { eligible: false, reason: "not_food" };
-  }
+  const commercialSignal =
+    tipoVenta === "bebida" ||
+    data.productFamilyType === "drink" ||
+    looksLikeBrandedOrBeverageProduct(name, categoryName);
+  const allowCatalogFallback =
+    options?.allowCatalogFallback === true && commercialSignal;
 
-  if (looksLikeBrandedOrBeverageProduct(name, categoryName)) {
-    return { eligible: false, reason: "branded_or_beverage" };
+  if (!allowCatalogFallback) {
+    if (tipoVenta !== "plato" || data.productFamilyType === "drink") {
+      return { eligible: false, reason: "not_food" };
+    }
+    if (looksLikeBrandedOrBeverageProduct(name, categoryName)) {
+      return { eligible: false, reason: "branded_or_beverage" };
+    }
   }
 
   const imageState = readImageState(data);
@@ -273,6 +281,9 @@ export function evaluateImportedProductImageEligibility(
     name: name.slice(0, 140),
     categoryName: categoryName.slice(0, 100),
     ...(description ? { description: description.slice(0, 360) } : {}),
+    ...(allowCatalogFallback
+      ? { contentMode: "generic_product" as const }
+      : {}),
   };
 }
 
@@ -280,7 +291,22 @@ export function buildImportedProductImagePrompt(input: {
   name: string;
   categoryName: string;
   description?: string;
+  contentMode?: "dish" | "generic_product";
 }): string {
+  if (input.contentMode === "generic_product") {
+    return [
+      "Create a realistic professional restaurant menu photograph representing this product generically.",
+      `Product name from the restaurant menu: ${input.name}`,
+      `Menu category: ${input.categoryName}`,
+      ...(input.description ? [`Menu description: ${input.description}`] : []),
+      "Use the product wording only to infer the product type, color, serving style and general presentation.",
+      "Do not reproduce or imitate trademarks, logos, typography, labels or exact branded packaging.",
+      "For a branded soft drink or beverage, show an unbranded generic serving consistent with that drink type, such as a neutral glass, cup or plain container.",
+      "No text, no logos, no brand marks, no readable labels, no menus, no people and no hands.",
+      "Clean neutral restaurant setting, premium commercial product photography, soft realistic lighting, square composition.",
+    ].join("\n");
+  }
+
   return [
     "Create a realistic professional restaurant menu photograph of one generic plated dish.",
     `Dish name from the restaurant menu: ${input.name}`,
@@ -321,8 +347,7 @@ async function generateImageWithAiGateway(
   mediaType: "image/png" | "image/jpeg" | "image/webp";
   costUsd?: number;
 }> {
-  const model =
-    process.env.HOSTLY_AI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
+  const model = process.env.HOSTLY_AI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
 
   try {
     const result = await generateImage({
@@ -430,10 +455,7 @@ async function deleteStoragePathSafely(
   path: string | undefined,
 ): Promise<void> {
   const trimmed = path?.trim();
-  if (
-    !trimmed ||
-    !trimmed.startsWith(productImagePrefix(restaurantId, productId))
-  ) {
+  if (!trimmed || !trimmed.startsWith(productImagePrefix(restaurantId, productId))) {
     return;
   }
   const bucket = getHostlyStorageBucket();
@@ -462,11 +484,7 @@ async function saveGeneratedImage(
 
   const token = randomUUID();
   const extension =
-    mediaType === "image/png"
-      ? "png"
-      : mediaType === "image/jpeg"
-        ? "jpg"
-        : "webp";
+    mediaType === "image/png" ? "png" : mediaType === "image/jpeg" ? "jpg" : "webp";
   const imagePath = `${productImagePrefix(
     restaurantId,
     productId,
@@ -494,9 +512,7 @@ async function saveGeneratedImage(
 
   const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(
     bucket.name,
-  )}/o/${encodeURIComponent(imagePath)}?alt=media&token=${encodeURIComponent(
-    token,
-  )}`;
+  )}/o/${encodeURIComponent(imagePath)}?alt=media&token=${encodeURIComponent(token)}`;
 
   return { imagePath, imageUrl };
 }
@@ -559,23 +575,27 @@ async function releaseGenerationLockSafely(params: {
   }
 }
 
-export async function generateImportedProductImage(params: {
-  db: Firestore;
-  restaurantId: string;
-  productId: string;
-  userId: string;
-  idempotencyKey: string;
-  access: CatalogImageAccess;
-  description?: string;
-  usageOperation?: "catalog_image_ai_single" | "catalog_image_ai_bulk";
-  usageCapability?: CatalogImageCapability;
-  jobId?: string;
-  allowApprovedAiReplacement?: boolean;
-}, dependencies?: {
-  generateImage?: typeof generateImageWithAiGateway;
-  saveImage?: typeof saveGeneratedImage;
-  deleteImage?: typeof deleteStoragePathSafely;
-}): Promise<GenerateImportedProductImageResult> {
+export async function generateImportedProductImage(
+  params: {
+    db: Firestore;
+    restaurantId: string;
+    productId: string;
+    userId: string;
+    idempotencyKey: string;
+    access: CatalogImageAccess;
+    description?: string;
+    usageOperation?: "catalog_image_ai_single" | "catalog_image_ai_bulk";
+    usageCapability?: CatalogImageCapability;
+    jobId?: string;
+    allowApprovedAiReplacement?: boolean;
+    allowCatalogFallback?: boolean;
+  },
+  dependencies?: {
+    generateImage?: typeof generateImageWithAiGateway;
+    saveImage?: typeof saveGeneratedImage;
+    deleteImage?: typeof deleteStoragePathSafely;
+  },
+): Promise<GenerateImportedProductImageResult> {
   const restaurantId = assertSimpleId(params.restaurantId, "restaurantId");
   const productId = assertSimpleId(params.productId, "productId");
   const userId = params.userId.trim();
@@ -607,8 +627,7 @@ export async function generateImportedProductImage(params: {
     .collection("catalogImageUsage")
     .doc(idempotencyKey);
   const requestId = idempotencyKey;
-  const requiredCapability =
-    params.usageCapability ?? "catalog.image.ai.single";
+  const requiredCapability = params.usageCapability ?? "catalog.image.ai.single";
 
   const acquisition = await params.db.runTransaction(async (transaction) => {
     const restaurantSnap = await transaction.get(restaurantRef);
@@ -646,58 +665,53 @@ export async function generateImportedProductImage(params: {
     const eligibility = evaluateImportedProductImageEligibility(
       data,
       params.description,
-      { allowApprovedAiReplacement: params.allowApprovedAiReplacement },
+      {
+        allowApprovedAiReplacement: params.allowApprovedAiReplacement,
+        allowCatalogFallback: params.allowCatalogFallback,
+      },
     );
     if (!eligibility.eligible) {
-      transaction.create(
-        usageRef,
-        {
-          ...usageRecordBase({
-            restaurantId,
-            productId,
-            userId,
-            idempotencyKey,
-            access: liveAccess,
-            status: "skipped",
-            now,
-            operation: params.usageOperation,
-            capability: params.usageCapability,
-            jobId: params.jobId,
-            approvedImageReplacementConfirmed:
-              params.allowApprovedAiReplacement,
-          }),
-          result: "skipped",
-          failureReason: eligibility.reason,
-          completedAt: now,
-        },
-      );
+      transaction.create(usageRef, {
+        ...usageRecordBase({
+          restaurantId,
+          productId,
+          userId,
+          idempotencyKey,
+          access: liveAccess,
+          status: "skipped",
+          now,
+          operation: params.usageOperation,
+          capability: params.usageCapability,
+          jobId: params.jobId,
+          approvedImageReplacementConfirmed: params.allowApprovedAiReplacement,
+        }),
+        result: "skipped",
+        failureReason: eligibility.reason,
+        completedAt: now,
+      });
       return { acquired: false as const, reason: eligibility.reason };
     }
 
     const lock = readGenerationLock(data.imageGenerationInProgress);
     if (lock && now - lock.startedAt < GENERATION_LOCK_MS) {
-      transaction.create(
-        usageRef,
-        {
-          ...usageRecordBase({
-            restaurantId,
-            productId,
-            userId,
-            idempotencyKey,
-            access: liveAccess,
-            status: "skipped",
-            now,
-            operation: params.usageOperation,
-            capability: params.usageCapability,
-            jobId: params.jobId,
-            approvedImageReplacementConfirmed:
-              params.allowApprovedAiReplacement,
-          }),
-          result: "skipped",
-          failureReason: "generation_in_progress",
-          completedAt: now,
-        },
-      );
+      transaction.create(usageRef, {
+        ...usageRecordBase({
+          restaurantId,
+          productId,
+          userId,
+          idempotencyKey,
+          access: liveAccess,
+          status: "skipped",
+          now,
+          operation: params.usageOperation,
+          capability: params.usageCapability,
+          jobId: params.jobId,
+          approvedImageReplacementConfirmed: params.allowApprovedAiReplacement,
+        }),
+        result: "skipped",
+        failureReason: "generation_in_progress",
+        completedAt: now,
+      });
       return {
         acquired: false as const,
         reason: "generation_in_progress" as const,
@@ -721,7 +735,7 @@ export async function generateImportedProductImage(params: {
           ? "CATALOG_IMAGE_CREDITS_EXHAUSTED"
           : creditDecision.status === "period_inactive"
             ? "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE"
-          : "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED";
+            : "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED";
       transaction.create(usageRef, {
         ...usageRecordBase({
           restaurantId,
@@ -734,8 +748,7 @@ export async function generateImportedProductImage(params: {
           operation: params.usageOperation,
           capability: params.usageCapability,
           jobId: params.jobId,
-          approvedImageReplacementConfirmed:
-            params.allowApprovedAiReplacement,
+          approvedImageReplacementConfirmed: params.allowApprovedAiReplacement,
         }),
         result: "blocked",
         failureReason,
@@ -767,35 +780,31 @@ export async function generateImportedProductImage(params: {
       updatedAt: now,
       updatedBy: userId,
     });
-    transaction.create(
-      usageRef,
-      {
-        ...usageRecordBase({
-          restaurantId,
-          productId,
-          userId,
-          idempotencyKey,
-          access: liveAccess,
-          status: "processing",
-          now,
-          operation: params.usageOperation,
-          capability: params.usageCapability,
-          jobId: params.jobId,
-          approvedImageReplacementConfirmed:
-            params.allowApprovedAiReplacement,
-        }),
-        ...(creditDecision.status === "available"
-          ? {
-              creditStatus: "reserved",
-              creditCost: creditDecision.creditCost,
-              creditBalanceBefore: creditDecision.creditBalanceBefore,
-              creditBalanceAfter: creditDecision.creditBalanceAfter,
-              creditLeaseExpiresAt:
-                now + HOSTLY_CATALOG_IMAGE_CREDIT_POLICY.reservationLeaseMs,
-            }
-          : {}),
-      },
-    );
+    transaction.create(usageRef, {
+      ...usageRecordBase({
+        restaurantId,
+        productId,
+        userId,
+        idempotencyKey,
+        access: liveAccess,
+        status: "processing",
+        now,
+        operation: params.usageOperation,
+        capability: params.usageCapability,
+        jobId: params.jobId,
+        approvedImageReplacementConfirmed: params.allowApprovedAiReplacement,
+      }),
+      ...(creditDecision.status === "available"
+        ? {
+            creditStatus: "reserved",
+            creditCost: creditDecision.creditCost,
+            creditBalanceBefore: creditDecision.creditBalanceBefore,
+            creditBalanceAfter: creditDecision.creditBalanceAfter,
+            creditLeaseExpiresAt:
+              now + HOSTLY_CATALOG_IMAGE_CREDIT_POLICY.reservationLeaseMs,
+          }
+        : {}),
+    });
 
     return { acquired: true as const, eligibility };
   });
@@ -805,8 +814,7 @@ export async function generateImportedProductImage(params: {
       "creditError" in acquisition &&
       (acquisition.creditError === "CATALOG_IMAGE_CREDITS_EXHAUSTED" ||
         acquisition.creditError === "CATALOG_IMAGE_CREDIT_PERIOD_INACTIVE" ||
-        acquisition.creditError ===
-          "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED")
+        acquisition.creditError === "CATALOG_IMAGE_CREDIT_CONFIGURATION_REQUIRED")
     ) {
       throw creditFailure(acquisition.creditError);
     }
@@ -840,8 +848,7 @@ export async function generateImportedProductImage(params: {
 
   try {
     const prompt = buildImportedProductImagePrompt(acquisition.eligibility);
-    const generateImageForProduct =
-      dependencies?.generateImage ?? generateImageWithAiGateway;
+    const generateImageForProduct = dependencies?.generateImage ?? generateImageWithAiGateway;
     const generated = await generateImageForProduct(prompt, userId);
     generatedMetadata = {
       model: generated.model,
@@ -917,11 +924,10 @@ export async function generateImportedProductImage(params: {
         };
       }
 
-      const eligibility = evaluateImportedProductImageEligibility(
-        data,
-        undefined,
-        { allowApprovedAiReplacement: params.allowApprovedAiReplacement },
-      );
+      const eligibility = evaluateImportedProductImageEligibility(data, undefined, {
+        allowApprovedAiReplacement: params.allowApprovedAiReplacement,
+        allowCatalogFallback: params.allowCatalogFallback,
+      });
       if (!eligibility.eligible) {
         const now = Date.now();
         const releasedCredit = releaseReservedCredits(
@@ -993,11 +999,7 @@ export async function generateImportedProductImage(params: {
 
     if (replacedImagePath && replacedImagePath !== stored.imagePath) {
       const deleteImage = dependencies?.deleteImage ?? deleteStoragePathSafely;
-      await deleteImage(
-        restaurantId,
-        productId,
-        replacedImagePath,
-      );
+      await deleteImage(restaurantId, productId, replacedImagePath);
     }
 
     return {

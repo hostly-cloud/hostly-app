@@ -86,6 +86,11 @@ export function buildProductImageReviewStateFromDocument(
     CATALOG_ATTACH_LOCK_MS,
   );
   const eligibility = evaluateImportedProductImageEligibility(data);
+  const individualFallbackEligibility = evaluateImportedProductImageEligibility(
+    data,
+    undefined,
+    { allowCatalogFallback: true },
+  );
 
   const source = enrichment?.source ?? (hasImage ? "legacy" : null);
   const reviewStatus =
@@ -107,16 +112,30 @@ export function buildProductImageReviewStateFromDocument(
     !generationInProgress &&
     !catalogAttachInProgress &&
     canAutomaticallyReplaceProductImage(imageState);
+  const generationEligible =
+    recommendedAction === "catalog_search"
+      ? individualFallbackEligibility.eligible && !canReviewAutomatic
+      : eligibility.eligible;
   const canGenerate =
-    recommendedAction === "ai_generate" &&
-    (eligibility.eligible || canReplaceApprovedAi) &&
+    (recommendedAction === "ai_generate" || recommendedAction === "catalog_search") &&
+    (generationEligible || canReplaceApprovedAi) &&
     !generationInProgress;
-  const generationReason =
-    generationInProgress && (eligibility.eligible || canReplaceApprovedAi)
-      ? "generation_in_progress"
-      : eligibility.eligible || canReplaceApprovedAi
-        ? null
-        : eligibility.reason;
+  const generationEligibility =
+    recommendedAction === "catalog_search" ? individualFallbackEligibility : eligibility;
+
+  let generationReason: ProductImageReviewResolvedState["generationReason"] = null;
+  if (
+    generationInProgress &&
+    (generationEligibility.eligible || canReplaceApprovedAi)
+  ) {
+    generationReason = "generation_in_progress";
+  } else if (!generationEligible && !canReplaceApprovedAi) {
+    if (generationEligibility.eligible && canReviewAutomatic) {
+      generationReason = "protected_existing_image";
+    } else if (!generationEligibility.eligible) {
+      generationReason = generationEligibility.reason;
+    }
+  }
 
   return {
     resolution: "resolved",

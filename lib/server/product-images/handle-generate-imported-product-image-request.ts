@@ -29,6 +29,7 @@ type Generate = (params: {
   access: CatalogImageAccess;
   description?: string;
   allowApprovedAiReplacement?: boolean;
+  allowCatalogFallback?: boolean;
 }) => Promise<GenerateImportedProductImageResult>;
 
 type ResolveAccess = (params: {
@@ -153,6 +154,7 @@ export async function handleGenerateImportedProductImageRequest(
     userId: authCtx.uid,
     idempotencyKey,
     access,
+    allowCatalogFallback: true,
     ...(body.confirmReplaceApprovedImage === true
       ? { allowApprovedAiReplacement: true }
       : {}),
