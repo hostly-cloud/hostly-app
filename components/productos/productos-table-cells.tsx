@@ -1,5 +1,6 @@
 import type { CSSProperties, SVGProps } from "react";
 import Image from "next/image";
+import { HostlyButton } from "@/components/ui/hostly";
 import { HostlyRowActionButton, HostlyRowActions, HostlyStatusBadge } from "@/components/ui/hostly/data-table";
 import { getProductFamilyLabel } from "@/lib/carta/product-category-family-resolver";
 import {
@@ -421,8 +422,9 @@ export function ProductosCartaRoutingAuditCell({
         parityAudit={parity}
       />
       {showCorrect ? (
-        <button
-          type="button"
+        <HostlyButton
+          variant="tool"
+          size="compact"
           className="hostly-productos-routing-correct-btn"
           title={t("productos.routingCorrectTitle")}
           aria-label={t("productos.routingCorrectAria", { name: p.nombre })}
@@ -432,7 +434,7 @@ export function ProductosCartaRoutingAuditCell({
           }}
         >
           {t("productos.routingCorrectLabel")}
-        </button>
+        </HostlyButton>
       ) : correctDisabled && productHasCorrectableRoutingParityIssue(parity) ? (
         <span
           className="hostly-productos-routing-correct-btn hostly-productos-routing-correct-btn--disabled"
@@ -586,26 +588,30 @@ export function ProductosCartaReorderControls({
 }) {
   return (
     <div className="hostly-productos-reorder-controls" role="group" aria-label={t("productos.orderModeRowAria")}>
-      <button
-        type="button"
+      <HostlyButton
+        variant="icon"
+        size="compact"
         className="hostly-productos-reorder-btn"
         disabled={!canMoveUp || busy}
         onClick={onMoveUp}
         aria-label={t("productos.moveUp")}
         title={t("productos.moveUp")}
+        iconOnlyLabel={t("productos.moveUp")}
       >
         ↑
-      </button>
-      <button
-        type="button"
+      </HostlyButton>
+      <HostlyButton
+        variant="icon"
+        size="compact"
         className="hostly-productos-reorder-btn"
         disabled={!canMoveDown || busy}
         onClick={onMoveDown}
         aria-label={t("productos.moveDown")}
         title={t("productos.moveDown")}
+        iconOnlyLabel={t("productos.moveDown")}
       >
         ↓
-      </button>
+      </HostlyButton>
     </div>
   );
 }
