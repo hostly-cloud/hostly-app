@@ -281,7 +281,9 @@ export function evaluateImportedProductImageEligibility(
     name: name.slice(0, 140),
     categoryName: categoryName.slice(0, 100),
     ...(description ? { description: description.slice(0, 360) } : {}),
-    contentMode: allowCatalogFallback ? "generic_product" : "dish",
+    ...(allowCatalogFallback
+      ? { contentMode: "generic_product" as const }
+      : {}),
   };
 }
 
