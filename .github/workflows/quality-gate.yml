@@ -52,7 +52,14 @@ jobs:
         run: npm run test:catalog-images-server
 
       - name: Interactive controls audit
-        run: npm run audit:interactive-controls
+        run: npm run audit:interactive-controls -- --json > interactive-controls-audit.json
+
+      - name: Publish interactive controls audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: interactive-controls-audit
+          path: interactive-controls-audit.json
+          retention-days: 14
 
       - name: Lint debt report
         continue-on-error: true
