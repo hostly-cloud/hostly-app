@@ -16,6 +16,7 @@ import {
   HostlyStatusBadge,
 } from "@/components/ui/hostly/data-table";
 import {
+  HostlyButton,
   HostlyFilterCard,
   type HostlyFilterCardTone,
 } from "@/components/ui/hostly";
@@ -30,6 +31,7 @@ import type {
   ProductResolverParitySummary,
   ResolverParityFilterId,
 } from "@/lib/productos/product-operational-routing-audit";
+import { requestProductCommercialEdit } from "@/lib/productos/product-commercial-edit-intent";
 import type { PlatoCarta, TipoProductoVenta } from "@/lib/platos-local";
 import {
   getPublicationFlags,
@@ -41,6 +43,7 @@ import {
   PRODUCTOS_CARTA_LEGACY_BLOCKED,
   type OpenProductEditFn,
   formatProductosCartaSectionCellDisplay,
+  productImageUrlFromPlato,
   productOperationalFieldsFromPlato,
 } from "./productos-table-cells";
 import { ProductosSelectionBar } from "./productos-selection-bar";
@@ -85,6 +88,36 @@ function tieneEscandalloForPlato(
   centralDoc?: Pick<ProductDocument, "recipe"> | null,
 ): boolean {
   return resolvePlatoTieneEscandallo(p, meta, centralDoc);
+}
+
+function ProductImageQuickAction({
+  p,
+  openEdit,
+  disabled,
+}: {
+  p: PlatoCarta;
+  openEdit: OpenProductEditFn;
+  disabled?: boolean;
+}) {
+  if (productImageUrlFromPlato(p)) return null;
+  const label = `Añadir imagen a ${p.nombre}`;
+  return (
+    <HostlyButton
+      variant="tool"
+      size="compact"
+      className="hostly-productos-image-quick-action"
+      disabled={disabled}
+      title={disabled ? PRODUCTOS_CARTA_LEGACY_BLOCKED : label}
+      aria-label={label}
+      onClick={(event) => {
+        event.stopPropagation();
+        requestProductCommercialEdit(p.id);
+        openEdit(p);
+      }}
+    >
+      Añadir imagen
+    </HostlyButton>
+  );
 }
 
 /** Microchip Carta: visibilidad en carta (sin mezclar activo/inactivo en el copy corto). */
@@ -449,6 +482,13 @@ function ProductPrimaryCell({
           >
             IA
           </HostlyStatusBadge>
+        ) : null}
+        {onCorrect && !showDragHandle ? (
+          <ProductImageQuickAction
+            p={p}
+            openEdit={onCorrect}
+            disabled={correctDisabled}
+          />
         ) : null}
         <span
           className="hostly-data-table-primary__meta hostly-data-table-col--tablet-only hostly-productos-carta-tablet-meta"
@@ -833,6 +873,13 @@ function MobileProductItem(
             ·
           </span>
           <span title={ops.tabletMeta}>{ops.tabletMeta}</span>
+          {!reorderMode ? (
+            <ProductImageQuickAction
+              p={p}
+              openEdit={props.openEdit}
+              disabled={isLegacyReadOnly}
+            />
+          ) : null}
           <span className="hostly-mobile-list-item__dot" aria-hidden>
             ·
           </span>

@@ -24,7 +24,7 @@ import type { ProductionStationDocument } from "@/lib/produccion/production-stat
 import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import type { TranslateFn } from "@/lib/i18n";
 
-export type ProductEditFocus = "routing" | "recipe";
+export type ProductEditFocus = "routing" | "recipe" | "commercial";
 
 export type ProductEditOptions = {
   focus?: ProductEditFocus;
