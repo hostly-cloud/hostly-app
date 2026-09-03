@@ -1,5 +1,6 @@
 "use client";
 
+import { HostlyButton } from "@/components/ui/hostly";
 import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
 import { KDS_OPERATION_STATION_FILTER_ALL } from "@/lib/kds/operation-station-kds-filter";
 
@@ -16,6 +17,9 @@ export default function OperationStationKdsFilter({
   selectedOperationStationId,
   onSelect,
 }: OperationStationKdsFilterProps) {
+  const allActive =
+    selectedOperationStationId === KDS_OPERATION_STATION_FILTER_ALL;
+
   return (
     <section
       className="hostly-kds-station-filter-section"
@@ -26,33 +30,27 @@ export default function OperationStationKdsFilter({
         role="group"
         aria-label="Estación operativa"
       >
-        <button
-          type="button"
-          className={`hostly-kds-op-station-filter${
-            selectedOperationStationId === KDS_OPERATION_STATION_FILTER_ALL
-              ? " is-active"
-              : ""
-          }`}
-          aria-pressed={
-            selectedOperationStationId === KDS_OPERATION_STATION_FILTER_ALL
-          }
+        <HostlyButton
+          variant="chip"
+          active={allActive}
+          className={`hostly-kds-op-station-filter${allActive ? " is-active" : ""}`}
           onClick={() => onSelect(KDS_OPERATION_STATION_FILTER_ALL)}
         >
           {allLabel}
-        </button>
+        </HostlyButton>
         {stations.map((station) => {
           const active = selectedOperationStationId === station.id;
           return (
-            <button
+            <HostlyButton
               key={station.id}
-              type="button"
+              variant="chip"
+              active={active}
               className={`hostly-kds-op-station-filter${active ? " is-active" : ""}`}
-              aria-pressed={active}
               title={station.name}
               onClick={() => onSelect(station.id)}
             >
               {station.name}
-            </button>
+            </HostlyButton>
           );
         })}
       </div>
