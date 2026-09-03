@@ -6,6 +6,7 @@ import {
   getCategoryOperationalBehaviorShortLabel,
   normalizeCategoryOperationalBehavior,
 } from "@/lib/carta-categorias/category-operational-behavior";
+import { HostlyButton } from "@/components/ui/hostly";
 import {
   HostlyDataCell,
   HostlyDataRow,
@@ -240,9 +241,9 @@ export function CategoriasCartaDataView({
           </p>
           <div className="hostly-carta-config-empty__actions">
             {onCreateNew ? (
-              <button type="button" onClick={onCreateNew} className="hostly-button-primary hostly-button-compact">
+              <HostlyButton variant="primary" size="compact" onClick={onCreateNew}>
                 Nueva categoría de carta
-              </button>
+              </HostlyButton>
             ) : null}
             <Link href="/dashboard/configuracion/carta/importacion" className="hostly-button-secondary hostly-button-compact">
               IA e importación
