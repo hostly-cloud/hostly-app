@@ -1,4 +1,7 @@
-import type { CatalogImageBulkSummary } from "@/lib/productos/catalog-image-bulk-contract";
+import type {
+  CatalogImageBulkEstimate,
+  CatalogImageBulkSummary,
+} from "@/lib/productos/catalog-image-bulk-contract";
 
 export type CatalogImageBulkReadiness = {
   pendingTotal: number;
@@ -37,4 +40,15 @@ export function summarizeCatalogImageBulkReadiness(
     accountedPending,
     isConsistent: accountedPending === summary.withoutApprovedImage,
   };
+}
+
+export function catalogImageBulkEstimateLabel(
+  estimate: CatalogImageBulkEstimate,
+): string {
+  if (estimate.credits != null) {
+    return `${estimate.credits} ${estimate.credits === 1 ? "crédito estimado" : "créditos estimados"}`;
+  }
+  return estimate.mode === "usage_recorded"
+    ? "Uso registrado"
+    : "Créditos por confirmar";
 }
