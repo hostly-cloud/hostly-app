@@ -29,6 +29,7 @@ import {
   type ConfigNavLeaf,
 } from "@/lib/configuracion/config-nav";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { HostlyButton } from "@/components/ui/hostly";
 
 type ConfigContextItem = ConfigNavLeaf & {
   Icon: LucideIcon;
@@ -186,14 +187,14 @@ export function ConfiguracionContextSelector() {
                 Configuración
               </p>
             </div>
-            <button
-              type="button"
+            <HostlyButton
+              variant="icon"
               className="hostly-config-context-selector__close"
-              aria-label="Cerrar selector"
+              iconOnlyLabel="Cerrar selector"
               onClick={() => setOpen(false)}
             >
               <X size={18} strokeWidth={2.3} />
-            </button>
+            </HostlyButton>
           </div>
 
           <div className="hostly-config-context-selector__groups">
