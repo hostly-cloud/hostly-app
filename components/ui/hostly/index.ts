@@ -38,8 +38,16 @@ export type {
   HostlyOperationalEmptyAction,
   HostlyOperationalEmptyStateProps,
 } from "./HostlyOperationalEmptyState";
-export { HostlySegmentedControl, hostlySegmentPillClassName, hostlySegmentTabClassName } from "./HostlySegmentedControl";
-export type { HostlySegmentedControlProps } from "./HostlySegmentedControl";
+export {
+  HostlySegmentedButton,
+  HostlySegmentedControl,
+  hostlySegmentPillClassName,
+  hostlySegmentTabClassName,
+} from "./HostlySegmentedControl";
+export type {
+  HostlySegmentedButtonProps,
+  HostlySegmentedControlProps,
+} from "./HostlySegmentedControl";
 export {
   HostlyDataTable,
   HostlyDataTableScroll,
