@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 
 export type CartaDeleteChoiceModalProps = {
   open: boolean;
@@ -54,30 +55,15 @@ export function CartaDeleteChoiceModal({
           <p className="hostly-carta-delete-choice-modal__hint">{deletePermanentHint}</p>
         ) : null}
         <div className="hostly-carta-delete-choice-modal__actions">
-          <button
-            type="button"
-            className="hostly-button-secondary hostly-button-compact"
-            disabled={busy}
-            onClick={onCancel}
-          >
+          <HostlyButton variant="secondary" size="compact" disabled={busy} onClick={onCancel}>
             {cancelLabel}
-          </button>
-          <button
-            type="button"
-            className="hostly-button-secondary hostly-button-compact"
-            disabled={busy}
-            onClick={onDeactivate}
-          >
+          </HostlyButton>
+          <HostlyButton variant="secondary" size="compact" disabled={busy} onClick={onDeactivate}>
             {deactivateLabel}
-          </button>
-          <button
-            type="button"
-            className="hostly-button-danger hostly-button-compact"
-            disabled={busy}
-            onClick={onDeletePermanent}
-          >
+          </HostlyButton>
+          <HostlyButton variant="destructive" size="compact" disabled={busy} onClick={onDeletePermanent}>
             {deletePermanentLabel}
-          </button>
+          </HostlyButton>
         </div>
       </div>
     </div>
