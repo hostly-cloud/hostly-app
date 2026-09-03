@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 
 export type ProductFormDrawerTabId =
   | "producto"
@@ -98,13 +99,14 @@ export function ProductFormDrawerTabs({
       {PRODUCT_FORM_DRAWER_TAB_SPECS.map((tab, index) => {
         const active = activeTab === tab.id;
         return (
-          <button
+          <HostlyButton
             key={tab.id}
             ref={(element) => {
               tabRefs.current[index] = element;
             }}
             id={`product-form-tab-${tab.id}`}
-            type="button"
+            variant="ghost"
+            active={active}
             role="tab"
             tabIndex={active ? 0 : -1}
             aria-selected={active}
@@ -123,7 +125,7 @@ export function ProductFormDrawerTabs({
                 {tab.description}
               </span>
             </span>
-          </button>
+          </HostlyButton>
         );
       })}
     </nav>
