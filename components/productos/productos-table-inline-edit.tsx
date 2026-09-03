@@ -14,6 +14,7 @@ import {
   type Ref,
   type RefObject,
 } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { TranslateFn } from "@/lib/i18n";
 import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import { getPublicationFlags } from "@/components/productos/productos-table-cells";
@@ -556,12 +557,13 @@ export function ProductosInlineActiveToggle({
   const label = isActive ? t("carta.estadoActivo") : t("carta.estadoInactivo");
 
   return (
-    <button
+    <HostlyButton
       ref={tabRef as Ref<HTMLButtonElement>}
-      type="button"
+      variant="chip"
+      size="compact"
+      active={isActive}
       tabIndex={disabled ? -1 : 0}
       disabled={disabled || busy}
-      aria-pressed={isActive}
       aria-label={label}
       title={label}
       className={[
@@ -582,6 +584,6 @@ export function ProductosInlineActiveToggle({
       }}
     >
       {saved ? "✓" : label}
-    </button>
+    </HostlyButton>
   );
 }
