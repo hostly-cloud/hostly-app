@@ -1,8 +1,14 @@
 /*
- * Hostly — lenguaje de acción principal.
+ * Hostly — lenguaje interactivo unificado.
  *
- * El navy del acceso al TPV identifica decisiones que hacen avanzar el trabajo.
- * Los colores verde, ámbar, rojo y morado siguen reservados para estados reales.
+ * Regla semántica:
+ * - Navy: acciones que hacen avanzar el trabajo.
+ * - Blanco / hielo: acciones secundarias y herramientas.
+ * - Navy suave: selección activa.
+ * - Verde: éxito / estado activo ya alcanzado.
+ * - Ámbar: aviso.
+ * - Rojo: error / acción destructiva.
+ * - Morado: reservado / estado especial.
  */
 
 .hostly-touch-root {
@@ -13,11 +19,70 @@
   --hostly-action-primary-border: rgba(111, 191, 226, 0.24);
   --hostly-action-primary-shadow: 0 8px 20px rgba(7, 29, 49, 0.18);
   --hostly-action-primary-shadow-hover: 0 12px 28px rgba(7, 29, 49, 0.24);
+  --hostly-control-height: 42px;
+  --hostly-control-height-compact: 36px;
+  --hostly-control-radius: 11px;
+  --hostly-control-radius-compact: 9px;
+  --hostly-control-border: color-mix(in srgb, var(--hostly-line-strong) 78%, transparent);
+  --hostly-control-surface: rgba(255, 255, 255, 0.88);
+  --hostly-control-surface-hover: rgba(244, 250, 253, 0.98);
+  --hostly-control-shadow: 0 1px 2px rgba(15, 39, 68, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
+/* ADN compartido. La geometría puede cambiar por familia, pero no el tacto. */
+.hostly-touch-root .hostly-ds-button,
+.hostly-touch-root .hostly-touch-nav-link,
+.hostly-touch-root .hostly-button-tool,
+.hostly-touch-root .hostly-button-chip {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    transform 120ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    opacity 150ms ease;
+}
+
+.hostly-touch-root .hostly-ds-button:not(:disabled):active,
+.hostly-touch-root .hostly-touch-nav-link:active,
+.hostly-touch-root .hostly-button-tool:not(:disabled):active,
+.hostly-touch-root .hostly-button-chip:not(:disabled):active {
+  transform: translateY(1px) scale(0.985);
+}
+
+.hostly-touch-root .hostly-ds-button:focus-visible,
+.hostly-touch-root .hostly-touch-nav-link:focus-visible,
+.hostly-touch-root .hostly-button-tool:focus-visible,
+.hostly-touch-root .hostly-button-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-touch-root .hostly-ds-button:disabled,
+.hostly-touch-root .hostly-button-tool:disabled,
+.hostly-touch-root .hostly-button-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
+  box-shadow: none;
+}
+
+.hostly-touch-root .hostly-button-touch {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.hostly-touch-root .hostly-button-compact {
+  min-height: var(--hostly-control-height-compact);
+}
+
+/* Acción principal: única firma navy para crear, guardar, confirmar y avanzar. */
 .hostly-touch-root .hostly-button-primary:not(.hostly-button-danger),
 .hostly-touch-root .hostly-analysis-detail-link,
-.hostly-touch-root .hostly-productos-carta-header-inline-actions__btn--primary {
+.hostly-touch-root .hostly-productos-carta-header-inline-actions__btn--primary,
+.hostly-touch-root .hostly-employees-invite-link {
   border-color: var(--hostly-action-primary-border) !important;
   background: linear-gradient(
     138deg,
@@ -33,7 +98,8 @@
 
 .hostly-touch-root .hostly-button-primary:not(.hostly-button-danger):hover:not(:disabled),
 .hostly-touch-root .hostly-analysis-detail-link:hover,
-.hostly-touch-root .hostly-productos-carta-header-inline-actions__btn--primary:hover:not(:disabled) {
+.hostly-touch-root .hostly-productos-carta-header-inline-actions__btn--primary:hover:not(:disabled),
+.hostly-touch-root .hostly-employees-invite-link:hover {
   border-color: rgba(139, 211, 241, 0.38) !important;
   background: linear-gradient(
     138deg,
@@ -48,11 +114,113 @@
 
 .hostly-touch-root .hostly-button-primary:not(.hostly-button-danger):focus-visible,
 .hostly-touch-root .hostly-analysis-detail-link:focus-visible,
-.hostly-touch-root .hostly-productos-carta-header-inline-actions__btn--primary:focus-visible {
+.hostly-touch-root .hostly-productos-carta-header-inline-actions__btn--primary:focus-visible,
+.hostly-touch-root .hostly-employees-invite-link:focus-visible {
   outline: none;
   box-shadow:
     var(--hostly-focus-ring),
     var(--hostly-action-primary-shadow) !important;
+}
+
+/* Acción secundaria: limpia, táctil y sin competir con el CTA. */
+.hostly-touch-root .hostly-button-secondary,
+.hostly-touch-root .hostly-button-tool,
+.hostly-touch-root .hostly-nav-aux {
+  border: 1px solid var(--hostly-control-border);
+  background: var(--hostly-control-surface);
+  color: var(--hostly-ink-strong);
+  box-shadow: var(--hostly-control-shadow);
+}
+
+.hostly-touch-root .hostly-button-secondary:hover:not(:disabled),
+.hostly-touch-root .hostly-button-tool:hover:not(:disabled),
+.hostly-touch-root .hostly-nav-aux:hover {
+  border-color: color-mix(in srgb, var(--hostly-action-primary) 24%, var(--hostly-line-strong));
+  background: var(--hostly-control-surface-hover);
+  color: var(--hostly-action-primary);
+  box-shadow: 0 7px 18px rgba(15, 39, 68, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+/* Volver: misma familia secundaria, con contraste correcto en chrome oscuro. */
+.hostly-touch-root .hostly-back-button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--hostly-control-radius-compact);
+  cursor: pointer;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-decoration: none;
+}
+
+.hostly-touch-root .hostly-back-button--dark:not(.hostly-back-button--module) {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 23, 0.22);
+  color: #f8fafc;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.hostly-touch-root .hostly-back-button--dark:not(.hostly-back-button--module):hover {
+  border-color: rgba(139, 211, 241, 0.28);
+  background: rgba(8, 29, 49, 0.72);
+  color: #ffffff;
+  box-shadow: 0 7px 18px rgba(2, 6, 23, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Botón de herramienta: editor, KDS y operaciones densas. */
+.hostly-touch-root .hostly-button-tool {
+  min-height: 40px;
+  border-radius: var(--hostly-control-radius-compact);
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.hostly-touch-root .hostly-button-tool[data-active="true"],
+.hostly-touch-root .hostly-button-tool[aria-pressed="true"] {
+  border-color: var(--hostly-action-primary-border);
+  background: var(--hostly-action-primary-soft);
+  color: var(--hostly-action-primary);
+  box-shadow: inset 0 0 0 1px rgba(15, 39, 68, 0.03);
+}
+
+/* Chips / filtros: selección, nunca CTA. */
+.hostly-touch-root .hostly-button-chip {
+  min-height: 38px;
+  border: 1px solid var(--hostly-control-border);
+  border-radius: 999px;
+  background: var(--hostly-control-surface);
+  color: var(--hostly-ink-muted);
+  padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 680;
+  line-height: 1.15;
+}
+
+.hostly-touch-root .hostly-button-chip:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--hostly-action-primary) 22%, var(--hostly-line-strong));
+  background: var(--hostly-control-surface-hover);
+  color: var(--hostly-action-primary);
+}
+
+.hostly-touch-root .hostly-button-chip[data-active="true"],
+.hostly-touch-root .hostly-button-chip[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--hostly-action-primary) 28%, var(--hostly-line-strong));
+  background: var(--hostly-action-primary-soft);
+  color: var(--hostly-action-primary);
+  box-shadow: inset 0 0 0 1px rgba(15, 39, 68, 0.025);
 }
 
 /* La acción principal conserva su identidad aunque viva dentro de una barra o drawer. */
@@ -133,8 +301,28 @@
   background: linear-gradient(138deg, #1e4864, var(--hostly-action-primary));
 }
 
+/* Los enlaces que se comportan como botones heredan también el tacto Hostly. */
+.hostly-touch-root a.hostly-button-primary,
+.hostly-touch-root a.hostly-button-secondary,
+.hostly-touch-root a.hostly-button-ghost {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  text-decoration: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .hostly-touch-root .hostly-ds-button,
+  .hostly-touch-root .hostly-touch-nav-link,
+  .hostly-touch-root .hostly-button-tool {
+    min-height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .hostly-touch-root .hostly-button-primary,
+  .hostly-touch-root .hostly-ds-button,
+  .hostly-touch-root .hostly-touch-nav-link,
+  .hostly-touch-root .hostly-button-tool,
+  .hostly-touch-root .hostly-button-chip,
   .hostly-touch-root .hostly-analysis-detail-link,
   .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__arrow {
     transition: none !important;

@@ -21,23 +21,11 @@ function normalizeLabel(label: ReactNode): ReactNode {
   return label.replace(/^\s*←\s*/u, "");
 }
 
-const sharedDark = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 8,
-  border: "1px solid rgba(148, 163, 184, 0.14)",
-  background: "rgba(2, 6, 23, 0.18)",
-  color: "#f8fafc",
-  cursor: "pointer",
-  letterSpacing: "-0.02em",
-  lineHeight: 1.15,
-  borderRadius: 10,
-  textDecoration: "none",
-} as const;
-
-const linkClassName = (tone: "dark" | "light", moduleChrome?: boolean) =>
+const controlClassName = (tone: "dark" | "light", moduleChrome?: boolean) =>
   hostlyCx(
-    "hostly-touch-nav-link hostly-nav-aux",
+    "hostly-touch-nav-link hostly-nav-aux hostly-back-button",
+    tone === "dark" && "hostly-back-button--dark",
+    tone === "light" && "hostly-back-button--light",
     tone === "light" && moduleChrome && "hostly-back-button--module",
   );
 
@@ -58,10 +46,9 @@ export function HostlyBackButton(props: HostlyBackButtonProps) {
     return (
       <Link
         href={props.href}
-        className={linkClassName(tone, moduleChrome)}
+        className={controlClassName(tone, moduleChrome)}
         aria-label={props.ariaLabel ?? "Volver"}
         title="Volver"
-        style={moduleChrome ? undefined : tone === "light" ? { ...sharedDark, border: "1px solid rgba(148, 163, 184, 0.35)", background: "rgba(255, 255, 255, 0.72)", color: "#0f172a" } : sharedDark}
       >
         {content}
       </Link>
@@ -72,10 +59,9 @@ export function HostlyBackButton(props: HostlyBackButtonProps) {
     <button
       type="button"
       onClick={props.onClick}
-      className={linkClassName(tone, moduleChrome)}
+      className={controlClassName(tone, moduleChrome)}
       aria-label={props.ariaLabel ?? "Volver"}
       title="Volver"
-      style={moduleChrome ? undefined : tone === "light" ? { ...sharedDark, border: "1px solid rgba(148, 163, 184, 0.35)", background: "rgba(255, 255, 255, 0.72)", color: "#0f172a" } : sharedDark}
     >
       {content}
     </button>

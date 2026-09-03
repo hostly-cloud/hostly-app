@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { HostlyOperationalEmptyState } from "@/components/ui/hostly";
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
 import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlySectionHeader } from "@/components/ui/hostly";
+import {
+  HostlyButton,
+  HostlyOperationalEmptyState,
+  HostlySectionHeader,
+} from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   createPurchaseReceiptFromOrder,
@@ -85,24 +88,6 @@ function statusPillStyle(status: PurchaseOrderStatus): CSSProperties {
       return { ...base, background: "rgba(148, 163, 184, 0.16)", color: "#475569" };
   }
 }
-
-const actionButtonStyle: CSSProperties = {
-  padding: "8px 14px",
-  borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.28)",
-  background: "var(--hostly-surface-card-solid)",
-  color: "var(--hostly-ink-strong)",
-  fontSize: 13,
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const primaryButtonStyle: CSSProperties = {
-  ...actionButtonStyle,
-  background: "var(--hostly-ink-strong)",
-  color: "#fff",
-  border: "1px solid var(--hostly-ink-strong)",
-};
 
 type ReceiptDraftLine = {
   productId: string;
@@ -189,10 +174,7 @@ export default function PedidosCompraPage() {
           if (line.productId !== productId) return line;
           const parsed = Number(rawValue.replace(",", "."));
           const qty = Number.isFinite(parsed) ? parsed : 0;
-          const receiveQuantity = Math.min(
-            Math.max(0, qty),
-            line.remainingQuantity,
-          );
+          const receiveQuantity = Math.min(Math.max(0, qty), line.remainingQuantity);
           return { ...line, receiveQuantity };
         }),
       );
@@ -321,14 +303,7 @@ export default function PedidosCompraPage() {
                     }}
                   >
                     <div>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 8,
-                          alignItems: "center",
-                        }}
-                      >
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--hostly-ink-strong)" }}>
                           {order.lines.length} líneas · total {formatEur(order.totalEstimatedCost)}
                         </span>
@@ -343,18 +318,18 @@ export default function PedidosCompraPage() {
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <Link
                         href={purchaseOrderDetailHref(order.id)}
-                        style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex" }}
+                        className="hostly-button-secondary hostly-button-compact inline-flex items-center no-underline"
                         prefetch
                       >
                         Ver detalle
                       </Link>
-                      <button
-                        type="button"
-                        style={primaryButtonStyle}
+                      <HostlyButton
+                        variant="primary"
+                        size="compact"
                         onClick={() => handleOpenReceive(order)}
                       >
                         Recibir
-                      </button>
+                      </HostlyButton>
                     </div>
                   </div>
                 );
@@ -397,7 +372,7 @@ export default function PedidosCompraPage() {
                     </span>
                     <Link
                       href={purchaseOrderDetailHref(order.id)}
-                      style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex" }}
+                      className="hostly-button-secondary hostly-button-compact inline-flex items-center no-underline"
                       prefetch
                     >
                       Ver detalle
@@ -454,9 +429,9 @@ export default function PedidosCompraPage() {
                   {receiptSuccess} El stock se ha actualizado correctamente.
                 </p>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                  <button type="button" style={primaryButtonStyle} onClick={handleCloseReceive}>
+                  <HostlyButton variant="primary" onClick={handleCloseReceive}>
                     Cerrar
-                  </button>
+                  </HostlyButton>
                 </div>
               </>
             ) : (
@@ -498,9 +473,7 @@ export default function PedidosCompraPage() {
                               max={line.remainingQuantity}
                               step="any"
                               value={line.receiveQuantity}
-                              onChange={(e) =>
-                                handleReceiveQuantityChange(line.productId, e.target.value)
-                              }
+                              onChange={(e) => handleReceiveQuantityChange(line.productId, e.target.value)}
                               aria-label={`Cantidad a recibir de ${line.productName}`}
                               style={{
                                 width: 88,
@@ -512,13 +485,7 @@ export default function PedidosCompraPage() {
                                 textAlign: "right",
                               }}
                             />
-                            <span
-                              style={{
-                                marginLeft: 4,
-                                fontSize: 11,
-                                color: "var(--hostly-ink-muted)",
-                              }}
-                            >
+                            <span style={{ marginLeft: 4, fontSize: 11, color: "var(--hostly-ink-muted)" }}>
                               {displayUnit(line.unit)}
                             </span>
                           </td>
@@ -531,22 +498,20 @@ export default function PedidosCompraPage() {
                   Total a recibir: {formatQty(receiptTotalQuantity)} unidades
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
-                  <button
-                    type="button"
-                    style={actionButtonStyle}
+                  <HostlyButton
+                    variant="secondary"
                     onClick={handleCloseReceive}
                     disabled={isSubmittingReceipt}
                   >
                     Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    style={primaryButtonStyle}
+                  </HostlyButton>
+                  <HostlyButton
+                    variant="primary"
                     onClick={() => void handleConfirmReceipt()}
                     disabled={isSubmittingReceipt || receiptTotalQuantity <= 0}
                   >
                     {isSubmittingReceipt ? "Registrando…" : "Confirmar recepción"}
-                  </button>
+                  </HostlyButton>
                 </div>
               </>
             )}

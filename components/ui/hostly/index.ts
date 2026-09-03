@@ -11,7 +11,7 @@ export type { HostlySurfaceVariant } from "./hostly-surface-types";
 export { HostlySurface } from "./HostlySurface";
 export type { HostlySurfaceProps } from "./HostlySurface";
 export { HostlyButton } from "./HostlyButton";
-export type { HostlyButtonProps, HostlyButtonVariant } from "./HostlyButton";
+export type { HostlyButtonProps, HostlyButtonSize, HostlyButtonVariant } from "./HostlyButton";
 export { HostlyCard } from "./HostlyCard";
 export type { HostlyCardProps, HostlyCardFamily } from "./HostlyCard";
 export { HostlyField, HostlyInput, HostlySelect, HostlyTextarea, HostlyCheckbox } from "./HostlyField";
