@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRef, type KeyboardEvent, type ReactNode } from "react";
 
 export type ProductFormDrawerTabId =
   | "producto"
@@ -23,9 +23,9 @@ export const PRODUCT_FORM_DRAWER_TAB_SPECS: ReadonlyArray<{
   },
   {
     id: "operacion",
-    label: "Cocina",
+    label: "Operación",
     shortLabel: "02",
-    description: "Destino y pase",
+    description: "Destino, pase y comportamiento",
   },
   {
     id: "modificadores",
@@ -54,22 +54,63 @@ export function ProductFormDrawerTabs({
   activeTab: ProductFormDrawerTabId;
   onTabChange: (tab: ProductFormDrawerTabId) => void;
 }) {
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const activateTabAt = (index: number) => {
+    const spec = PRODUCT_FORM_DRAWER_TAB_SPECS[index];
+    if (!spec) return;
+    onTabChange(spec.id);
+    tabRefs.current[index]?.focus();
+  };
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      event.preventDefault();
+      activateTabAt((index + 1) % PRODUCT_FORM_DRAWER_TAB_SPECS.length);
+      return;
+    }
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      event.preventDefault();
+      activateTabAt(
+        (index - 1 + PRODUCT_FORM_DRAWER_TAB_SPECS.length) %
+          PRODUCT_FORM_DRAWER_TAB_SPECS.length,
+      );
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      activateTabAt(0);
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      activateTabAt(PRODUCT_FORM_DRAWER_TAB_SPECS.length - 1);
+    }
+  };
+
   return (
     <nav
       className="hostly-product-form-drawer-tabs"
       aria-label="Secciones de configuración del producto"
+      role="tablist"
+      aria-orientation="horizontal"
     >
-      {PRODUCT_FORM_DRAWER_TAB_SPECS.map((tab) => {
+      {PRODUCT_FORM_DRAWER_TAB_SPECS.map((tab, index) => {
         const active = activeTab === tab.id;
         return (
           <button
             key={tab.id}
+            ref={(element) => {
+              tabRefs.current[index] = element;
+            }}
             id={`product-form-tab-${tab.id}`}
             type="button"
             role="tab"
+            tabIndex={active ? 0 : -1}
             aria-selected={active}
             aria-controls={`product-form-panel-${tab.id}`}
             className={`hostly-product-form-drawer-tabs__tab${active ? " is-active" : ""}`}
+            onKeyDown={(event) => handleTabKeyDown(event, index)}
             onClick={() => onTabChange(tab.id)}
           >
             <span className="hostly-product-form-drawer-tabs__index" aria-hidden>

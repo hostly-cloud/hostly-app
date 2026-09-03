@@ -1,11 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import type { TranslateFn } from "@/lib/i18n";
 import {
   PRODUCT_CATEGORY_ALL_ID,
   type ProductCategoryNavigationOption,
 } from "@/lib/productos/product-category-navigation";
+import { filterProductCategoryNavigationOptions } from "@/lib/productos/product-ui-navigation";
 
 export type ConfigCartaListFilterId =
   | "activos"
@@ -90,9 +98,17 @@ export function ProductosCategoryNavigation({
   categoriesLabel,
 }: ProductosCategoryNavigationProps) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const allOption = options.find((option) => option.kind === "all");
   const categoryOptions = options.filter((option) => option.kind !== "all");
+  const filteredCategoryOptions = useMemo(
+    () => filterProductCategoryNavigationOptions(categoryOptions, query),
+    [categoryOptions, query],
+  );
   const activeOption = options.find((option) => option.id === value) ?? allOption;
   const categorySelected = activeOption?.kind !== "all";
 
@@ -102,7 +118,10 @@ export function ProductosCategoryNavigation({
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -112,9 +131,56 @@ export function ProductosCategoryNavigation({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+    const timer = window.setTimeout(() => searchRef.current?.focus(), 0);
+    return () => window.clearTimeout(timer);
+  }, [open]);
+
   const selectOption = (option: ProductCategoryNavigationOption) => {
     onChange(option.id);
     setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const focusOption = (index: number) => {
+    optionRefs.current[index]?.focus();
+  };
+
+  const handleSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusOption(0);
+    }
+  };
+
+  const handleOptionKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusOption(Math.min(index + 1, filteredCategoryOptions.length - 1));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (index === 0) searchRef.current?.focus();
+      else focusOption(index - 1);
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      focusOption(0);
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      focusOption(filteredCategoryOptions.length - 1);
+    }
   };
 
   return (
@@ -137,12 +203,14 @@ export function ProductosCategoryNavigation({
         </button>
       ) : null}
       <button
+        ref={triggerRef}
         type="button"
         className={`hostly-productos-category-navigation__trigger${
           categorySelected ? " is-active" : ""
         }`}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls="hostly-productos-category-navigation-panel"
         disabled={categoryOptions.length === 0}
         onClick={() => setOpen((current) => !current)}
       >
@@ -159,27 +227,55 @@ export function ProductosCategoryNavigation({
         </span>
       </button>
       {open ? (
-        <div className="hostly-productos-category-navigation__panel" role="menu">
+        <div
+          id="hostly-productos-category-navigation-panel"
+          className="hostly-productos-category-navigation__panel"
+          role="menu"
+        >
           <div className="hostly-productos-category-navigation__panel-head">
             <span>{categoriesLabel}</span>
             <span>{categoryOptions.length}</span>
           </div>
+          {categoryOptions.length > 7 ? (
+            <div className="hostly-productos-category-navigation__search-wrap">
+              <input
+                ref={searchRef}
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Buscar categoría..."
+                aria-label="Buscar categoría"
+                className="hostly-config-canonical-search hostly-productos-category-navigation__search"
+              />
+            </div>
+          ) : null}
           <div className="hostly-productos-category-navigation__options">
-            {categoryOptions.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                role="menuitemradio"
-                aria-checked={option.id === value}
-                className={`hostly-productos-category-navigation__option${
-                  option.id === value ? " is-active" : ""
-                }`}
-                onClick={() => selectOption(option)}
-              >
-                <span>{option.label}</span>
-                <span className="hostly-productos-category-navigation__count">{option.count}</span>
-              </button>
-            ))}
+            {filteredCategoryOptions.length > 0 ? (
+              filteredCategoryOptions.map((option, index) => (
+                <button
+                  key={option.id}
+                  ref={(element) => {
+                    optionRefs.current[index] = element;
+                  }}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={option.id === value}
+                  className={`hostly-productos-category-navigation__option${
+                    option.id === value ? " is-active" : ""
+                  }`}
+                  onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                  onClick={() => selectOption(option)}
+                >
+                  <span>{option.label}</span>
+                  <span className="hostly-productos-category-navigation__count">{option.count}</span>
+                </button>
+              ))
+            ) : (
+              <p className="hostly-productos-category-navigation__empty" role="status">
+                No hay categorías que coincidan.
+              </p>
+            )}
           </div>
         </div>
       ) : null}
@@ -205,6 +301,8 @@ export function ProductosCompactBulkActionsMenu({
 }: ProductosCompactBulkActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -214,7 +312,10 @@ export function ProductosCompactBulkActionsMenu({
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -224,9 +325,31 @@ export function ProductosCompactBulkActionsMenu({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setTimeout(() => {
+      const firstEnabled = itemRefs.current.find((element) => element && !element.disabled);
+      firstEnabled?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [open]);
+
+  const focusRelativeItem = (currentIndex: number, direction: 1 | -1) => {
+    if (items.length === 0) return;
+    for (let step = 1; step <= items.length; step += 1) {
+      const nextIndex = (currentIndex + direction * step + items.length) % items.length;
+      const candidate = itemRefs.current[nextIndex];
+      if (candidate && !candidate.disabled) {
+        candidate.focus();
+        return;
+      }
+    }
+  };
+
   return (
     <div ref={rootRef} className="hostly-productos-bulk-actions-menu">
       <button
+        ref={triggerRef}
         type="button"
         className="hostly-button-secondary hostly-button-compact hostly-productos-bulk-actions-menu__trigger"
         aria-haspopup="menu"
@@ -240,9 +363,12 @@ export function ProductosCompactBulkActionsMenu({
       </button>
       {open ? (
         <div className="hostly-productos-bulk-actions-menu__panel" role="menu">
-          {items.map((item) => (
+          {items.map((item, index) => (
             <button
               key={item.key}
+              ref={(element) => {
+                itemRefs.current[index] = element;
+              }}
               type="button"
               role="menuitem"
               className={`hostly-productos-bulk-actions-menu__item${
@@ -250,9 +376,29 @@ export function ProductosCompactBulkActionsMenu({
               }`}
               disabled={item.disabled}
               title={item.disabled ? item.disabledTitle : undefined}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  focusRelativeItem(index, 1);
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  focusRelativeItem(index, -1);
+                } else if (event.key === "Home") {
+                  event.preventDefault();
+                  const firstEnabled = itemRefs.current.find((element) => element && !element.disabled);
+                  firstEnabled?.focus();
+                } else if (event.key === "End") {
+                  event.preventDefault();
+                  const lastEnabled = [...itemRefs.current]
+                    .reverse()
+                    .find((element) => element && !element.disabled);
+                  lastEnabled?.focus();
+                }
+              }}
               onClick={() => {
                 setOpen(false);
                 item.onClick();
+                triggerRef.current?.focus();
               }}
             >
               {item.label}
