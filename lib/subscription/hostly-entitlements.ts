@@ -6,13 +6,16 @@ import type { HostlyPlan } from "@/lib/subscription/hostly-plan";
  * No confundir con `HostlyCapability` de `lib/auth/hostly-capabilities.ts`,
  * que representa permisos operativos de una persona según su rol.
  */
-export const HOSTLY_ENTITLEMENTS = [
-  "catalog.image.ai.single",
-  "catalog.image.ai.bulk",
-  "catalog.image.catalogSearch",
-] as const;
+export const HOSTLY_ENTITLEMENTS = {
+  catalogImages: [
+    "catalog.image.ai.single",
+    "catalog.image.ai.bulk",
+    "catalog.image.catalogSearch",
+  ],
+} as const;
 
-export type HostlyEntitlement = (typeof HOSTLY_ENTITLEMENTS)[number];
+export type HostlyEntitlement =
+  (typeof HOSTLY_ENTITLEMENTS)[keyof typeof HOSTLY_ENTITLEMENTS][number];
 
 /**
  * Solo contiene diferencias comerciales ya decididas y activas en Hostly.
