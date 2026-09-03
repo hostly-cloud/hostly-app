@@ -1,7 +1,7 @@
 import { FieldValue, type DocumentData } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import { readCategoryProductFamilyType } from "@/lib/carta/category-product-family";
-import type { CartaCategoria, CartaCategoriaTipo } from "@/lib/carta-categorias/types";
+import type { CartaCategoria } from "@/lib/carta-categorias/types";
 import { isCartaCategoriaTipo } from "@/lib/carta-categorias/types";
 import { isProductFamilyType } from "@/lib/carta/product-family-types";
 import { normalizeCategoryOperationalBehavior } from "@/lib/carta-categorias/category-operational-behavior";

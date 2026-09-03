@@ -191,15 +191,17 @@ export function ProductQuickCreateDrawer({
     onClose();
   }, [onClose]);
 
+  const syncQuickCreateBaseline = quickCreate.syncBaseline;
+
   useEffect(() => {
     if (!open) {
       setDiscardConfirmOpen(false);
       setSubmittingMode(null);
       return;
     }
-    quickCreate.syncBaseline();
+    syncQuickCreateBaseline();
     focusNombre(false);
-  }, [open, quickCreate.syncBaseline, focusNombre]);
+  }, [open, syncQuickCreateBaseline, focusNombre]);
 
   useEffect(() => {
     if (!open) return;

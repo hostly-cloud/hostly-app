@@ -31,13 +31,6 @@ type IngredientDraftRow = {
   unidad: string;
 };
 
-function formatMoneyOrDash(value: number | null | undefined): string {
-  if (value == null) return "-";
-  if (!Number.isFinite(value)) return "-";
-  const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
-  return rounded.toFixed(2);
-}
-
 function formatMarginOrDash(costeTotal: number | null, precioVenta: number | null): string {
   if (precioVenta == null || precioVenta === 0) return "-";
   if (costeTotal == null) return "-";

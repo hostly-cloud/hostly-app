@@ -1,4 +1,5 @@
 import type { CSSProperties, SVGProps } from "react";
+import Image from "next/image";
 import { HostlyRowActionButton, HostlyRowActions, HostlyStatusBadge } from "@/components/ui/hostly/data-table";
 import { getProductFamilyLabel } from "@/lib/carta/product-category-family-resolver";
 import {
@@ -107,9 +108,12 @@ export function ProductosCartaNameThumb({
         aria-hidden
       >
         <span className="hostly-productos-carta-name-thumb__initial">{initial}</span>
-        <img
+        <Image
           src={imageUrl}
           alt=""
+          width={48}
+          height={48}
+          unoptimized
           className="hostly-productos-carta-name-thumb__img"
           loading="lazy"
           decoding="async"

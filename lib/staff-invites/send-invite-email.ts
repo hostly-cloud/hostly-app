@@ -11,7 +11,8 @@ export type SendInviteEmailInput = {
  * TODO: conectar Resend / SendGrid / Firebase Extension para envío real.
  * Fase 1: no-op controlado — la invitación ya existe en Firestore y el link se copia en UI.
  */
-export async function sendInviteEmail(_input: SendInviteEmailInput): Promise<void> {
+export async function sendInviteEmail(input: SendInviteEmailInput): Promise<void> {
+  void input;
   return;
 }
 

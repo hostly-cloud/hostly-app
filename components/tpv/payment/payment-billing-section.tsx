@@ -184,7 +184,7 @@ export function PaymentBillingSection({
                         aria-label="Resultados de empresas"
                       >
                         {searchResults.map((customer) => (
-                          <li key={customer.id} role="option">
+                          <li key={customer.id} role="option" aria-selected={false}>
                             <button
                               type="button"
                               className="hostly-payment-list-item w-full rounded-lg px-2.5 py-1.5 text-left touch-manipulation"
@@ -310,7 +310,7 @@ export function PaymentBillingSection({
                         aria-label="Resultados de empresas"
                       >
                         {searchResults.map((customer) => (
-                          <li key={customer.id} role="option">
+                          <li key={customer.id} role="option" aria-selected={false}>
                             <button
                               type="button"
                               className="hostly-payment-list-item w-full rounded-xl px-3 py-2 text-left touch-manipulation"

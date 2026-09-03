@@ -33,6 +33,7 @@ export type ExtractedMenuRow = {
  * @deprecated No usar en producción. Solo conserva el tipo ExtractedMenuRow.
  * La extracción real va por `/api/ai/import-menu` + validación OCR.
  */
-export async function mockExtractMenuFromPhoto(_file: File): Promise<ExtractedMenuRow[]> {
+export async function mockExtractMenuFromPhoto(file: File): Promise<ExtractedMenuRow[]> {
+  void file;
   throw new Error("MOCK_MENU_IMPORT_DISABLED");
 }

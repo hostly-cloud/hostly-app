@@ -61,10 +61,6 @@ function tokenize(text: string): string[] {
   return text.trim().split(/\s+/).filter(Boolean);
 }
 
-function normalizeWordForCompare(word: string): string {
-  return word.toLowerCase().replace(/[,;:.!?¿¡]+$/g, "");
-}
-
 function capitalizeWord(word: string): string {
   if (!word) return word;
   return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();

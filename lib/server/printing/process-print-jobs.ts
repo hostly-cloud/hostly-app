@@ -1,17 +1,11 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
-import { parseOperationStationDocument } from "@/lib/firestore/operation-stations";
 import {
   getDefaultPrinterConfig,
   parsePrinterConfigDocument,
 } from "@/lib/firestore/printer-config";
-import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
 import type { PrinterConfigDocument } from "@/lib/printing/printer-config-types";
 import { parsePrintJobDocument } from "@/lib/printing/parse-print-job-document";
-import {
-  buildOperationStationMap,
-  resolvePrintJobPrinterTarget,
-} from "@/lib/printing/resolve-print-job-printer-target";
 import { computePrintJobNextRetryAt } from "@/lib/printing/print-job-retry";
 import type { PrintJobDocument } from "@/lib/printing/print-job-types";
 import { normalizePrintJobAttempts } from "@/lib/printing/print-job-types";
@@ -59,27 +53,6 @@ type PlannedAction =
   | { kind: "fail"; message: string }
   | { kind: "omit"; reason: string };
 
-async function loadOperationStationsByIdAdmin(
-  db: Firestore,
-  restaurantId: string,
-): Promise<Map<string, OperationStationDocument>> {
-  const snap = await db
-    .collection("restaurants")
-    .doc(restaurantId)
-    .collection("operationStations")
-    .get();
-  const list: OperationStationDocument[] = [];
-  snap.forEach((docSnap) => {
-    const parsed = parseOperationStationDocument(
-      docSnap.id,
-      docSnap.data(),
-      restaurantId,
-    );
-    if (parsed) list.push(parsed);
-  });
-  return buildOperationStationMap(list);
-}
-
 function workerItemMeta(job: PrintJobDocument): Pick<
   ProcessPrintJobItemResult,
   "productName" | "modifiersLabel"
@@ -96,7 +69,6 @@ function planJobAction(
   job: PrintJobDocument,
   config: PrinterConfigDocument,
   nowMs: number,
-  operationStationsById: ReadonlyMap<string, OperationStationDocument>,
 ): PlannedAction {
   if (job.status !== "pending") {
     return { kind: "omit", reason: `status_${job.status}` };
@@ -219,10 +191,7 @@ export async function processPendingPrintJobs(
 
   if (!rid) return result;
 
-  const [config, operationStationsById] = await Promise.all([
-    loadPrinterConfigAdmin(params.db, rid),
-    loadOperationStationsByIdAdmin(params.db, rid),
-  ]);
+  const config = await loadPrinterConfigAdmin(params.db, rid);
 
   const snap = await params.db
     .collection("restaurants")
@@ -239,7 +208,7 @@ export async function processPendingPrintJobs(
 
   for (const { id: jobId, job } of docs) {
     result.processed += 1;
-    const plan = planJobAction(job, config, nowMs, operationStationsById);
+    const plan = planJobAction(job, config, nowMs);
 
     if (plan.kind === "omit") {
       result.omitted += 1;

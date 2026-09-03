@@ -4,10 +4,6 @@ import {
 } from "firebase/firestore";
 import { mergeTableGroupOrdersViaApi } from "@/lib/firestore/tpv-mutations-via-api";
 import {
-  computeBillableTotalFromOrderDocLike,
-  readOrderCreatedAtMs,
-} from "@/lib/firestore/order-table-occupancy";
-import {
   fetchActiveOrdersForTable,
   sortOpenOrderDocsByCreatedAt,
 } from "@/lib/firestore/open-orders-same-table";
@@ -61,20 +57,6 @@ function withTableGroupLineOrigin(
     ...(tid ? { tableGroupSourceTableId: tid } : {}),
     ...(oid ? { tableGroupSourceOrderId: oid } : {}),
   };
-}
-
-function isPaymentRequestedAtSet(raw: unknown): boolean {
-  if (raw == null) return false;
-  if (typeof raw === "number" && Number.isFinite(raw)) return true;
-  if (
-    raw &&
-    typeof raw === "object" &&
-    "toMillis" in raw &&
-    typeof (raw as { toMillis?: () => number }).toMillis === "function"
-  ) {
-    return true;
-  }
-  return false;
 }
 
 function pickDestinationOrderDoc(
@@ -285,39 +267,9 @@ export async function mergeOpenOrdersForTableGroup(
     );
   });
   const mergedItems = normalizeMergedFirestoreItems([...destItems, ...flatSource]);
-  const mergedTotal = computeBillableTotalFromOrderDocLike({
-    items: mergedItems,
-    total: 0,
-  });
 
   report.plannedFinalItems = formatFirestoreOrderItems(mergedItems);
   report.mergedSourceOrderIds = sources.map((s) => s.id);
-
-  const noteParts: string[] = [];
-  const pushNote = (n: unknown) => {
-    const s = typeof n === "string" ? n.trim() : "";
-    if (s) noteParts.push(s);
-  };
-  pushNote(destData.note);
-  for (const s of sources) {
-    pushNote((s.data() as { note?: unknown }).note);
-  }
-  const mergedNote = noteParts.join("\n");
-
-  const prRaw: unknown[] = [destData.paymentRequestedAt];
-  for (const s of sources) {
-    prRaw.push((s.data() as { paymentRequestedAt?: unknown }).paymentRequestedAt);
-  }
-  let mergedPr: unknown = null;
-  let bestMs = -1;
-  for (const raw of prRaw) {
-    if (!isPaymentRequestedAtSet(raw)) continue;
-    const ms = readOrderCreatedAtMs(raw) ?? 0;
-    if (ms > bestMs) {
-      bestMs = ms;
-      mergedPr = raw;
-    }
-  }
 
   try {
     const apiResult = await mergeTableGroupOrdersViaApi({

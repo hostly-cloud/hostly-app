@@ -18,7 +18,6 @@ import {
 import {
   asOrderItems,
   isActiveOrderStatus,
-  isPaymentRequestedAtSet,
   tableGroupsDocRef,
 } from "@/lib/server/tpv/table-group-order-utils";
 import {

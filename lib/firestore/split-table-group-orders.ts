@@ -67,23 +67,6 @@ function totalFromItems(items: RawOrderItem[]): number {
   return Number.isFinite(total) ? total : 0;
 }
 
-function resolveRestoredStatus(data: Record<string, unknown>): string {
-  const original = String(data.tableGroupMergeOriginalStatus ?? "").trim();
-  if (original && original !== "merged") return original;
-  const hasSentLine = asItems(data.items).some((item) => {
-    const status = String(item.status ?? "").trim().toLowerCase();
-    return status === "sent" || status === "prepared" || status === "served";
-  });
-  return hasSentLine ? "sent" : "open";
-}
-
-function hasStoredOriginalPaymentRequest(data: Record<string, unknown>): boolean {
-  return Object.prototype.hasOwnProperty.call(
-    data,
-    "tableGroupMergeOriginalPaymentRequestedAt",
-  );
-}
-
 async function fetchMergedSourceOrdersForTable(
   db: Firestore,
   restaurantId: string,

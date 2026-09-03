@@ -55,7 +55,6 @@ import type {
 import {
   IMPORTED_MENU_CARTA_TYPE_LABELS,
   IMPORTED_MENU_STATION_LABELS,
-  IMPORTED_MENU_STATION_OPTIONS,
 } from "@/lib/carta/imported-menu-types";
 import {
   createMenuImportDraft,
@@ -1137,7 +1136,7 @@ function menuImportDraftHasItems(doc: MenuImportDraftDocument): boolean {
   return flattenSectionsToItems(uiDraft.sections).length > 0;
 }
 
-function resolveMenuImportDraftOpenStep(_doc: MenuImportDraftDocument): "upload" | "review" {
+function resolveMenuImportDraftOpenStep(): "upload" | "review" {
   return "review";
 }
 
@@ -1522,7 +1521,7 @@ export function ImportMenuPageContent() {
         const uiDraft = menuImportDocToUiDraft(doc);
         setDraft(uiDraft);
         setActiveDraftId(draftId);
-        setStep(resolveMenuImportDraftOpenStep(doc));
+        setStep(resolveMenuImportDraftOpenStep());
         const openMessage = resolveMenuImportDraftOpenMessage(doc);
         if (openMessage) setFlowError(openMessage);
       } catch (e) {

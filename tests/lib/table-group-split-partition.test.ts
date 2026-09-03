@@ -63,7 +63,7 @@ function plan(args: {
     lines: args.lines,
     sourceOrders:
       args.sources ??
-      removed.map((tid, i) => ({ id: `src-${tid}`, tableId: tid })),
+      removed.map((tid) => ({ id: `src-${tid}`, tableId: tid })),
   });
 }
 

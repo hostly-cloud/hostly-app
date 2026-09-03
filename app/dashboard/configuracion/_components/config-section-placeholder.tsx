@@ -11,7 +11,6 @@ type ConfigSectionPlaceholderProps = {
  * Configuration Compact Layout: sin cabecera duplicada.
  */
 export function ConfigSectionPlaceholder({
-  title: _title,
   description,
   children,
 }: ConfigSectionPlaceholderProps) {

@@ -23,7 +23,6 @@ import { normalizeProductName } from "@/lib/carta/duplicate-detection";
 import { normalizeOperationalStationSelection } from "@/lib/carta/operational-station-options";
 import {
   productFamilyFieldsToFirestorePatch,
-  type ProductFamilyDenormFields,
 } from "@/lib/carta/product-category-family-resolver";
 import type { ProductFamilyType } from "@/lib/carta/product-family-types";
 import { auth, db } from "@/lib/firebase/client";

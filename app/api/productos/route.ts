@@ -2,10 +2,6 @@ import { NextResponse } from "next/server";
 import { isAuthErrorResponse } from "@/lib/server/auth/require-authenticated-restaurant";
 import { requireLegacyRestaurantApi } from "@/lib/server/auth/require-legacy-restaurant-api";
 
-function badRequest(message: string, status = 400) {
-  return NextResponse.json({ ok: false as const, error: message }, { status });
-}
-
 type ProductoApiRow = {
   id: string;
   nombre: string;

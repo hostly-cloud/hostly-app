@@ -116,11 +116,9 @@ function compactEscBadgeCopy(
 function ProductosCartaTableCartaBadge({
   p,
   t,
-  locale,
 }: {
   p: PlatoCarta;
   t: TranslateFn;
-  locale: Locale;
 }) {
   const { short, full, tone } = compactCartaBadgeCopy(p, t);
   return (
@@ -139,11 +137,9 @@ function ProductosCartaTableCartaBadge({
 function ProductosCartaTableEscBadge({
   tiene,
   t,
-  locale,
 }: {
   tiene: boolean;
   t: TranslateFn;
-  locale: Locale;
 }) {
   const { short, full, tone } = compactEscBadgeCopy(tiene, t);
   return (
@@ -732,11 +728,11 @@ function renderProductRowCells(args: {
             />
           </span>
         ) : (
-          <ProductosCartaTableCartaBadge p={p} t={t} locale={locale} />
+          <ProductosCartaTableCartaBadge p={p} t={t} />
         )}
       </HostlyDataCell>
       <HostlyDataCell align="center" col="esc">
-        <ProductosCartaTableEscBadge tiene={tiene} t={t} locale={locale} />
+        <ProductosCartaTableEscBadge tiene={tiene} t={t} />
       </HostlyDataCell>
       <HostlyDataCell align="end" col="actions">
         <div className="hostly-data-table-actions-shell">
@@ -861,8 +857,8 @@ function MobileProductItem(
         <>
           <span className="hostly-mobile-list-item__price">{formatEuro(p.precioVenta, locale)}</span>
           <div className="hostly-mobile-list-item__badges">
-            <ProductosCartaTableCartaBadge p={p} t={t} locale={locale} />
-            <ProductosCartaTableEscBadge tiene={tiene} t={t} locale={locale} />
+            <ProductosCartaTableCartaBadge p={p} t={t} />
+            <ProductosCartaTableEscBadge tiene={tiene} t={t} />
           </div>
         </>
       }
@@ -925,11 +921,8 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
     compactBulkBar = false,
     reorderMode = false,
     reorderBusyId = null,
-    onMoveProductUp,
-    onMoveProductDown,
     onReorderProducts,
     reorderFocusLayout = false,
-    locale,
     inlineEdit,
   } = props;
 

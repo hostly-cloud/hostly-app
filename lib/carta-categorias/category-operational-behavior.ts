@@ -42,8 +42,9 @@ export function categoryOperationalBehaviorsForType(
 }
 
 export function defaultCategoryOperationalBehaviorForType(
-  _type: CartaCategoriaTipo,
+  type: CartaCategoriaTipo,
 ): CategoryOperationalBehavior {
+  void type;
   return DEFAULT_CATEGORY_OPERATIONAL_BEHAVIOR;
 }
 

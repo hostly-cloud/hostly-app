@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import Image from "next/image";
 
 export type HostlyBrandMarkTone = "app" | "premium" | "mono";
 export const HOSTLY_LOGO_SRC = "/brand/hostly-logo.png";
@@ -23,7 +24,7 @@ export function HostlyBrandMark({
   style,
 }: HostlyBrandMarkProps) {
   return (
-    <img
+    <Image
       src={HOSTLY_MARK_SRC}
       alt="Hostly"
       width={size}
@@ -55,7 +56,7 @@ export function HostlyBrandLockup({
   const width = Math.round(size * 4.25);
 
   return (
-    <img
+    <Image
       src={HOSTLY_LOGO_SRC}
       alt="Hostly"
       width={width}

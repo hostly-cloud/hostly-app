@@ -106,9 +106,7 @@ function renderCategoryCells(args: {
     rowCount,
     onMoveCategoryUp,
     onMoveCategoryDown,
-    onReorderCategories,
     reorderBusyId,
-    dragHandleLabel,
     showDragHandle,
     t,
   } = args;

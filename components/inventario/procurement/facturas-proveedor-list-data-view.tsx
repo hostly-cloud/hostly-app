@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/hostly/data-table";
 import {
   displayProcurementUnit,
-  formatProcurementEur,
   formatProcurementQty,
   supplierInvoiceStatusLabel,
   supplierInvoiceStatusTone,
