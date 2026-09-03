@@ -365,7 +365,7 @@ export function ProductCommercialIdentityPanel({
             className="hostly-product-commercial-modal__hint"
             role="status"
           >
-            Identidad guardada. Buscando coincidencia exacta…
+            Identidad guardada. Puedes buscar la imagen exacta cuando quieras.
           </span>
         ) : null}
         {error ? (
