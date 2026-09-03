@@ -86,6 +86,11 @@ export function buildProductImageReviewStateFromDocument(
     CATALOG_ATTACH_LOCK_MS,
   );
   const eligibility = evaluateImportedProductImageEligibility(data);
+  const individualFallbackEligibility = evaluateImportedProductImageEligibility(
+    data,
+    undefined,
+    { allowCatalogFallback: true },
+  );
 
   const source = enrichment?.source ?? (hasImage ? "legacy" : null);
   const reviewStatus =
@@ -107,16 +112,22 @@ export function buildProductImageReviewStateFromDocument(
     !generationInProgress &&
     !catalogAttachInProgress &&
     canAutomaticallyReplaceProductImage(imageState);
+  const generationEligible =
+    recommendedAction === "catalog_search"
+      ? individualFallbackEligibility.eligible
+      : eligibility.eligible;
   const canGenerate =
-    recommendedAction === "ai_generate" &&
-    (eligibility.eligible || canReplaceApprovedAi) &&
+    (recommendedAction === "ai_generate" || recommendedAction === "catalog_search") &&
+    (generationEligible || canReplaceApprovedAi) &&
     !generationInProgress;
+  const generationEligibility =
+    recommendedAction === "catalog_search" ? individualFallbackEligibility : eligibility;
   const generationReason =
-    generationInProgress && (eligibility.eligible || canReplaceApprovedAi)
+    generationInProgress && (generationEligibility.eligible || canReplaceApprovedAi)
       ? "generation_in_progress"
-      : eligibility.eligible || canReplaceApprovedAi
+      : generationEligibility.eligible || canReplaceApprovedAi
         ? null
-        : eligibility.reason;
+        : generationEligibility.reason;
 
   return {
     resolution: "resolved",
