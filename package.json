@@ -18,7 +18,7 @@
     "test:tpv-table-order-lock": "tsx --test tests/server/tpv-table-order-lock.test.ts",
     "test:tpv-table-order-lock-server": "firebase emulators:exec --only firestore --project demo-hostly-tpv-table-lock \"tsx --test tests/server/tpv-table-order-lock-emulator.test.ts\"",
     "test:tpv-release-effects": "tsx --test tests/carta/release-effects-exactly-once.test.ts",
-    "test:tpv-release-effects-server": "firebase emulators:exec --only firestore --project demo-hostly-tpv-release-fx \"tsx --test tests/carta/release-effects-exactly-once.test.ts\"",
+    "test:tpv-release-effects-server": "firebase emulators:exec --only firestore --project demo-hostly-tpv-release-fx \"tsx --test tests/server/tpv-release-effects-emulator.test.ts\"",
     "audit:product-gtin-index": "tsx scripts/audit-product-gtin-index.ts",
     "admin:catalog-image-credits": "tsx scripts/administer-catalog-image-credits.ts",
     "eval:menu-import": "tsx scripts/eval-menu-import-corpus.ts",
