@@ -1,15 +1,15 @@
 import {
+  HOSTLY_ENTITLEMENTS,
+  HOSTLY_PLAN_ENTITLEMENTS,
+} from "@/lib/subscription/hostly-entitlements";
+import {
   HOSTLY_PLANS,
   hostlyPlanLabel,
   type HostlyPlan,
   type HostlyPlanSource,
 } from "@/lib/subscription/hostly-plan";
 
-export const CATALOG_IMAGE_CAPABILITIES = [
-  "catalog.image.ai.single",
-  "catalog.image.ai.bulk",
-  "catalog.image.catalogSearch",
-] as const;
+export const CATALOG_IMAGE_CAPABILITIES = HOSTLY_ENTITLEMENTS.catalogImages;
 
 export type CatalogImageCapability =
   (typeof CATALOG_IMAGE_CAPABILITIES)[number];
@@ -68,20 +68,12 @@ export type CatalogImageCreditDecision =
     };
 
 /**
- * Política comercial centralizada. Los precios y las asignaciones cuantitativas
- * se configuran por tenant bajo la autoridad server-only de `subscription`.
+ * Alias de compatibilidad del módulo de imágenes. La fuente comercial global
+ * vive en `lib/subscription/hostly-entitlements.ts`.
  */
 export const HOSTLY_CATALOG_IMAGE_PLAN_POLICY: Readonly<
   Record<HostlyCatalogImagePlan, readonly CatalogImageCapability[]>
-> = {
-  basic: [],
-  pro: ["catalog.image.ai.single", "catalog.image.catalogSearch"],
-  ultra: [
-    "catalog.image.ai.single",
-    "catalog.image.ai.bulk",
-    "catalog.image.catalogSearch",
-  ],
-};
+> = HOSTLY_PLAN_ENTITLEMENTS;
 
 /**
  * Configuración operativa y comercial centralizada para trabajos masivos.
