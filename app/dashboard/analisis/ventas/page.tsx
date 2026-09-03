@@ -6,9 +6,9 @@ import ModulePageShell from "@/components/module-page-shell";
 import {
   HostlyButton,
   HostlyKpiCard,
+  HostlySegmentedButton,
   HostlySegmentedControl,
   HostlySurface,
-  hostlySegmentTabClassName,
 } from "@/components/ui/hostly";
 import { AnalyticsDateRangeFields } from "@/components/analysis/AnalyticsDateRangeFields";
 import { useAuth } from "@/components/auth/auth-context";
@@ -419,111 +419,78 @@ export default function AnalisisVentasPage() {
         <div className="hostly-analytics-toolbar">
           <div className="hostly-analytics-toolbar__filters">
             <HostlySegmentedControl aria-label="Filtro de fecha" scrollable={false}>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={dateFilter === "today"}
+              <HostlySegmentedButton
+                selected={dateFilter === "today"}
                 onClick={() => setDateFilter("today")}
-                className={hostlySegmentTabClassName()}
               >
                 Hoy
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={dateFilter === "yesterday"}
+              </HostlySegmentedButton>
+              <HostlySegmentedButton
+                selected={dateFilter === "yesterday"}
                 onClick={() => setDateFilter("yesterday")}
-                className={hostlySegmentTabClassName()}
               >
                 Ayer
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={dateFilter === "range"}
+              </HostlySegmentedButton>
+              <HostlySegmentedButton
+                selected={dateFilter === "range"}
                 onClick={() => setDateFilter("range")}
-                className={hostlySegmentTabClassName()}
               >
                 Rango
-              </button>
+              </HostlySegmentedButton>
             </HostlySegmentedControl>
 
             <HostlySegmentedControl aria-label="Filtro de turno" scrollable={false}>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={shiftFilter === "all"}
+              <HostlySegmentedButton
+                selected={shiftFilter === "all"}
                 onClick={() => setShiftFilter("all")}
-                className={hostlySegmentTabClassName()}
               >
                 Todo
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={shiftFilter === "morning"}
+              </HostlySegmentedButton>
+              <HostlySegmentedButton
+                selected={shiftFilter === "morning"}
                 onClick={() => setShiftFilter("morning")}
-                className={hostlySegmentTabClassName()}
               >
                 Mañana
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={shiftFilter === "afternoon"}
+              </HostlySegmentedButton>
+              <HostlySegmentedButton
+                selected={shiftFilter === "afternoon"}
                 onClick={() => setShiftFilter("afternoon")}
-                className={hostlySegmentTabClassName()}
               >
                 Tarde
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={shiftFilter === "night"}
+              </HostlySegmentedButton>
+              <HostlySegmentedButton
+                selected={shiftFilter === "night"}
                 onClick={() => setShiftFilter("night")}
-                className={hostlySegmentTabClassName()}
               >
                 Noche
-              </button>
+              </HostlySegmentedButton>
             </HostlySegmentedControl>
 
             <HostlySegmentedControl aria-label="Filtro de pago" scrollable={false}>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={paymentFilter === "all"}
+              <HostlySegmentedButton
+                selected={paymentFilter === "all"}
                 onClick={() => setPaymentFilter("all")}
-                className={hostlySegmentTabClassName()}
               >
                 Todos
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={paymentFilter === "cash"}
+              </HostlySegmentedButton>
+              <HostlySegmentedButton
+                selected={paymentFilter === "cash"}
                 onClick={() => setPaymentFilter("cash")}
-                className={hostlySegmentTabClassName()}
               >
                 Efectivo
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={paymentFilter === "card"}
+              </HostlySegmentedButton>
+              <HostlySegmentedButton
+                selected={paymentFilter === "card"}
                 onClick={() => setPaymentFilter("card")}
-                className={hostlySegmentTabClassName()}
               >
                 Tarjeta
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={paymentFilter === "voucher"}
+              </HostlySegmentedButton>
+              <HostlySegmentedButton
+                selected={paymentFilter === "voucher"}
                 onClick={() => setPaymentFilter("voucher")}
-                className={hostlySegmentTabClassName()}
               >
                 Voucher
-              </button>
+              </HostlySegmentedButton>
             </HostlySegmentedControl>
 
             {dateFilter === "range" ? (
