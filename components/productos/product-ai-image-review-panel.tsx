@@ -2,11 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import {
-  ConfigBtnDanger,
-  ConfigBtnPrimary,
-  ConfigBtnSecondary,
-} from "@/app/dashboard/configuracion/_components/config-carta-workbench";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { CatalogProductImageCandidate } from "@/lib/productos/catalog-product-image-contract";
 import { fetchCatalogImageCreditSummary } from "@/lib/productos/catalog-image-credit-api";
 import type { CatalogImageCreditAccountSummary } from "@/lib/productos/catalog-image-credit-contract";
@@ -144,18 +140,18 @@ function ProductImageActionConfirmDialog({
             : `Se copiará la imagen de “${confirmation.candidate.productName}” y quedará pendiente de aprobación.`}
         </p>
         <div className="hostly-productos-bulk-course-modal__actions">
-          <button
+          <HostlyButton
             ref={cancelRef}
-            type="button"
-            className="hostly-button-secondary hostly-button-compact"
+            variant="secondary"
+            size="compact"
             onClick={onCancel}
           >
             Cancelar
-          </button>
-          <button
+          </HostlyButton>
+          <HostlyButton
             ref={confirmRef}
-            type="button"
-            className="hostly-button-primary hostly-button-compact"
+            variant="primary"
+            size="compact"
             onClick={onConfirm}
           >
             {isRegeneration
@@ -163,7 +159,7 @@ function ProductImageActionConfirmDialog({
               : isGeneration
                 ? "Crear imagen"
                 : "Usar imagen"}
-          </button>
+          </HostlyButton>
         </div>
       </div>
     </div>
@@ -377,14 +373,14 @@ function CandidateCard({
           </ul>
         ) : null}
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-          <button
-            type="button"
+          <HostlyButton
+            variant="secondary"
+            size="compact"
             disabled={disabled}
             onClick={onAttach}
-            className="hostly-button-secondary hostly-button-compact"
           >
             {attaching ? "Adjuntando…" : "Usar esta imagen"}
-          </button>
+          </HostlyButton>
           <a
             href={candidate.sourceUrl}
             target="_blank"
@@ -712,8 +708,9 @@ export function ProductAiImageReviewPanel({
           ) : null}
           {access?.meteringMode === "credit_balance" ? (
             <div style={{ marginTop: 8 }}>
-              <ConfigBtnSecondary
-                type="button"
+              <HostlyButton
+                variant="tool"
+                size="compact"
                 disabled={creditSummaryLoading}
                 onClick={() => void loadCreditSummary()}
               >
@@ -722,7 +719,7 @@ export function ProductAiImageReviewPanel({
                   : creditSummary
                     ? "Actualizar consumo"
                     : "Ver consumo de créditos"}
-              </ConfigBtnSecondary>
+              </HostlyButton>
             </div>
           ) : null}
         </div>
@@ -905,32 +902,35 @@ export function ProductAiImageReviewPanel({
                 const busy = busyAction === action;
                 if (action === "approve") {
                   return (
-                    <ConfigBtnPrimary
+                    <HostlyButton
                       key={action}
-                      type="button"
+                      variant="primary"
+                      size="compact"
                       disabled={buttonDisabled}
                       onClick={() => void runReview("approve")}
                     >
                       {busy ? "Aprobando…" : "Aprobar imagen"}
-                    </ConfigBtnPrimary>
+                    </HostlyButton>
                   );
                 }
                 if (action === "reject") {
                   return (
-                    <ConfigBtnDanger
+                    <HostlyButton
                       key={action}
-                      type="button"
+                      variant="destructive"
+                      size="compact"
                       disabled={buttonDisabled}
                       onClick={() => void runReview("reject")}
                     >
                       {busy ? "Rechazando…" : "Rechazar"}
-                    </ConfigBtnDanger>
+                    </HostlyButton>
                   );
                 }
                 return (
-                  <ConfigBtnSecondary
+                  <HostlyButton
                     key={action}
-                    type="button"
+                    variant="secondary"
+                    size="compact"
                     disabled={buttonDisabled || generationBlockedByCredits}
                     onClick={() =>
                       setPendingConfirmation({
@@ -946,7 +946,7 @@ export function ProductAiImageReviewPanel({
                       : action === "regenerate"
                         ? "Regenerar imagen"
                         : "Crear imagen"}
-                  </ConfigBtnSecondary>
+                  </HostlyButton>
                 );
               })}
             </div>
@@ -991,8 +991,9 @@ export function ProductAiImageReviewPanel({
                   className="hostly-input"
                   style={{ flex: "1 1 230px", minWidth: 0 }}
                 />
-                <ConfigBtnSecondary
-                  type="button"
+                <HostlyButton
+                  variant="tool"
+                  size="compact"
                   disabled={
                     buttonDisabled ||
                     catalogSearchBlockedByCredits ||
@@ -1001,7 +1002,7 @@ export function ProductAiImageReviewPanel({
                   onClick={() => void runCatalogSearch()}
                 >
                   {catalogSearching ? "Buscando…" : "Buscar catálogo"}
-                </ConfigBtnSecondary>
+                </HostlyButton>
               </div>
               {catalogSearchBlockedByCredits ? (
                 <p className="hostly-product-commercial-modal__hint" role="status">
@@ -1067,14 +1068,14 @@ export function ProductAiImageReviewPanel({
           }}
         >
           <span style={{ minWidth: 0 }}>{error}</span>
-          <button
-            type="button"
+          <HostlyButton
+            variant="ghost"
+            size="compact"
             disabled={buttonDisabled}
             onClick={refresh}
-            style={{ border: 0, background: "transparent", color: "inherit", fontWeight: 750 }}
           >
             Actualizar
-          </button>
+          </HostlyButton>
         </div>
       ) : null}
       {pendingConfirmation ? (
