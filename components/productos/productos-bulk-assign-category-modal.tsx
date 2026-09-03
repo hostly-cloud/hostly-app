@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { CartaCategoria } from "@/lib/carta-categorias/types";
 import type { TranslateFn } from "@/lib/i18n";
 import {
@@ -111,17 +112,17 @@ function ProductosBulkAssignCategoryModalContent({
           ))}
         </select>
         <div className="hostly-productos-bulk-course-modal__actions">
-          <button
-            type="button"
-            className="hostly-button-secondary hostly-button-compact"
+          <HostlyButton
+            variant="secondary"
+            size="compact"
             disabled={saving}
             onClick={onClose}
           >
             {t("common.cancel")}
-          </button>
-          <button
-            type="button"
-            className="hostly-button-primary hostly-button-compact"
+          </HostlyButton>
+          <HostlyButton
+            variant="primary"
+            size="compact"
             disabled={saving || count < 1 || isBulkSelectMixedValue(categoryId)}
             onClick={() => {
               if (categoryId === UNCATEGORIZED_VALUE) {
@@ -134,7 +135,7 @@ function ProductosBulkAssignCategoryModalContent({
             }}
           >
             {saving ? t("common.saving") : t("productos.bulkAssignCategoryApply")}
-          </button>
+          </HostlyButton>
         </div>
       </div>
     </div>
