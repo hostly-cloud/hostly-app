@@ -22,28 +22,28 @@ export const PRODUCT_FORM_DRAWER_TAB_SPECS: ReadonlyArray<{
     description: "Nombre, precio y carta",
   },
   {
+    id: "comercial",
+    label: "Contenido",
+    shortLabel: "02",
+    description: "Descripción e imagen",
+  },
+  {
     id: "operacion",
     label: "Operación",
-    shortLabel: "02",
+    shortLabel: "03",
     description: "Destino, pase y comportamiento",
   },
   {
     id: "modificadores",
     label: "Modificadores",
-    shortLabel: "03",
+    shortLabel: "04",
     description: "Opciones de venta",
   },
   {
     id: "escandallo",
-    label: "Costes",
-    shortLabel: "04",
-    description: "Escandallo y margen",
-  },
-  {
-    id: "comercial",
-    label: "Contenido",
+    label: "Escandallo",
     shortLabel: "05",
-    description: "Descripción e imagen",
+    description: "Coste y margen",
   },
 ];
 
