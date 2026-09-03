@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { summarizeCatalogImageBulkReadiness } from "@/lib/productos/catalog-image-bulk-readiness";
+import {
+  catalogImageBulkEstimateLabel,
+  summarizeCatalogImageBulkReadiness,
+} from "@/lib/productos/catalog-image-bulk-readiness";
 
 test("bulk readiness separates automatic preparation from immediate review", () => {
   const readiness = summarizeCatalogImageBulkReadiness({
@@ -42,4 +45,40 @@ test("bulk readiness flags inconsistent summaries instead of hiding them", () =>
 
   assert.equal(readiness.accountedPending, 3);
   assert.equal(readiness.isConsistent, false);
+});
+
+test("bulk estimate label surfaces configured credits and safe fallbacks", () => {
+  assert.equal(
+    catalogImageBulkEstimateLabel({
+      aiGenerationRequests: 2,
+      catalogSearchRequests: 1,
+      credits: 7,
+      costUsd: null,
+      mode: "credit_balance",
+      note: "",
+    }),
+    "7 créditos estimados",
+  );
+  assert.equal(
+    catalogImageBulkEstimateLabel({
+      aiGenerationRequests: 0,
+      catalogSearchRequests: 0,
+      credits: null,
+      costUsd: null,
+      mode: "usage_recorded",
+      note: "",
+    }),
+    "Uso registrado",
+  );
+  assert.equal(
+    catalogImageBulkEstimateLabel({
+      aiGenerationRequests: 1,
+      catalogSearchRequests: 0,
+      credits: null,
+      costUsd: null,
+      mode: "credit_balance",
+      note: "",
+    }),
+    "Créditos por confirmar",
+  );
 });
