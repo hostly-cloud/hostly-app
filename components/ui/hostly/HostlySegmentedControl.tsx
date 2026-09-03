@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { hostlyCx } from "./hostly-cx";
 
 export type HostlySegmentedControlProps = {
@@ -10,9 +10,15 @@ export type HostlySegmentedControlProps = {
   scrollable?: boolean;
 };
 
+export type HostlySegmentedButtonProps = Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "aria-selected"
+> & {
+  selected: boolean;
+};
+
 /**
  * Contenedor unificado para tabs / filtros / segmented controls.
- * Solo presentación — los hijos siguen siendo `button`, `a` o `Link` con `hostly-tab`.
  */
 export function HostlySegmentedControl({
   children,
@@ -26,6 +32,27 @@ export function HostlySegmentedControl({
         {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * Opción canónica para controles segmentados Hostly.
+ * Conserva semántica de `button` + `role=tab` y el estado seleccionado.
+ */
+export function HostlySegmentedButton({
+  selected,
+  className,
+  type = "button",
+  ...props
+}: HostlySegmentedButtonProps) {
+  return (
+    <button
+      {...props}
+      type={type}
+      role="tab"
+      aria-selected={selected}
+      className={hostlySegmentTabClassName(className)}
+    />
   );
 }
 

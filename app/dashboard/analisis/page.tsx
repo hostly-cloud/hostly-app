@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlySegmentedControl, hostlySegmentTabClassName } from "@/components/ui/hostly";
+import { HostlySegmentedButton, HostlySegmentedControl } from "@/components/ui/hostly";
 import {
   AnalysisTabContent,
   buildAnalysisTabContentProps,
@@ -1076,15 +1076,13 @@ function AnalisisTabsBar({
       {TABS.map((t) => {
         const Icon = t.icon;
         return (
-          <button
+          <HostlySegmentedButton
             key={t.id}
-            type="button"
-            role="tab"
             id={`hostly-analysis-tab-${t.id}`}
             aria-controls={`hostly-analysis-panel-${t.id}`}
-            aria-selected={active === t.id}
+            selected={active === t.id}
             onClick={() => onChange(t.id)}
-            className={hostlySegmentTabClassName("hostly-analysis-tab")}
+            className="hostly-analysis-tab"
             data-analysis-tab={t.id}
           >
             <Icon size={18} strokeWidth={2.1} aria-hidden="true" />
@@ -1092,7 +1090,7 @@ function AnalisisTabsBar({
               <strong>{t.label}</strong>
               <small>{t.caption}</small>
             </span>
-          </button>
+          </HostlySegmentedButton>
         );
       })}
     </HostlySegmentedControl>

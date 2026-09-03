@@ -29,6 +29,7 @@ const EXTENSIONS = new Set([".tsx", ".jsx"]);
 const ACTION_INPUT_TYPES = new Set(["button", "submit", "reset", "checkbox", "radio"]);
 const CANONICAL_CLICK_COMPONENTS = new Set([
   "HostlyButton",
+  "HostlySegmentedButton",
   "HostlyFormToggle",
   "HostlyRowActionButton",
   "HostlyRowActions",
