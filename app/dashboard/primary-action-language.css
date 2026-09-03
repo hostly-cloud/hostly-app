@@ -259,6 +259,69 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
+/* Productos: herramientas heredadas del catálogo pasan al mismo lenguaje secundario. */
+.hostly-productos-v3--operations .hostly-productos-carta-header-inline-actions__more,
+.hostly-productos-v3--operations .hostly-productos-carta-action--ops,
+.hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > a,
+.hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--hostly-control-border) !important;
+  border-radius: var(--hostly-control-radius-compact) !important;
+  background: var(--hostly-control-surface) !important;
+  color: var(--hostly-ink-strong) !important;
+  box-shadow: var(--hostly-control-shadow) !important;
+  font-weight: 700;
+  line-height: 1.15;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    opacity 150ms ease;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-header-inline-actions__more:hover,
+.hostly-productos-v3--operations .hostly-productos-carta-action--ops:hover:not(:disabled),
+.hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > a:hover,
+.hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--hostly-action-primary) 24%, var(--hostly-line-strong)) !important;
+  background: var(--hostly-control-surface-hover) !important;
+  color: var(--hostly-action-primary) !important;
+  box-shadow: 0 7px 18px rgba(15, 39, 68, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.82) !important;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-header-inline-actions__more:focus-visible,
+.hostly-productos-v3--operations .hostly-productos-carta-action--ops:focus-visible,
+.hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > a:focus-visible,
+.hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > button:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring) !important;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-header-inline-actions__more:active,
+.hostly-productos-v3--operations .hostly-productos-carta-action--ops:active:not(:disabled),
+.hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > a:active,
+.hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-action--ops:disabled,
+.hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
+  box-shadow: none !important;
+}
+
 /* Gestión del dashboard: misma firma navy en los accesos, manteniendo sus ilustraciones. */
 .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__icon {
   border-color: rgba(139, 211, 241, 0.2);
@@ -316,6 +379,13 @@
   .hostly-touch-root .hostly-button-tool {
     min-height: 44px;
   }
+
+  .hostly-productos-v3--operations .hostly-productos-carta-header-inline-actions__more,
+  .hostly-productos-v3--operations .hostly-productos-carta-action--ops,
+  .hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > a,
+  .hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > button {
+    min-height: 44px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -324,7 +394,11 @@
   .hostly-touch-root .hostly-button-tool,
   .hostly-touch-root .hostly-button-chip,
   .hostly-touch-root .hostly-analysis-detail-link,
-  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__arrow {
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__arrow,
+  .hostly-productos-v3--operations .hostly-productos-carta-header-inline-actions__more,
+  .hostly-productos-v3--operations .hostly-productos-carta-action--ops,
+  .hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > a,
+  .hostly-productos-v3--operations .hostly-productos-carta-advanced-nav > button {
     transition: none !important;
   }
 }
