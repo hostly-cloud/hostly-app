@@ -43,7 +43,7 @@ function apiError(
 export async function searchCatalogProductImagesForReview(
   productId: string,
   query: string,
-  confirmation: { confirmedByUser: true },
+  confirmation: { confirmedByUser: true } = { confirmedByUser: true },
 ): Promise<CatalogProductImageSearchResult> {
   if (confirmation.confirmedByUser !== true) {
     throw new CatalogProductImageApiError(
