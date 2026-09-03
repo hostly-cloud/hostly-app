@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductBarcodeScanner } from "@/components/productos/product-barcode-scanner";
 import { ProductExactCatalogImageSuggestion } from "@/components/productos/product-exact-catalog-image-suggestion";
+import { HostlyButton } from "@/components/ui/hostly";
 import {
   fetchProductCommercialIdentity,
   saveProductCommercialIdentity,
@@ -346,14 +347,14 @@ export function ProductCommercialIdentityPanel({
           gap: 8,
         }}
       >
-        <button
-          type="button"
-          className="hostly-button-secondary hostly-button-compact"
+        <HostlyButton
+          variant="primary"
+          size="compact"
           disabled={disabled || loading || saving || !dirty}
           onClick={() => void save()}
         >
           {saving ? "Guardando…" : "Guardar identidad"}
-        </button>
+        </HostlyButton>
         {loading ? (
           <span className="hostly-product-commercial-modal__hint">
             Cargando…
