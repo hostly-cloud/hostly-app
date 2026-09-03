@@ -114,7 +114,7 @@ export function buildProductImageReviewStateFromDocument(
     canAutomaticallyReplaceProductImage(imageState);
   const generationEligible =
     recommendedAction === "catalog_search"
-      ? individualFallbackEligibility.eligible
+      ? individualFallbackEligibility.eligible && !canReviewAutomatic
       : eligibility.eligible;
   const canGenerate =
     (recommendedAction === "ai_generate" || recommendedAction === "catalog_search") &&
@@ -125,9 +125,11 @@ export function buildProductImageReviewStateFromDocument(
   const generationReason =
     generationInProgress && (generationEligibility.eligible || canReplaceApprovedAi)
       ? "generation_in_progress"
-      : generationEligibility.eligible || canReplaceApprovedAi
+      : generationEligible || canReplaceApprovedAi
         ? null
-        : generationEligibility.reason;
+        : generationEligibility.eligible && canReviewAutomatic
+          ? "protected_existing_image"
+          : generationEligibility.reason;
 
   return {
     resolution: "resolved",
