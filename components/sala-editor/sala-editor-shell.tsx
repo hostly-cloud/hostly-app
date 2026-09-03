@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { SalaEditorNavigation } from "@/lib/sala-editor/types/editor-navigation";
 import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
+import { HostlyButton } from "@/components/ui/hostly";
 import { SalaEditorPhaseNav } from "@/components/sala-editor/sala-editor-phase-nav";
 import { SalaEditorHistoryControls } from "@/components/sala-editor/sala-editor-history-controls";
 import type { SalaEditorContextActionTarget } from "@/components/sala-editor/sala-editor-context-action-bar";
@@ -101,40 +102,43 @@ export function SalaEditorShell({
           ) : null}
         </div>
         <div className="hostly-sala-editor-workbench__toolbar-meta">
-          <button
-            type="button"
+          <HostlyButton
+            variant="tool"
+            size="compact"
+            active={canvasFocus}
             className="hostly-sala-editor-workbench__canvas-focus-btn"
-            aria-pressed={canvasFocus}
             aria-label={canvasFocus ? "Mostrar herramientas del editor" : "Dar más espacio al plano"}
             title={canvasFocus ? "Mostrar herramientas" : "Ampliar plano"}
             onClick={() => setCanvasFocus((current) => !current)}
           >
             {canvasFocus ? "Mostrar herramientas" : "Ampliar plano"}
-          </button>
+          </HostlyButton>
           {publishToTpvStatus ? (
             <span className="hostly-sala-editor-workbench__publish-status">
               {publishToTpvStatus}
             </span>
           ) : null}
           {onAutoLinkTables ? (
-            <button
-              type="button"
+            <HostlyButton
+              variant="tool"
+              size="compact"
               className="hostly-sala-editor-workbench__publish-btn hostly-sala-editor-workbench__publish-btn--secondary"
               onClick={onAutoLinkTables}
               disabled={autoLinkTablesDisabled || autoLinkTablesPending}
             >
               {autoLinkTablesPending ? "Enlazando..." : "Enlazar automáticamente"}
-            </button>
+            </HostlyButton>
           ) : null}
           {onPublishToTpv ? (
-            <button
-              type="button"
+            <HostlyButton
+              variant="primary"
+              size="compact"
               className="hostly-sala-editor-workbench__publish-btn"
               onClick={handlePublishClick}
               disabled={publishToTpvDisabled || publishToTpvPending}
             >
               {publishToTpvPending ? "Publicando..." : "Publicar en TPV"}
-            </button>
+            </HostlyButton>
           ) : null}
           <span className="hostly-sala-editor-workbench__count">
             {espaciosCount} espacio{espaciosCount === 1 ? "" : "s"}
