@@ -10,6 +10,7 @@ import {
   FamiliasCartaSortableItem,
   FamiliasCartaSortableRoot,
 } from "@/components/carta/familias-carta-sortable";
+import { HostlyButton } from "@/components/ui/hostly";
 import { HostlyStatusBadge } from "@/components/ui/hostly/data-table";
 import { formatCartaFamiliaListSummary } from "@/lib/carta-categorias/familia-operational-config";
 import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
@@ -139,9 +140,9 @@ export function FamiliasCartaDataView({
           </p>
           <div className="hostly-carta-config-empty__actions">
             {onCreateNew ? (
-              <button type="button" onClick={onCreateNew} className="hostly-button-primary hostly-button-compact">
+              <HostlyButton variant="primary" size="compact" onClick={onCreateNew}>
                 Nueva familia de menú
-              </button>
+              </HostlyButton>
             ) : null}
             <Link href="/dashboard/configuracion/carta/categorias" className="hostly-button-secondary hostly-button-compact">
               Categorías de carta
