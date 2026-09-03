@@ -8,7 +8,7 @@ import type {
   ProductCommercialIdentity,
   ProductCommercialIdentityInput,
 } from "@/lib/productos/product-commercial-identity-contract";
-import { isValidGtin, normalizeValidGtin } from "@/lib/productos/gtin";
+import { normalizeValidGtin } from "@/lib/productos/gtin";
 import { normalizeCatalogBarcode } from "@/lib/server/product-images/open-food-facts-exact-product";
 
 const MAX_BRAND_LENGTH = 120;

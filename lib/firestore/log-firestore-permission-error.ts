@@ -14,8 +14,10 @@ export type FirestorePermissionDebugContext = {
 };
 
 export function logFirestorePermissionError(
-  _context: FirestorePermissionDebugContext,
-  _error: unknown,
+  context: FirestorePermissionDebugContext,
+  error: unknown,
 ): void {
+  void context;
+  void error;
   /* diagnostic logging removed post-stabilization */
 }

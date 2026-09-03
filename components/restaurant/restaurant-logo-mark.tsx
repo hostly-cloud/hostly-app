@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 type RestaurantLogoMarkProps = {
   name: string;
   logoUrl?: string | null;
@@ -19,9 +21,12 @@ export function RestaurantLogoMark({
 
   if (trimmedUrl) {
     return (
-      <img
+      <Image
         src={trimmedUrl}
         alt=""
+        width={size}
+        height={size}
+        unoptimized
         className={[
           "shrink-0 rounded-full border border-[var(--hostly-table-divider-soft)] object-cover bg-white",
           className,

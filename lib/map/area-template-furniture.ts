@@ -106,7 +106,6 @@ export function getAreaTemplateFurniture(
       const th = 62;
       const gap = snap(Math.max(70, zw * 0.14));
       const cx = zx + zw / 2;
-      const cy = zy + zh / 2;
       const positions: [number, number][] = [
         [snap(zx + pad), snap(zy + pad + 20)],
         [snap(cx - tw / 2), snap(zy + zh * 0.38)],

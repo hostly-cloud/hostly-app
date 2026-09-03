@@ -1049,7 +1049,7 @@ export function listenProductsForInventory(
         legacyItems = snap.docs.map(mapLegacyInventoryDocToProductDocument);
         emit();
       },
-      (_error: unknown) => {
+      () => {
         legacyItems = [];
         emit();
       },

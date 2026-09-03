@@ -21,7 +21,6 @@ import {
   sortProductFamilies,
   type ProductFamilyDocument,
   type ProductFamilyInput,
-  type ProductFamilyType,
 } from "@/lib/carta/product-family-types";
 
 export function productFamiliesCollectionRef(restaurantId: string) {

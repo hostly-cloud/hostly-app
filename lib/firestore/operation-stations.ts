@@ -22,7 +22,6 @@ import {
   sortOperationStations,
   type OperationStationDocument,
   type OperationStationInput,
-  type OperationStationType,
 } from "@/lib/operacion/operation-station-types";
 
 export function operationStationsCollectionRef(restaurantId: string) {

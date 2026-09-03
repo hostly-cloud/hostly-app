@@ -2,7 +2,6 @@ import {
   convertInventoryQuantity,
   normalizeInventoryUnitAlias,
   resolveInventoryUnitGroup,
-  roundInventoryQuantity,
 } from "@/lib/inventory/unit-conversions";
 
 export type PurchaseUnit = "unit" | "ml" | "cl" | "l" | "g" | "kg";

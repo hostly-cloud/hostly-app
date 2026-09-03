@@ -162,7 +162,6 @@ function findCentralDuplicateMatch(
   categoryNameById: Map<string, string>,
 ): CatalogMigrationDuplicateItem | null {
   const legacyNorm = normalizeProductName(plato.nombre);
-  const legacyCatKey = categoryMatchKey(categoryName || plato.categoria || "General");
   const legacyPrice =
     typeof plato.precioVenta === "number" && Number.isFinite(plato.precioVenta)
       ? plato.precioVenta

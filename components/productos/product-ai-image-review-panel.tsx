@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import {
   ConfigBtnDanger,
   ConfigBtnPrimary,
@@ -314,9 +315,12 @@ function CandidateCard({
         background: "rgba(255,255,255,.88)",
       }}
     >
-      <img
+      <Image
         src={candidate.thumbnailUrl}
         alt={candidate.productName}
+        width={88}
+        height={88}
+        unoptimized
         loading="lazy"
         referrerPolicy="no-referrer"
         style={{

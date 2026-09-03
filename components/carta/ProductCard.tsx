@@ -1,6 +1,7 @@
 "use client";
 
 import { type CSSProperties } from "react";
+import Image from "next/image";
 import type { Product } from "@/types/product";
 
 const cardBtnBase: CSSProperties = {
@@ -65,9 +66,12 @@ export function ProductCard({
       }}
     >
       {hasImg ? (
-        <img
-          src={product.imageUrl}
+        <Image
+          src={product.imageUrl!}
           alt=""
+          width={72}
+          height={72}
+          unoptimized
           style={{
             width: 72,
             height: 72,

@@ -8,6 +8,7 @@ import {
   useState,
   type RefObject,
 } from "react";
+import Image from "next/image";
 import {
   ConfigBtnPrimary,
   ConfigBtnSecondary,
@@ -63,9 +64,12 @@ export function ProductFormCommercialInfoSummaryCard({
         </p>
         <div className="hostly-product-commercial-summary__image">
           {hasImage && imagePreviewUrl ? (
-            <img
+            <Image
               src={imagePreviewUrl}
               alt=""
+              width={120}
+              height={120}
+              unoptimized
               className="hostly-product-commercial-summary__thumb"
             />
           ) : (
@@ -226,9 +230,12 @@ export function ProductFormCommercialInfoModal({
               <div className="hostly-product-commercial-modal__image-block">
                 <span className="hostly-product-commercial-modal__label">{t("carta.fieldFoto")}</span>
                 {effectiveShowImagePreview && effectiveImagePreviewUrl ? (
-                  <img
+                  <Image
                     src={effectiveImagePreviewUrl}
                     alt=""
+                    width={640}
+                    height={640}
+                    unoptimized
                     className="hostly-product-commercial-modal__image-preview"
                   />
                 ) : (

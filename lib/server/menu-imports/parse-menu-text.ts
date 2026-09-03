@@ -793,13 +793,6 @@ function classifyV2OrphanLine(
   return null;
 }
 
-function shouldSkipV2OrphanTranslationLine(
-  line: string,
-  pendingNames: Array<{ rawText: string }>,
-): boolean {
-  return classifyV2OrphanLine(line, pendingNames) != null;
-}
-
 /**
  * Extrae nombre corto de producto antes de ingredientes OCR.
  * Ej: "Margherita* tomate-mozzarella..." → "Margherita"

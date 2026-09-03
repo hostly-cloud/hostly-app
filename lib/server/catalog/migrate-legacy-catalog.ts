@@ -19,7 +19,6 @@ import { categoryMatchKey } from "@/lib/server/menu-imports/normalize-category-n
 import type { Firestore } from "firebase-admin/firestore";
 import {
   buildCatalogMigrationPreview,
-  BuildCatalogMigrationPreviewError,
 } from "./build-catalog-migration-preview";
 import {
   getCatalogMigrationConfig,

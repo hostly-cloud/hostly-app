@@ -2,6 +2,7 @@
 
 import "./supplier-invoice-ocr-review.css";
 
+import Image from "next/image";
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -579,9 +580,12 @@ export function DocumentPreviewPanel({
                 style={{ width: "100%", height: "100%", minHeight: 320, border: 0, display: "block" }}
               />
             ) : (
-              <img
+              <Image
                 src={previewUrl}
                 alt={isDemoInvoice ? "Vista previa factura demo" : "Vista previa factura"}
+                width={1200}
+                height={1600}
+                unoptimized
                 style={{
                   width: "100%",
                   height: "auto",

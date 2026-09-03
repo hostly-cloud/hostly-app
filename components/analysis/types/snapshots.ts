@@ -6,7 +6,6 @@ import type {
   VentasChartPoint,
   VentasKpis,
   VentasTableRow,
-  ZonasInsightLines,
   ZonasKpis,
 } from "./index";
 
@@ -35,4 +34,3 @@ export type ComensalesAnalyticsSnapshotModel = {
 export type ZonasAnalyticsSnapshotModel = {
   kpis: ZonasKpis;
 };
-

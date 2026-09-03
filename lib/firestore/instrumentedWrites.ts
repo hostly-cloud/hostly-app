@@ -29,25 +29,28 @@ export type FsWriteDebugContext = {
 export async function dbgAddDoc(
   collectionRef: CollectionReference<DocumentData>,
   data: DocumentData,
-  _ctx: FsWriteDebugContext,
+  ctx: FsWriteDebugContext,
 ): Promise<DocumentReference<DocumentData>> {
+  void ctx;
   return addDoc(collectionRef, data);
 }
 
 export async function dbgUpdateDoc(
   docRef: DocumentReference<DocumentData>,
   data: UpdateData<DocumentData>,
-  _ctx: FsWriteDebugContext,
+  ctx: FsWriteDebugContext,
 ): Promise<void> {
+  void ctx;
   await updateDoc(docRef, data);
 }
 
 export async function dbgSetDoc(
   docRef: DocumentReference<DocumentData>,
   data: DocumentData,
-  _ctx: FsWriteDebugContext,
+  ctx: FsWriteDebugContext,
   options?: SetOptions,
 ): Promise<void> {
+  void ctx;
   if (options) {
     await setDoc(docRef, data, options);
   } else {
@@ -58,7 +61,8 @@ export async function dbgSetDoc(
 export class DbgWriteBatch {
   private readonly inner: ReturnType<typeof writeBatch>;
 
-  constructor(db: Firestore, _ctxBase: FsWriteDebugContext) {
+  constructor(db: Firestore, ctxBase: FsWriteDebugContext) {
+    void ctxBase;
     this.inner = writeBatch(db);
   }
 
@@ -94,15 +98,17 @@ export function dbgTransactionUpdate(
   transaction: Transaction,
   docRef: DocumentReference<DocumentData>,
   data: UpdateData<DocumentData>,
-  _ctx: FsWriteDebugContext,
+  ctx: FsWriteDebugContext,
 ): void {
+  void ctx;
   transaction.update(docRef, data);
 }
 
 export async function dbgRunTransaction<T>(
   db: Firestore,
   updateFn: (transaction: Transaction) => Promise<T>,
-  _ctx: FsWriteDebugContext,
+  ctx: FsWriteDebugContext,
 ): Promise<T> {
+  void ctx;
   return runTransaction(db, updateFn);
 }

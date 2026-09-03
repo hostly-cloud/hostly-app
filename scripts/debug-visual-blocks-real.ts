@@ -3,10 +3,6 @@ import path from "node:path";
 import type { OcrLayoutLine } from "../lib/server/menu-imports/menu-import-ocr-layout-types";
 import { parseVisualMenuLayout } from "../lib/server/menu-imports/visual-menu-layout-parser";
 
-const PRICE_LINE_RE = /^(\d{1,3}[.,]\d{1,2})\s*(?:€|eur)?\s*$/i;
-function isPriceLine(line: OcrLayoutLine) {
-  return PRICE_LINE_RE.test(line.text.trim());
-}
 function medianLineHeight(lines: OcrLayoutLine[]) {
   const hs = lines.map((l) => l.box.height).sort((a, b) => a - b);
   return hs[Math.floor(hs.length / 2)] ?? 16;

@@ -38,7 +38,7 @@ export function NewBillingCustomerModal({
     setError(null);
     setIsSaving(false);
     onError?.(null);
-  }, [open]);
+  }, [open, onError]);
 
   useEffect(() => {
     if (!open) return;

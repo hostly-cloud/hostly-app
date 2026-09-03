@@ -3,7 +3,6 @@ import type {
   MenuImportDebugRejectedItem,
   MenuImportDebugReport,
   MenuImportDebugReviewItem,
-  ParseMenuLineEvent,
 } from "@/lib/carta/menu-import-debug-report-types";
 import type { ParseMenuTextDiagnostics } from "./parse-menu-text";
 import { explainOcrValidationDecision } from "./validate-items-against-ocr";

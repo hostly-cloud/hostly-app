@@ -1,7 +1,6 @@
 import type { ModifierInventoryUnit } from "@/lib/modifiers/modifier-types";
 import {
   modifierInventoryFieldsToPayload,
-  normalizeModifierInventoryFields,
 } from "@/lib/modifiers/modifier-inventory-consumption";
 import {
   DEFAULT_DRINK_FORMAT_GROUP_ID,

@@ -188,12 +188,6 @@ export async function handleChargeOrder(
   let resultAmount = 0;
   let resultRemaining = 0;
 
-  const preOrderSnap = await orderRef.get();
-  const preOrderData = preOrderSnap.exists
-    ? (preOrderSnap.data() as Record<string, unknown>)
-    : null;
-  const preTableId = preOrderData ? String(preOrderData.tableId ?? "").trim() : "";
-
   try {
     await ctx.db.runTransaction(async (tx) => {
       if (idemKey) {

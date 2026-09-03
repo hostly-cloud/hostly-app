@@ -37,7 +37,6 @@ import type {
   PrintJobDocument,
   PrintJobStatus,
 } from "@/lib/printing/print-job-types";
-import { normalizePrintJobAttempts } from "@/lib/printing/print-job-types";
 import type { Product } from "@/types/product";
 import {
   resolveLineModifierTotal,

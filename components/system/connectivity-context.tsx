@@ -162,14 +162,14 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
     });
   }, [clearReconnectTimer, flashSuccess, runConnectivityPing]);
 
-  const notifyListenerError = useCallback((_source?: string) => {
+  const notifyListenerError = useCallback(() => {
     listenerErrorUntilRef.current = Date.now() + CONNECTIVITY_DEGRADED_AFTER_OFFLINE_MS;
     if (navigatorOnline) {
       setIsDegraded(true);
     }
   }, [navigatorOnline]);
 
-  const notifyListenerHealthy = useCallback((_source?: string) => {
+  const notifyListenerHealthy = useCallback(() => {
     listenerErrorUntilRef.current = 0;
     if (navigatorOnline && !isReconnecting) {
       setIsDegraded(false);

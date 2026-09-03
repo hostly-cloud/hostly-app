@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import type { CatalogProductImageCandidate } from "@/lib/productos/catalog-product-image-contract";
 import { selectExactCatalogProductImageCandidate } from "@/lib/productos/catalog-product-image-exact-suggestion";
 import {
@@ -135,9 +136,12 @@ export function ProductExactCatalogImageSuggestion({
             marginTop: 10,
           }}
         >
-          <img
+          <Image
             src={candidate.thumbnailUrl}
             alt=""
+            width={72}
+            height={72}
+            unoptimized
             style={{ width: 72, height: 72, borderRadius: 10, objectFit: "contain", background: "#fff" }}
           />
           <div style={{ minWidth: 0 }}>

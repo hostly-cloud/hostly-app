@@ -20,7 +20,7 @@ import { firestoreItemsToSaleLineIntents } from "@/lib/firestore/firestore-items
 import { updateMesa } from "@/lib/firestore/mesas";
 import type { CatalogProduct, ComandaItem, PastOrder } from "@/types/comanda";
 import type { Mesa } from "@/types/mesa";
-import type { OrderSource, OrderStatus } from "@/types/order";
+import type { OrderStatus } from "@/types/order";
 import type { ComandaOrderStatus, OrderMetaDoc } from "@/utils/comanda";
 import {
   addProductToComanda,
@@ -40,8 +40,6 @@ import {
 } from "@/utils/comanda";
 
 const ORDER_CONFLICT_ERROR = "ORDER_CONFLICT";
-
-const orderSource: OrderSource = "mesa";
 
 const ORDER_STATUS_OPEN: OrderStatus = "open";
 const ORDER_STATUS_SENT: OrderStatus = "sent";
@@ -96,13 +94,6 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     ) {
       throw new Error(ORDER_CONFLICT_ERROR);
     }
-  };
-
-  const getOrderAuditFields = () => {
-    return {
-      updatedBy: restaurantId ?? null,
-      updatedFrom: "mesa-detail",
-    };
   };
 
   useEffect(() => {

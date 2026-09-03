@@ -14,7 +14,6 @@ import {
 } from "@/lib/modificadores/default-modifier-family";
 import type { ExtractedMenuRow } from "@/lib/carta/mock-menu-photo-import";
 import { extractMenuFromUpload, MenuImportExtractError, MenuImportNoProductsError } from "@/lib/carta/extract-menu-from-upload";
-import { findPotentialDuplicates } from "@/lib/carta/duplicate-detection";
 import {
   TIPOS_PRODUCTO_VENTA,
   createPlatoDraft,
@@ -32,15 +31,6 @@ type AnalyzePhase = 0 | 1 | 2 | 3 | 4;
 
 type ReviewSeverity = "ok" | "review" | "error";
 
-type MenuDetectedItem = {
-  nombre: string;
-  categoria: string;
-  descripcion: string;
-  precio: number | null;
-  confianza?: number;
-  tipoVenta?: TipoProductoVenta;
-};
-
 const TIPO_KEYS: Record<TipoProductoVenta, string> = {
   plato: "carta.tipoPlato",
   bebida: "carta.tipoBebida",
@@ -56,14 +46,6 @@ const cellInp: CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
   boxSizing: "border-box",
-};
-
-const headStyle: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 700,
-  color: "#64748b",
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
 };
 
 function asStringArray(value: unknown): string[] {
@@ -188,7 +170,6 @@ export default function MenuPhotoImportFlow() {
   const [iaPhase, setIaPhase] = useState(0);
   const [busyProgress, setBusyProgress] = useState(0);
   const [anPhase, setAnPhase] = useState<AnalyzePhase>(0);
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "plato" | "bebida" | "alerts">("all");
   const [onlyIssues, setOnlyIssues] = useState(false);
@@ -202,19 +183,6 @@ export default function MenuPhotoImportFlow() {
     familia: string;
     disponible: boolean;
   } | null>(null);
-
-  const categoryOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const p of loadPlatos(getBrowserRestauranteId())) {
-      const c = (p.categoria ?? "").trim();
-      if (c) set.add(c);
-    }
-    for (const r of rows) {
-      const c = (r.categoria ?? "").trim();
-      if (c) set.add(c);
-    }
-    return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  }, [rows]);
 
   useEffect(() => {
     if (!procBusy) {
@@ -351,14 +319,6 @@ export default function MenuPhotoImportFlow() {
   }, [file, t]);
 
   // (movido más abajo) auto-abrir primer producto en revisión
-
-  const toggleRow = useCallback((tempId: string) => {
-    setRows((prev) =>
-      prev
-        .map(normalizeImportedRow)
-        .map((r) => (r.tempId === tempId ? normalizeImportedRow({ ...r, selected: !r.selected }) : r)),
-    );
-  }, []);
 
   const setAllSelected = useCallback((v: boolean) => {
     setRows((prev) => prev.map(normalizeImportedRow).map((r) => normalizeImportedRow({ ...r, selected: v })));
@@ -539,7 +499,6 @@ export default function MenuPhotoImportFlow() {
     return () => window.clearTimeout(id);
   }, [step, router]);
 
-  const gridCols = "36px minmax(120px,1.4fr) minmax(88px,0.75fr) minmax(100px,0.65fr) minmax(72px,0.45fr)";
   const duplicateCount = useMemo(() => rows.filter((r) => r.issues?.includes("duplicate")).length, [rows]);
   const suspiciousCount = useMemo(() => rows.filter((r) => r.issues?.includes("price_suspicious")).length, [rows]);
   const missingPriceCount = useMemo(() => rows.filter((r) => !Number.isFinite(r.precio)).length, [rows]);
@@ -664,14 +623,6 @@ export default function MenuPhotoImportFlow() {
     return "ok";
   }, []);
 
-  const jumpToRow = useCallback((tempId: string) => {
-    const el = document.getElementById(`hostly-import-row-${tempId}`);
-    if (!el) return;
-    el.scrollIntoView({ block: "center", behavior: "smooth" });
-    setHoveredRow(tempId);
-    window.setTimeout(() => setHoveredRow((p) => (p === tempId ? null : p)), 1400);
-  }, []);
-
   const saveDraft = useCallback(() => {
     // Demo: persistencia mínima para enseñar “producto real”.
     try {
@@ -693,6 +644,8 @@ export default function MenuPhotoImportFlow() {
   }, [rows]);
 
   const catalogOptions = useMemo(() => {
+    // La fase invalida el snapshot local tras crear o actualizar productos.
+    void step;
     try {
       const rid = getBrowserRestauranteId();
       return loadPlatos(rid).map((p) => ({ id: p.id, nombre: p.nombre, categoria: p.categoria, precioVenta: p.precioVenta }));

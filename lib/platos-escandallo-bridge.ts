@@ -72,8 +72,9 @@ export type FetchEscandalloMergedOptions = {
  * Ya no bootstrappea desde localStorage: el catálogo central vacío es válido.
  */
 export async function bootstrapPlatosFromEscandallosIfEmpty(
-  _restauranteId: string,
+  restauranteId: string,
 ): Promise<PlatoCarta[]> {
+  void restauranteId;
   return [];
 }
 
@@ -143,8 +144,9 @@ export async function fetchEscandalloMergedRowsForBrowser(
 
 /** Sin tabla remota adicional: no-op. */
 export async function mirrorPlatoToEscandalloRow(
-  _plato: PlatoCarta,
+  plato: PlatoCarta,
 ): Promise<{ error: string | null }> {
+  void plato;
   return { error: null };
 }
 

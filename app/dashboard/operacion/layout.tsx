@@ -45,7 +45,7 @@ export default function OperacionLayout({
     return () => {
       window.removeEventListener("keydown", handler);
     };
-  }, []);
+  }, [router]);
 
   return (
     <OperationFilterProvider>

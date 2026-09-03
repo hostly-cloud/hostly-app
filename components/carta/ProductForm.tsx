@@ -1,6 +1,7 @@
 "use client";
 
 import { type CSSProperties, type ReactNode } from "react";
+import Image from "next/image";
 import { PRODUCT_IMAGE_ACCEPT } from "@/lib/firebase/product-image-contract";
 
 const inputStyle: CSSProperties = {
@@ -109,9 +110,12 @@ export function ProductForm({
       </label>
       {imagePreviewUrl ? (
         <div style={{ marginBottom: 12 }}>
-          <img
+          <Image
             src={imagePreviewUrl}
             alt="Vista previa"
+            width={200}
+            height={200}
+            unoptimized
             style={{
               maxWidth: 200,
               maxHeight: 200,

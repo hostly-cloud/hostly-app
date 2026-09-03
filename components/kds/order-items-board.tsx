@@ -4,15 +4,9 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Timestamp,
-  GeoPoint,
-  DocumentReference,
-  type DocumentData,
-  type UpdateData,
   collection,
-  doc,
   onSnapshot,
   query,
-  serverTimestamp,
   where,
 } from "firebase/firestore";
 import { useAuth } from "@/components/auth/auth-context";
@@ -102,41 +96,6 @@ export type BoardOrder = {
 };
 
 type BoardStatus = "sent" | "prepared" | "served" | "waiting_march";
-
-function cleanFirestoreData<T extends Record<string, unknown>>(data: T) {
-  return Object.fromEntries(
-    Object.entries(data).filter(([, value]) => value !== undefined),
-  ) as Partial<T>;
-}
-
-/**
- * Elimina solo `undefined` en profundidad (objetos y arrays).
- * Conserva `null`, `false`, `0`; no usa JSON (preserva Timestamp / Date).
- */
-function stripUndefinedDeep(value: unknown): unknown {
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-  if (typeof value !== "object") return value;
-  if (value instanceof Timestamp) return value;
-  if (value instanceof Date) return value;
-  if (value instanceof GeoPoint) return value;
-  if (value instanceof DocumentReference) return value;
-  if (Array.isArray(value)) {
-    return value
-      .map((el) => stripUndefinedDeep(el))
-      .filter((el) => el !== undefined);
-  }
-  const obj = value as Record<string, unknown>;
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v === undefined) continue;
-    const next = stripUndefinedDeep(v);
-    if (next !== undefined) {
-      out[k] = next;
-    }
-  }
-  return out;
-}
 
 type BoardLine = {
   orderId: string;
@@ -664,17 +623,6 @@ const columnBodyStyle: CSSProperties = {
   gap: 6,
 };
 
-/** Contenedor vertical métricas + rail en modo comandero (cocina). */
-const ticketRailOuterBodyStyle: CSSProperties = {
-  flex: 1,
-  minHeight: 0,
-  minWidth: 0,
-  display: "flex",
-  flexDirection: "column",
-  overflow: "hidden",
-  paddingTop: 6,
-};
-
 /** Carril horizontal de tickets por estado (scroll táctil). */
 const ticketRailStripStyle: CSSProperties = {
   flex: 1,
@@ -949,21 +897,6 @@ const lineNoteStyle: CSSProperties = {
   wordBreak: "break-word",
 };
 
-const lineCourseTypeStyle: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 500,
-  color: "var(--hostly-ink-muted)",
-  lineHeight: 1.2,
-  marginTop: 2,
-};
-
-const lineMesaLabelStyle: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 600,
-  color: "var(--hostly-ink-muted)",
-  lineHeight: 1.2,
-};
-
 const lineExtrasJoinedStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
@@ -989,19 +922,6 @@ const lineRemovedStyle: CSSProperties = {
   lineHeight: 1.25,
   marginTop: 3,
   wordBreak: "break-word",
-};
-
-const coursePillStyle: CSSProperties = {
-  flexShrink: 0,
-  fontSize: 9,
-  fontWeight: 800,
-  letterSpacing: "0.06em",
-  padding: "2px 6px",
-  borderRadius: 4,
-  background: "var(--hostly-info-soft)",
-  color: "var(--hostly-navy-deep)",
-  border: "1px solid rgba(49, 95, 125, 0.18)",
-  lineHeight: 1.1,
 };
 
 type DecoratedLine = BoardLine & {
@@ -1497,18 +1417,20 @@ export default function OrderItemsBoard({
     });
   }, []);
 
+  const focusTableKey = focusTableKeys[0] ?? null;
+
   useEffect(() => {
-    if (focusTableKeys.length === 0) return;
+    if (!focusTableKey) return;
     if (userInteractingRef.current) return;
     if (!boardScrollNearTopRef.current) return;
     if (Date.now() < focusScrollGuardUntilRef.current) return;
     const target = document.querySelector(
-      `[data-kds-focus-table="${focusTableKeys[0]}"]`,
+      `[data-kds-focus-table="${focusTableKey}"]`,
     );
     if (target instanceof HTMLElement) {
       target.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-  }, [focusTableKeys.join("|")]);
+  }, [focusTableKey]);
 
   async function handleMarkNext(
     orderId: string,
@@ -1527,12 +1449,6 @@ export default function OrderItemsBoard({
     const baseline = (
       orderFirestoreItemsRef.current[orderId] ?? []
     ).map(cloneFirestoreOrderLineRecord);
-    const rawNext = applyKitchenMarkNextToRawItems(
-      baseline,
-      itemId,
-      next,
-      now,
-    );
     try {
       const row = baseline.find((r) => String(r.id ?? "") === itemId);
       if (!row) {
@@ -1962,7 +1878,6 @@ export default function OrderItemsBoard({
           kdsRushMode={kdsHeatSnapshot.mode === "rush"}
           focusTableKeys={focusTableKeys}
           manualPriorityKeys={manualPriorityKeys}
-          onToggleManualPriority={toggleManualPriority}
           isBatchCollapsed={isBatchCollapsed}
           onToggleBatchCollapsed={toggleBatchCollapsed}
           lineQuickNotes={lineQuickNotes}
@@ -2508,7 +2423,6 @@ function BoardColumn({
   kdsRushMode = false,
   focusTableKeys = [],
   manualPriorityKeys,
-  onToggleManualPriority,
   isBatchCollapsed,
   onToggleBatchCollapsed,
   lineQuickNotes,
@@ -2568,7 +2482,6 @@ function BoardColumn({
   kdsRushMode?: boolean;
   focusTableKeys?: string[];
   manualPriorityKeys?: Set<string>;
-  onToggleManualPriority?: (tableKey: string) => void;
   isBatchCollapsed?: (batchKey: string, defaultCollapsed: boolean) => boolean;
   onToggleBatchCollapsed?: (batchKey: string, defaultCollapsed: boolean) => void;
   lineQuickNotes?: Record<string, string>;

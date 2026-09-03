@@ -2,7 +2,6 @@ import { FirebaseError } from "firebase/app";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, storage } from "@/lib/firebase/client";
 import {
-  MAX_PRODUCT_IMAGE_BYTES,
   validateProductImageCandidate,
 } from "@/lib/firebase/product-image-contract";
 
