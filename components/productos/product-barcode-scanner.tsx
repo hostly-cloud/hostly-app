@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import { normalizeValidGtin } from "@/lib/productos/gtin";
 
 type DetectedBarcode = {
@@ -158,14 +159,14 @@ export function ProductBarcodeScanner({
 
   return (
     <>
-      <button
-        type="button"
-        className="hostly-button-secondary hostly-button-compact"
+      <HostlyButton
+        variant="tool"
+        size="compact"
         disabled={disabled}
         onClick={() => void start()}
       >
         Escanear
-      </button>
+      </HostlyButton>
 
       {open ? (
         <div
@@ -214,13 +215,9 @@ export function ProductBarcodeScanner({
                   Centra el código de barras dentro de la cámara.
                 </p>
               </div>
-              <button
-                type="button"
-                className="hostly-button-secondary hostly-button-compact"
-                onClick={close}
-              >
+              <HostlyButton variant="secondary" size="compact" onClick={close}>
                 Cerrar
-              </button>
+              </HostlyButton>
             </div>
 
             <div
