@@ -8,6 +8,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { TranslateFn } from "@/lib/i18n";
 import {
   PRODUCT_CATEGORY_ALL_ID,
@@ -194,10 +195,11 @@ export function ProductosCategoryNavigation({
       aria-label={categoriesLabel}
     >
       {allOption ? (
-        <button
-          type="button"
+        <HostlyButton
+          variant="chip"
+          size="compact"
+          active={value === PRODUCT_CATEGORY_ALL_ID}
           style={TOOLBAR_TOUCH_STYLE}
-          aria-pressed={value === PRODUCT_CATEGORY_ALL_ID}
           className={`hostly-productos-category-navigation__all${
             value === PRODUCT_CATEGORY_ALL_ID ? " is-active" : ""
           }`}
@@ -205,11 +207,13 @@ export function ProductosCategoryNavigation({
         >
           <span>{allOption.label}</span>
           <span className="hostly-productos-category-navigation__count">{allOption.count}</span>
-        </button>
+        </HostlyButton>
       ) : null}
-      <button
+      <HostlyButton
         ref={triggerRef}
-        type="button"
+        variant="tool"
+        size="compact"
+        active={categorySelected}
         style={TOOLBAR_TOUCH_STYLE}
         className={`hostly-productos-category-navigation__trigger${
           categorySelected ? " is-active" : ""
@@ -231,7 +235,7 @@ export function ProductosCategoryNavigation({
         <span className="hostly-productos-category-navigation__caret" aria-hidden>
           ▾
         </span>
-      </button>
+      </HostlyButton>
       {open ? (
         <div
           id="hostly-productos-category-navigation-panel"
@@ -264,12 +268,14 @@ export function ProductosCategoryNavigation({
           >
             {filteredCategoryOptions.length > 0 ? (
               filteredCategoryOptions.map((option, index) => (
-                <button
+                <HostlyButton
                   key={option.id}
                   ref={(element) => {
                     optionRefs.current[index] = element;
                   }}
-                  type="button"
+                  variant="ghost"
+                  size="touch"
+                  active={option.id === value}
                   role="option"
                   style={MENU_TOUCH_STYLE}
                   aria-selected={option.id === value}
@@ -281,7 +287,7 @@ export function ProductosCategoryNavigation({
                 >
                   <span>{option.label}</span>
                   <span className="hostly-productos-category-navigation__count">{option.count}</span>
-                </button>
+                </HostlyButton>
               ))
             ) : (
               <p className="hostly-productos-category-navigation__empty" role="status">
@@ -360,11 +366,13 @@ export function ProductosCompactBulkActionsMenu({
 
   return (
     <div ref={rootRef} className="hostly-productos-bulk-actions-menu">
-      <button
+      <HostlyButton
         ref={triggerRef}
-        type="button"
+        variant="tool"
+        size="compact"
+        active={open}
         style={TOOLBAR_TOUCH_STYLE}
-        className="hostly-button-secondary hostly-button-compact hostly-productos-bulk-actions-menu__trigger"
+        className="hostly-productos-bulk-actions-menu__trigger"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
@@ -373,16 +381,17 @@ export function ProductosCompactBulkActionsMenu({
         <span className="hostly-productos-bulk-actions-menu__caret" aria-hidden>
           ▼
         </span>
-      </button>
+      </HostlyButton>
       {open ? (
         <div className="hostly-productos-bulk-actions-menu__panel" role="menu">
           {items.map((item, index) => (
-            <button
+            <HostlyButton
               key={item.key}
               ref={(element) => {
                 itemRefs.current[index] = element;
               }}
-              type="button"
+              variant={item.tone === "danger" ? "destructive" : "ghost"}
+              size="touch"
               role="menuitem"
               style={MENU_TOUCH_STYLE}
               className={`hostly-productos-bulk-actions-menu__item${
@@ -416,7 +425,7 @@ export function ProductosCompactBulkActionsMenu({
               }}
             >
               {item.label}
-            </button>
+            </HostlyButton>
           ))}
         </div>
       ) : null}

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { hostlyCx } from "./hostly-cx";
 
 export type HostlyButtonVariant =
@@ -40,21 +40,25 @@ const SIZE_CLASS: Record<HostlyButtonSize, string> = {
   touch: "hostly-button-touch",
 };
 
-export function HostlyButton({
-  variant = "secondary",
-  size = "default",
-  icon,
-  iconOnlyLabel,
-  active,
-  className,
-  type = "button",
-  children,
-  ...rest
-}: HostlyButtonProps) {
+export const HostlyButton = forwardRef<HTMLButtonElement, HostlyButtonProps>(function HostlyButton(
+  {
+    variant = "secondary",
+    size = "default",
+    icon,
+    iconOnlyLabel,
+    active,
+    className,
+    type = "button",
+    children,
+    ...rest
+  },
+  ref,
+) {
   const iconOnly = variant === "icon";
 
   return (
     <button
+      ref={ref}
       type={type}
       aria-label={iconOnly ? iconOnlyLabel ?? rest["aria-label"] : rest["aria-label"]}
       aria-pressed={active === undefined ? rest["aria-pressed"] : active}
@@ -72,4 +76,4 @@ export function HostlyButton({
       {children}
     </button>
   );
-}
+});
