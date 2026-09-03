@@ -7,7 +7,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
 import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlySectionHeader } from "@/components/ui/hostly";
+import { HostlyButton, HostlySectionHeader } from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   listenPurchaseOrderById,
@@ -136,24 +136,6 @@ const metaLabelStyle: CSSProperties = {
   letterSpacing: "0.04em",
   textTransform: "uppercase",
   color: "var(--hostly-ink-muted)",
-};
-
-const actionButtonStyle: CSSProperties = {
-  padding: "8px 14px",
-  borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.28)",
-  background: "var(--hostly-surface-card-solid)",
-  color: "var(--hostly-ink-strong)",
-  fontSize: 13,
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const primaryButtonStyle: CSSProperties = {
-  ...actionButtonStyle,
-  background: "var(--hostly-ink-strong)",
-  color: "#fff",
-  border: "1px solid var(--hostly-ink-strong)",
 };
 
 function useNarrowLayout(maxWidth = 720): boolean {
@@ -515,19 +497,14 @@ export default function PedidoCompraDetallePage() {
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {canPrepareShipment ? (
-                  <button type="button" style={primaryButtonStyle} onClick={handleOpenShipmentModal}>
+                  <HostlyButton variant="primary" size="compact" onClick={handleOpenShipmentModal}>
                     Preparar envío
-                  </button>
+                  </HostlyButton>
                 ) : null}
                 {order.lines.some((line) => (line.receivedQuantity ?? 0) > 0) ? (
                   <Link
                     href={`/dashboard/inventario/facturas-proveedor?purchaseOrderId=${encodeURIComponent(order.id)}`}
-                    style={{
-                      ...actionButtonStyle,
-                      textDecoration: "none",
-                      display: "inline-flex",
-                      alignItems: "center",
-                    }}
+                    className="hostly-button-secondary hostly-button-compact"
                     prefetch
                   >
                     Registrar factura
@@ -854,26 +831,30 @@ export default function PedidoCompraDetallePage() {
             ) : null}
 
             <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                type="button"
-                style={actionButtonStyle}
+              <HostlyButton
+                variant="secondary"
+                size="compact"
                 onClick={handleCloseShipmentModal}
                 disabled={isMarkingOrdered}
               >
                 Cerrar
-              </button>
-              <button type="button" style={actionButtonStyle} onClick={() => void handleCopyShipmentMessage()}>
+              </HostlyButton>
+              <HostlyButton
+                variant="tool"
+                size="compact"
+                onClick={() => void handleCopyShipmentMessage()}
+              >
                 Copiar pedido
-              </button>
+              </HostlyButton>
               {canMarkOrdered ? (
-                <button
-                  type="button"
-                  style={primaryButtonStyle}
+                <HostlyButton
+                  variant="primary"
+                  size="compact"
                   onClick={() => void handleMarkAsOrdered()}
                   disabled={isMarkingOrdered}
                 >
                   {isMarkingOrdered ? "Guardando…" : "Marcar como enviado"}
-                </button>
+                </HostlyButton>
               ) : (
                 <span style={{ fontSize: 12, color: "var(--hostly-ink-muted)", alignSelf: "center" }}>
                   Ya enviado al proveedor
