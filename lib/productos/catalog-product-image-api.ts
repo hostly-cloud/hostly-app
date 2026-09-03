@@ -43,7 +43,15 @@ function apiError(
 export async function searchCatalogProductImagesForReview(
   productId: string,
   query: string,
+  confirmation: { confirmedByUser: true } = { confirmedByUser: true },
 ): Promise<CatalogProductImageSearchResult> {
+  if (confirmation.confirmedByUser !== true) {
+    throw new CatalogProductImageApiError(
+      "CATALOG_SEARCH_CONFIRMATION_REQUIRED",
+      "La búsqueda de catálogo requiere una acción explícita del usuario.",
+      400,
+    );
+  }
   const idempotencyKey = globalThis.crypto?.randomUUID?.() ??
     `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const response = await authenticatedApiFetch(

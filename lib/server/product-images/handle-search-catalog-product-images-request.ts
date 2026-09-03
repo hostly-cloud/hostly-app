@@ -100,6 +100,14 @@ export async function handleSearchCatalogProductImagesRequest(
   const query = typeof body.query === "string" ? body.query.trim() : "";
   if (query.length > 160) return jsonError(400, "CATALOG_QUERY_TOO_LONG");
 
+  if (body.confirmSearch !== true) {
+    return jsonError(
+      400,
+      "CATALOG_SEARCH_CONFIRMATION_REQUIRED",
+      "Confirma expresamente la búsqueda antes de consultar el catálogo",
+    );
+  }
+
   const idempotencyKey =
     typeof body.idempotencyKey === "string"
       ? body.idempotencyKey.trim()
@@ -107,13 +115,6 @@ export async function handleSearchCatalogProductImagesRequest(
   if (access.meteringMode === "credit_balance") {
     if (!/^[A-Za-z0-9_-]{8,120}$/.test(idempotencyKey)) {
       return jsonError(400, "INVALID_IMAGE_IDEMPOTENCY_KEY");
-    }
-    if (body.confirmSearch !== true) {
-      return jsonError(
-        400,
-        "CATALOG_SEARCH_CONFIRMATION_REQUIRED",
-        "Confirma la búsqueda; puede consumir créditos",
-      );
     }
     const reconcileExpiredReservations = dependencies
       ? dependencies.reconcileExpiredReservations
