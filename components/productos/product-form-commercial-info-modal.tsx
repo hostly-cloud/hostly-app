@@ -13,6 +13,7 @@ import { HostlyButton } from "@/components/ui/hostly";
 import { ProductAiImageReviewPanel } from "@/components/productos/product-ai-image-review-panel";
 import { ProductCommercialIdentityPanel } from "@/components/productos/product-commercial-identity-panel";
 import { PRODUCT_IMAGE_ACCEPT } from "@/lib/firebase/product-image-contract";
+import { consumeProductCommercialEdit } from "@/lib/productos/product-commercial-edit-intent";
 
 const DESCRIPTION_PREVIEW_MAX = 140;
 
@@ -123,18 +124,32 @@ export function ProductFormCommercialInfoModal({
   const fileInputRef = imageFileInputRef ?? localFileInputRef;
   const [aiResolvedImageUrl, setAiResolvedImageUrl] = useState<string | null>(null);
   const [imageReviewRevision, setImageReviewRevision] = useState(0);
+  const [intentOpen, setIntentOpen] = useState(false);
+  const effectiveOpen = open || intentOpen;
 
   useEffect(() => {
-    if (!open) return;
+    if (open) return;
+    if (consumeProductCommercialEdit(productId)) {
+      setIntentOpen(true);
+    }
+  }, [open, productId]);
+
+  const handleClose = useCallback(() => {
+    setIntentOpen(false);
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!effectiveOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !disabled) {
         e.preventDefault();
-        onClose();
+        handleClose();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, disabled, onClose]);
+  }, [effectiveOpen, disabled, handleClose]);
 
   const handleAiImageUrlChange = useCallback((url: string | null) => {
     setAiResolvedImageUrl(url);
@@ -145,7 +160,7 @@ export function ProductFormCommercialInfoModal({
     setImageReviewRevision((value) => value + 1);
   }, []);
 
-  if (!open) return null;
+  if (!effectiveOpen) return null;
 
   const titleName = productName.trim() || "Producto";
   const effectiveImagePreviewUrl = aiResolvedImageUrl ?? imagePreviewUrl;
@@ -165,7 +180,7 @@ export function ProductFormCommercialInfoModal({
       className="hostly-product-commercial-modal-backdrop"
       role="presentation"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !disabled) onClose();
+        if (e.target === e.currentTarget && !disabled) handleClose();
       }}
     >
       <div
@@ -185,7 +200,7 @@ export function ProductFormCommercialInfoModal({
             </h2>
             <p className="hostly-product-commercial-modal__subtitle">{titleName}</p>
           </div>
-          <HostlyButton variant="secondary" size="compact" disabled={disabled} onClick={onClose}>
+          <HostlyButton variant="secondary" size="compact" disabled={disabled} onClick={handleClose}>
             Cerrar
           </HostlyButton>
         </div>
@@ -289,7 +304,7 @@ export function ProductFormCommercialInfoModal({
 
                 <ProductAiImageReviewPanel
                   key={`${productId ?? "new"}:${productName}:${imageReviewRevision}`}
-                  open={open}
+                  open={effectiveOpen}
                   productId={productId}
                   productName={productName}
                   productDescription={description}
@@ -322,7 +337,7 @@ export function ProductFormCommercialInfoModal({
         </div>
 
         <div className="hostly-product-commercial-modal__footer">
-          <HostlyButton variant="primary" size="compact" disabled={disabled} onClick={onClose}>
+          <HostlyButton variant="primary" size="compact" disabled={disabled} onClick={handleClose}>
             {doneLabel}
           </HostlyButton>
         </div>
