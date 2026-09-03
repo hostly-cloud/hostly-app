@@ -34,3 +34,16 @@ test("producto y cocina se renderizan en paneles independientes sin duplicar for
   assert.equal(source.match(/className="hostly-product-form-sale-status"/g)?.length, 1);
   assert.equal(source.match(/onClick=\{\(\) => void submitForm\(\)\}/g)?.length, 1);
 });
+
+test("el resumen del editor presenta el precio con el formato monetario del idioma", () => {
+  const source = readFileSync(
+    new URL("../../components/productos/productos-management-page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /formatEuro\(draftSalePriceForProfitability, locale as Locale\)/,
+  );
+  assert.doesNotMatch(source, /`\$\{draftPrecio\.trim\(\)\} €`/);
+});
