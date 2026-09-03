@@ -106,7 +106,6 @@ export function ProductFormDrawerTabs({
             }}
             id={`product-form-tab-${tab.id}`}
             variant="ghost"
-            active={active}
             role="tab"
             tabIndex={active ? 0 : -1}
             aria-selected={active}
