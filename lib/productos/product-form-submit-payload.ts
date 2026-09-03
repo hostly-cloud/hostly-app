@@ -8,7 +8,7 @@ import type { ProductCompositionType } from "@/lib/carta/product-composition-typ
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
 import type { TipoProductoVenta } from "@/lib/carta/product-sale-contract";
 import type { CentralOperationalProductInput } from "@/lib/firestore/products";
-import { sanitizeModifierGroupIdsForSave } from "@/lib/modifiers/effective-product-modifiers";
+import { sanitizeModifierGroupIdsForProductKind } from "@/lib/modifiers/effective-product-modifiers";
 import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
 import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
 import {
@@ -86,15 +86,17 @@ export function validateProductFormCoreFields(
   }
 
   const inheritedIdsForSave = selectedCategory
-    ? sanitizeModifierGroupIdsForSave(
+    ? sanitizeModifierGroupIdsForProductKind(
         selectedCategory.modifierGroupIds ?? [],
         context.modifierGroups,
+        draft.draftTipo,
       )
     : [];
   const inheritedIdSetForSave = new Set(inheritedIdsForSave);
-  const sanitizedModifierGroupIds = sanitizeModifierGroupIdsForSave(
+  const sanitizedModifierGroupIds = sanitizeModifierGroupIdsForProductKind(
     [...draft.draftModifierGroupIds],
     context.modifierGroups,
+    draft.draftTipo,
   ).filter((id) => !inheritedIdSetForSave.has(id));
   const modifierGroupIdsForSave =
     sanitizedModifierGroupIds.length > 0 ? sanitizedModifierGroupIds : null;
