@@ -68,6 +68,7 @@ export type CatalogImageBulkPreflight = {
   summary: CatalogImageBulkSummary;
   estimate: CatalogImageBulkEstimate;
   access: CatalogImageAccess;
+  confirmationToken: string;
 };
 
 export type CatalogImageBulkJobCounters = {
