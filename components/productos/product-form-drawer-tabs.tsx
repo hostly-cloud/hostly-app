@@ -110,6 +110,7 @@ export function ProductFormDrawerTabs({
             aria-selected={active}
             aria-controls={`product-form-panel-${tab.id}`}
             className={`hostly-product-form-drawer-tabs__tab${active ? " is-active" : ""}`}
+            style={{ minHeight: 44 }}
             onKeyDown={(event) => handleTabKeyDown(event, index)}
             onClick={() => onTabChange(tab.id)}
           >
