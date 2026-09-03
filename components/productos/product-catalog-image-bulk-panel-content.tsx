@@ -12,6 +12,10 @@ import {
   type CatalogImageBulkPreflight,
 } from "@/lib/productos/catalog-image-bulk-contract";
 import {
+  catalogImageBulkEstimateLabel,
+  summarizeCatalogImageBulkReadiness,
+} from "@/lib/productos/catalog-image-bulk-readiness";
+import {
   approveCatalogImageBulkSelection,
   CatalogImageBulkApiErrorResponse,
   controlCatalogImageBulkJob,
@@ -224,6 +228,18 @@ export function ProductCatalogImageBulkPanel() {
     return Math.min(100, Math.round((finished / counters.total) * 100));
   }, [payload]);
 
+  const readiness = useMemo(
+    () =>
+      preflight
+        ? summarizeCatalogImageBulkReadiness(preflight.summary)
+        : null,
+    [preflight],
+  );
+  const estimateLabel = useMemo(
+    () => (preflight ? catalogImageBulkEstimateLabel(preflight.estimate) : ""),
+    [preflight],
+  );
+
   const visibleItems = useMemo(
     () =>
       payload?.items.filter(
@@ -393,20 +409,29 @@ export function ProductCatalogImageBulkPanel() {
               {error ? <p className={styles.error} role="alert">{error}</p> : null}
               {message ? <p className={styles.success} role="status">{message}</p> : null}
 
-              {!loading && preflight && !payload ? (
+              {!loading && preflight && !payload && readiness ? (
                 <>
+                  <p className={styles.hint}>
+                    Alcance: todo el catálogo del restaurante · {preflight.summary.totalProducts} productos analizados. Los filtros de la tabla, incluido «Sin imagen», no cambian este alcance.
+                  </p>
                   <div className={styles.summaryGrid}>
-                    <Metric value={preflight.summary.withoutApprovedImage} label="Sin imagen aprobada" />
-                    <Metric value={preflight.summary.aiGenerable} label="Generables con IA" />
-                    <Metric value={preflight.summary.catalogSearchable} label="Catálogo real" />
-                    <Metric value={preflight.summary.manualReview} label="Intervención manual" />
+                    <Metric value={readiness.pendingTotal} label="Sin imagen aprobada" />
+                    <Metric value={readiness.automaticNow} label="Hostly puede preparar" />
+                    <Metric value={readiness.reviewNow} label="Revisión ya necesaria" />
+                    <Metric value={readiness.alreadyProcessing} label="Ya procesándose" />
                   </div>
                   <p className={styles.notice}>
-                    {preflight.estimate.note} La confirmación iniciará únicamente los
-                    {" "}{preflight.estimate.aiGenerationRequests} platos generables y
-                    buscará {preflight.estimate.catalogSearchRequests} productos de marca.
-                    Nada se publicará sin aprobación.
+                    Hostly puede preparar {readiness.automaticNow} ahora: {readiness.aiGeneration} con IA y {readiness.catalogSearch} mediante catálogo real. {readiness.reviewNow} ya requieren revisión: {readiness.manualReview} necesitan intervención manual y {readiness.pendingReview} ya tienen un resultado pendiente. {readiness.alreadyProcessing > 0 ? `${readiness.alreadyProcessing} ya se están procesando y no se duplicarán. ` : ""}Nada se publicará sin tu aprobación.
                   </p>
+                  <p className={styles.hint}>
+                    Operaciones automáticas previstas: {readiness.automaticNow} · {estimateLabel}.
+                  </p>
+                  <p className={styles.hint}>{preflight.estimate.note}</p>
+                  {!readiness.isConsistent ? (
+                    <p className={styles.error} role="alert">
+                      El resumen no cuadra con el catálogo analizado. Vuelve a abrir el panel para recalcular antes de iniciar el lote.
+                    </p>
+                  ) : null}
                 </>
               ) : null}
 
@@ -565,10 +590,14 @@ export function ProductCatalogImageBulkPanel() {
                   <HostlyButton
                     variant="primary"
                     size="compact"
-                    disabled={controlRequest || preflight.summary.withoutApprovedImage === 0}
+                    disabled={
+                      controlRequest ||
+                      preflight.summary.withoutApprovedImage === 0 ||
+                      readiness?.isConsistent === false
+                    }
                     onClick={() => void start()}
                   >
-                    {controlRequest ? "Preparando…" : "Confirmar e iniciar"}
+                    {controlRequest ? "Preparando…" : "Confirmar alcance e iniciar"}
                   </HostlyButton>
                 ) : null}
                 {payload?.job.status === "running" || payload?.job.status === "queued" ? (
