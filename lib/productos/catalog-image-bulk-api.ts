@@ -63,7 +63,9 @@ export async function fetchCatalogImageBulkPreflight(): Promise<CatalogImageBulk
   return body.preflight;
 }
 
-export async function createCatalogImageBulkJob(): Promise<CatalogImageBulkJob> {
+export async function createCatalogImageBulkJob(
+  confirmationToken?: string,
+): Promise<CatalogImageBulkJob> {
   const idempotencyKey =
     globalThis.crypto?.randomUUID?.() ??
     `bulk-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -74,6 +76,7 @@ export async function createCatalogImageBulkJob(): Promise<CatalogImageBulkJob> 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         idempotencyKey,
+        confirmationToken,
         confirmBulkGeneration: true,
       }),
     },

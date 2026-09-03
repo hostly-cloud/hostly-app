@@ -71,6 +71,18 @@ function itemBelongsToJob(params: {
   );
 }
 
+async function recordApprovedReviewCount(
+  jobRef: FirebaseFirestore.DocumentReference,
+  count: number,
+): Promise<void> {
+  if (count <= 0) return;
+  await jobRef.update({
+    "counters.needsReview": FieldValue.increment(-count),
+    "counters.completed": FieldValue.increment(count),
+    updatedAt: Date.now(),
+  });
+}
+
 export async function reviewCatalogImageBulkSelection(params: {
   db: Firestore;
   restaurantId: string;
@@ -287,6 +299,11 @@ export async function reviewCatalogImageBulkSelection(params: {
       results.push({ productId, status: "failed", error: code });
     }
   }
+
+  await recordApprovedReviewCount(
+    jobRef,
+    results.filter((result) => result.status === "approved").length,
+  );
 
   return {
     requested: requestedCount,

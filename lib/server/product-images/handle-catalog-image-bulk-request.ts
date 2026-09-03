@@ -19,6 +19,7 @@ import {
   readCatalogImageBulkJob,
   readLatestCatalogImageBulkJob,
 } from "@/lib/server/product-images/catalog-image-bulk";
+import { buildCatalogImageBulkConfirmationToken } from "@/lib/server/product-images/catalog-image-bulk-confirmation";
 import { resolveCatalogImageAccess } from "@/lib/server/product-images/resolve-catalog-image-access";
 import {
   enqueueCatalogImageBulkControlRecovery,
@@ -126,6 +127,7 @@ export async function handleCatalogImageBulkPreflightRequest(
       summary: result.summary,
       estimate: result.estimate,
       access: result.access,
+      confirmationToken: buildCatalogImageBulkConfirmationToken(result),
     },
   });
 }
@@ -138,6 +140,7 @@ export async function handleCreateCatalogImageBulkJobRequest(
   if (isAuthErrorResponse(context)) return context;
   const body = (await req.json().catch(() => null)) as {
     idempotencyKey?: unknown;
+    confirmationToken?: unknown;
     confirmBulkGeneration?: unknown;
     restaurantId?: unknown;
   } | null;
@@ -168,6 +171,31 @@ export async function handleCreateCatalogImageBulkJobRequest(
   if (!idempotencyKey) {
     return jsonError(400, "MISSING_BULK_IDEMPOTENCY_KEY");
   }
+  const confirmationToken =
+    typeof body.confirmationToken === "string" ? body.confirmationToken.trim() : "";
+  if (!/^[a-f0-9]{64}$/.test(confirmationToken)) {
+    return jsonError(
+      400,
+      "MISSING_BULK_PREFLIGHT_CONFIRMATION",
+      "Vuelve a analizar el catálogo antes de iniciar el lote",
+    );
+  }
+
+  const analyze = dependencies?.analyze ?? analyzeCatalogImageBulk;
+  const currentAnalysis = await analyze({
+    db: context.auth.db,
+    restaurantId: context.auth.restaurantId,
+    access: context.access,
+  });
+  const currentToken = buildCatalogImageBulkConfirmationToken(currentAnalysis);
+  if (currentToken !== confirmationToken) {
+    return jsonError(
+      409,
+      "CATALOG_IMAGE_BULK_PREFLIGHT_STALE",
+      "El catálogo cambió desde el último análisis. Revisa el resumen actualizado antes de confirmar.",
+    );
+  }
+
   const createJob = dependencies?.createJob ?? createCatalogImageBulkJob;
   const job = await createJob({
     db: context.auth.db,
@@ -310,8 +338,6 @@ export async function handleControlCatalogImageBulkJobRequest(
   const operationId =
     action === "retry_failed" || action === "cancel" ? randomUUID() : undefined;
   if (operationId) {
-    // Publish first: if a control barrier is persisted, a durable recovery
-    // message is already guaranteed to exist even if this request stops.
     const enqueueControlRecovery =
       dependencies?.enqueueControlRecovery ??
       enqueueCatalogImageBulkControlRecovery;

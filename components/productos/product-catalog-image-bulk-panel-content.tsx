@@ -55,6 +55,9 @@ function messageFromError(error: unknown): string {
     if (error.code === "CATALOG_IMAGE_AI_BULK_PLAN_REQUIRED") {
       return "Esta función está disponible en el plan Ultra. La subida manual y la generación individual de Pro no cambian.";
     }
+    if (error.code === "CATALOG_IMAGE_BULK_PREFLIGHT_STALE") {
+      return "El catálogo cambió desde el último análisis. Hostly ha actualizado el resumen; revísalo y vuelve a confirmar.";
+    }
     return error.message;
   }
   return error instanceof Error ? error.message : "No se pudo completar la operación";
@@ -130,18 +133,29 @@ export function ProductCatalogImageBulkPanel() {
   }, []);
 
   const start = useCallback(async () => {
+    if (!preflight) return;
     setControlRequest(true);
     setError(null);
     setMessage(null);
     try {
-      const job = await createCatalogImageBulkJob();
+      const job = await createCatalogImageBulkJob(preflight.confirmationToken);
       await refreshJob(job.jobId);
     } catch (nextError) {
+      if (
+        nextError instanceof CatalogImageBulkApiErrorResponse &&
+        nextError.code === "CATALOG_IMAGE_BULK_PREFLIGHT_STALE"
+      ) {
+        try {
+          setPreflight(await fetchCatalogImageBulkPreflight());
+        } catch {
+          // Keep the original stale-preflight error; reopening can retry the analysis.
+        }
+      }
       setError(messageFromError(nextError));
     } finally {
       setControlRequest(false);
     }
-  }, [refreshJob]);
+  }, [preflight, refreshJob]);
 
   const prepareNewJob = useCallback(async () => {
     setControlRequest(true);
