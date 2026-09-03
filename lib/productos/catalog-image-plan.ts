@@ -1,3 +1,10 @@
+import {
+  HOSTLY_PLANS,
+  hostlyPlanLabel,
+  type HostlyPlan,
+  type HostlyPlanSource,
+} from "@/lib/subscription/hostly-plan";
+
 export const CATALOG_IMAGE_CAPABILITIES = [
   "catalog.image.ai.single",
   "catalog.image.ai.bulk",
@@ -7,15 +14,11 @@ export const CATALOG_IMAGE_CAPABILITIES = [
 export type CatalogImageCapability =
   (typeof CATALOG_IMAGE_CAPABILITIES)[number];
 
-export const HOSTLY_CATALOG_IMAGE_PLANS = ["basic", "pro", "ultra"] as const;
+export const HOSTLY_CATALOG_IMAGE_PLANS = HOSTLY_PLANS;
 
-export type HostlyCatalogImagePlan =
-  (typeof HOSTLY_CATALOG_IMAGE_PLANS)[number];
+export type HostlyCatalogImagePlan = HostlyPlan;
 
-export type CatalogImagePlanSource =
-  | "subscription"
-  | "legacy_field"
-  | "legacy_compatibility";
+export type CatalogImagePlanSource = HostlyPlanSource;
 
 export type CatalogImageMeteringMode = "usage_recorded" | "credit_balance";
 
@@ -183,5 +186,5 @@ export function isCatalogImageCreditPeriodActive(
 export function catalogImagePlanLabel(
   plan: HostlyCatalogImagePlan,
 ): string {
-  return plan === "basic" ? "Básico" : plan === "pro" ? "Pro" : "Ultra";
+  return hostlyPlanLabel(plan);
 }
