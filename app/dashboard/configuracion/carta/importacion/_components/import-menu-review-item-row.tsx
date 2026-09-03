@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { HostlySurface, hostlyCx } from "@/components/ui/hostly";
+import { HostlyButton, HostlySurface, hostlyCx } from "@/components/ui/hostly";
 import type { ImportedMenuItem, ImportedMenuSuggestedStation } from "@/lib/carta/imported-menu-types";
 import {
   IMPORTED_MENU_STATION_LABELS,
@@ -244,13 +244,14 @@ export function ImportMenuReviewItemRow({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 pt-0.5">
-            <button
+            <HostlyButton
               type="button"
-              className="text-[10px] font-medium text-[var(--hostly-ink-soft)] underline-offset-2 hover:text-[var(--hostly-navy-deep)] hover:underline"
+              variant="tool"
+              size="compact"
               onClick={() => setEditingDetails((v) => !v)}
             >
               {editingDetails ? "Ocultar ajustes" : "Ajustar categoría y estación"}
-            </button>
+            </HostlyButton>
             {showRawDetails ? (
               <details className="inline text-[10px] text-[var(--hostly-ink-soft)]">
                 <summary className="cursor-pointer font-medium underline-offset-2 hover:text-[var(--hostly-navy-deep)] hover:underline">
