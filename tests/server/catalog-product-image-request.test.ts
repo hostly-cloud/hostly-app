@@ -149,6 +149,31 @@ test("catalog search is blocked for an explicit Basic plan", async () => {
   assert.equal(searched, false);
 });
 
+test("catalog search always requires explicit user confirmation", async () => {
+  let searched = false;
+  const response = await handleSearchCatalogProductImagesRequest(
+    request("/api/catalog/search-product-images", {
+      productId: "product-1",
+      query: "Coca-Cola Zero 33 cl",
+    }),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => PRO_ACCESS,
+      searchCatalog: async () => {
+        searched = true;
+        throw new Error("should not run");
+      },
+    },
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(
+    (await json(response)).error,
+    "CATALOG_SEARCH_CONFIRMATION_REQUIRED",
+  );
+  assert.equal(searched, false);
+});
+
 test("catalog search receives only the server tenant and requested product", async () => {
   let received:
     | { restaurantId: string; productId: string; query: string }
@@ -157,6 +182,7 @@ test("catalog search receives only the server tenant and requested product", asy
     request("/api/catalog/search-product-images", {
       productId: " product-1 ",
       query: " Coca-Cola Zero 33 cl ",
+      confirmSearch: true,
     }),
     {
       authenticate: async () => authContext(),
@@ -363,6 +389,7 @@ test("structured catalog errors preserve status and code", async () => {
     request("/api/catalog/search-product-images", {
       productId: "product-1",
       query: "Coca-Cola",
+      confirmSearch: true,
     }),
     {
       authenticate: async () => authContext(),
