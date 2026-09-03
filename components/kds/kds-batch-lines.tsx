@@ -1,5 +1,6 @@
 "use client";
 
+import { HostlyButton } from "@/components/ui/hostly";
 import type { KdsVisualBatchLine } from "@/lib/kds/kds-batch-group";
 
 export function KdsVisualBatchSummary({
@@ -14,8 +15,9 @@ export function KdsVisualBatchSummary({
   if (batches.length === 0) return null;
 
   return (
-    <button
-      type="button"
+    <HostlyButton
+      variant="ghost"
+      active={!collapsed}
       className={`hostly-kds-batch-summary${collapsed ? " is-collapsed" : ""}`}
       onClick={onToggle}
     >
@@ -29,6 +31,6 @@ export function KdsVisualBatchSummary({
           </span>
         ))}
       </div>
-    </button>
+    </HostlyButton>
   );
 }
