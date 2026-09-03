@@ -31,6 +31,7 @@ import type {
   ProductResolverParitySummary,
   ResolverParityFilterId,
 } from "@/lib/productos/product-operational-routing-audit";
+import { requestProductCommercialEdit } from "@/lib/productos/product-commercial-edit-intent";
 import type { PlatoCarta, TipoProductoVenta } from "@/lib/platos-local";
 import {
   getPublicationFlags,
@@ -110,7 +111,8 @@ function ProductImageQuickAction({
       aria-label={label}
       onClick={(event) => {
         event.stopPropagation();
-        openEdit(p, { focus: "commercial" });
+        requestProductCommercialEdit(p.id);
+        openEdit(p);
       }}
     >
       Añadir imagen
