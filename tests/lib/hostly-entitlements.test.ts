@@ -7,8 +7,8 @@ import {
   hasHostlyPlanEntitlement,
 } from "@/lib/subscription/hostly-entitlements";
 
-test("Hostly keeps commercial entitlements separate from employee role capabilities", () => {
-  assert.deepEqual(HOSTLY_ENTITLEMENTS, [
+test("Hostly keeps commercial entitlements separated by module", () => {
+  assert.deepEqual(HOSTLY_ENTITLEMENTS.catalogImages, [
     "catalog.image.ai.single",
     "catalog.image.ai.bulk",
     "catalog.image.catalogSearch",
