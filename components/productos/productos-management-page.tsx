@@ -4700,7 +4700,11 @@ export default function ProductosManagementPage({
                 </p>
                 <div className="hostly-product-form-drawer__context" aria-label="Resumen del producto">
                   <span>{draftSelectedCategory?.name || "Sin categoría"}</span>
-                  <span>{draftPrecio.trim() ? `${draftPrecio.trim()} €` : "Sin precio"}</span>
+                  <span>
+                    {draftSalePriceForProfitability !== null
+                      ? formatEuro(draftSalePriceForProfitability, locale as Locale)
+                      : "Sin precio"}
+                  </span>
                   <span
                     className={
                       draftActivo
