@@ -159,6 +159,7 @@ export const DEFAULT_DRINK_MODIFIER_GROUP_SPECS: readonly {
   id: string;
   name: string;
   type: ModifierGroupType;
+  appliesToProductKind: "bebida";
   required: boolean;
   minSelected: number;
   maxSelected: number;
@@ -174,6 +175,7 @@ export const DEFAULT_DRINK_MODIFIER_GROUP_SPECS: readonly {
     id: DEFAULT_DRINK_FORMAT_GROUP_ID,
     name: "Formato bebida",
     type: "format",
+    appliesToProductKind: "bebida",
     required: true,
     minSelected: 1,
     maxSelected: 1,
@@ -188,6 +190,7 @@ export const DEFAULT_DRINK_MODIFIER_GROUP_SPECS: readonly {
     id: DEFAULT_DRINK_MIXER_GROUP_ID,
     name: "Mixer",
     type: "mixer",
+    appliesToProductKind: "bebida",
     required: false,
     minSelected: 0,
     maxSelected: 1,
