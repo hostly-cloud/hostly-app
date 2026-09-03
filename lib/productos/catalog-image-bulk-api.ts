@@ -64,7 +64,7 @@ export async function fetchCatalogImageBulkPreflight(): Promise<CatalogImageBulk
 }
 
 export async function createCatalogImageBulkJob(
-  confirmationToken: string,
+  confirmationToken?: string,
 ): Promise<CatalogImageBulkJob> {
   const idempotencyKey =
     globalThis.crypto?.randomUUID?.() ??
