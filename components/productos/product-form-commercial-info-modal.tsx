@@ -9,10 +9,7 @@ import {
   type RefObject,
 } from "react";
 import Image from "next/image";
-import {
-  ConfigBtnPrimary,
-  ConfigBtnSecondary,
-} from "@/app/dashboard/configuracion/_components/config-carta-workbench";
+import { HostlyButton } from "@/components/ui/hostly";
 import { ProductAiImageReviewPanel } from "@/components/productos/product-ai-image-review-panel";
 import { ProductCommercialIdentityPanel } from "@/components/productos/product-commercial-identity-panel";
 import { PRODUCT_IMAGE_ACCEPT } from "@/lib/firebase/product-image-contract";
@@ -54,9 +51,9 @@ export function ProductFormCommercialInfoSummaryCard({
     <section className="hostly-product-escandallo-summary" aria-label="Información comercial">
       <div className="hostly-product-escandallo-summary__head">
         <h3 className="hostly-product-escandallo-summary__title">Información comercial</h3>
-        <ConfigBtnSecondary type="button" disabled={disabled} onClick={onEdit}>
+        <HostlyButton variant="secondary" size="compact" disabled={disabled} onClick={onEdit}>
           {editLabel}
-        </ConfigBtnSecondary>
+        </HostlyButton>
       </div>
       <div className="hostly-product-commercial-summary__body">
         <p className="hostly-product-commercial-summary__description">
@@ -188,9 +185,9 @@ export function ProductFormCommercialInfoModal({
             </h2>
             <p className="hostly-product-commercial-modal__subtitle">{titleName}</p>
           </div>
-          <ConfigBtnSecondary type="button" disabled={disabled} onClick={onClose}>
+          <HostlyButton variant="secondary" size="compact" disabled={disabled} onClick={onClose}>
             Cerrar
-          </ConfigBtnSecondary>
+          </HostlyButton>
         </div>
 
         <div className="hostly-product-commercial-modal__body">
@@ -256,18 +253,20 @@ export function ProductFormCommercialInfoModal({
                       void onImageFileChange(selected);
                     }}
                   />
-                  <ConfigBtnSecondary
-                    type="button"
+                  <HostlyButton
+                    variant="tool"
+                    size="compact"
                     disabled={disabled}
                     onClick={() => fileInputRef.current?.click()}
                   >
                     {effectiveShowImagePreview && effectiveImagePreviewUrl
                       ? t("carta.fieldFotoChange")
                       : t("carta.fieldFotoUpload")}
-                  </ConfigBtnSecondary>
+                  </HostlyButton>
                   {effectiveShowImagePreview && effectiveImagePreviewUrl ? (
-                    <ConfigBtnSecondary
-                      type="button"
+                    <HostlyButton
+                      variant="secondary"
+                      size="compact"
                       disabled={disabled}
                       onClick={() => {
                         setAiResolvedImageUrl(null);
@@ -275,7 +274,7 @@ export function ProductFormCommercialInfoModal({
                       }}
                     >
                       {t("carta.fieldFotoRemove")}
-                    </ConfigBtnSecondary>
+                    </HostlyButton>
                   ) : null}
                 </div>
                 <p className="hostly-product-commercial-modal__hint">{t("carta.fieldFotoUploadHint")}</p>
@@ -323,9 +322,9 @@ export function ProductFormCommercialInfoModal({
         </div>
 
         <div className="hostly-product-commercial-modal__footer">
-          <ConfigBtnPrimary type="button" disabled={disabled} onClick={onClose}>
+          <HostlyButton variant="primary" size="compact" disabled={disabled} onClick={onClose}>
             {doneLabel}
-          </ConfigBtnPrimary>
+          </HostlyButton>
         </div>
       </div>
     </div>

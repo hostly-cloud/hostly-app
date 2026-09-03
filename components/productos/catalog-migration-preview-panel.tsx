@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import type {
   CatalogMigrationExecuteResult,
   CatalogMigrationPreviewResult,
@@ -236,45 +237,22 @@ export function CatalogMigrationPreviewPanel({
         </div>
         {!showCompletedBanner ? (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-            <button
-              type="button"
+            <HostlyButton
+              variant="tool"
+              size="compact"
               disabled={busy}
               onClick={() => void runPreview()}
-              style={{
-                border: "1px solid rgba(245, 158, 11, 0.45)",
-                background: iceVisual ? "#fff" : "rgba(251, 191, 36, 0.15)",
-                color: iceVisual ? "#92400e" : "#fde68a",
-                padding: "5px 10px",
-                borderRadius: 6,
-                fontWeight: 700,
-                fontSize: 11,
-                cursor: busy ? "wait" : "pointer",
-                opacity: busy ? 0.7 : 1,
-              }}
             >
               {previewLoading ? "Analizando…" : "Previsualizar migración"}
-            </button>
-            <button
-              type="button"
+            </HostlyButton>
+            <HostlyButton
+              variant="primary"
+              size="compact"
               disabled={busy || !preview || preview.totals.toCreate === 0}
               onClick={() => void runMigrate()}
-              style={{
-                border: "1px solid rgba(34, 197, 94, 0.5)",
-                background: iceVisual ? "rgba(220, 252, 231, 0.98)" : "rgba(34, 197, 94, 0.18)",
-                color: iceVisual ? "#15803d" : "#bbf7d0",
-                padding: "5px 10px",
-                borderRadius: 6,
-                fontWeight: 700,
-                fontSize: 11,
-                cursor:
-                  busy || !preview || preview.totals.toCreate === 0
-                    ? "not-allowed"
-                    : "pointer",
-                opacity: busy || !preview || preview.totals.toCreate === 0 ? 0.55 : 1,
-              }}
             >
               {migrateLoading ? "Migrando…" : "Migrar catálogo"}
-            </button>
+            </HostlyButton>
           </div>
         ) : null}
       </div>
