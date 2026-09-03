@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import {
   archiveLegacyPlatosLocalStorage,
   countLegacyPlatosForRestaurant,
@@ -158,25 +159,14 @@ export function LegacyPlatosArchivePanel({
             revísalos antes de limpiar datos o archiva la copia local de forma segura.
           </p>
         </div>
-        <button
-          type="button"
+        <HostlyButton
+          variant="secondary"
+          size="compact"
           disabled={archiving}
           onClick={() => void runArchive()}
-          style={{
-            border: "1px solid rgba(56, 189, 248, 0.45)",
-            background: iceVisual ? "#fff" : "rgba(56, 189, 248, 0.12)",
-            color: iceVisual ? "#0369a1" : "#e0f2fe",
-            padding: "5px 10px",
-            borderRadius: 6,
-            fontWeight: 700,
-            fontSize: 11,
-            cursor: archiving ? "wait" : "pointer",
-            opacity: archiving ? 0.7 : 1,
-            whiteSpace: "nowrap",
-          }}
         >
           {archiving ? "Archivando…" : "Archivar copia local antigua"}
-        </button>
+        </HostlyButton>
       </div>
       {error ? (
         <p
