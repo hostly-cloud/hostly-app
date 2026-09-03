@@ -6,6 +6,7 @@ import OriginalCartaImportPremiumLayout, {
   type CartaImportPremiumLayoutProps,
 } from "./carta-import-premium-layout";
 import { useI18n } from "@/components/i18n-provider";
+import { HostlyButton } from "@/components/ui/hostly";
 import { MAX_MENU_IMPORT_SOURCE_FILES } from "@/lib/carta/menu-import-source-files";
 import {
   clearRegisteredMenuImportBatch,
@@ -291,13 +292,14 @@ function CartaImportPremiumLayoutBatchContent(
             </div>
           </div>
           {canAppend ? (
-            <button
+            <HostlyButton
               type="button"
+              variant="secondary"
+              size="compact"
               onClick={openAppendPicker}
-              className="hostly-button-secondary px-3 py-1.5 text-[11px] font-semibold"
             >
               {english ? "Add pages" : "Añadir páginas"}
-            </button>
+            </HostlyButton>
           ) : null}
         </div>
 
@@ -369,33 +371,36 @@ function CartaImportPremiumLayoutBatchContent(
                     {file.name}
                   </div>
                   <div style={{ display: "flex", gap: 4, marginTop: 5 }}>
-                    <button
+                    <HostlyButton
                       type="button"
+                      variant="icon"
+                      size="compact"
                       disabled={props.busy || index === 0}
                       onClick={() => movePage(index, -1)}
-                      aria-label={english ? "Move page earlier" : "Mover página antes"}
-                      className="hostly-button-secondary min-h-[28px] px-2 py-1 text-[11px] disabled:opacity-35"
+                      iconOnlyLabel={english ? "Move page earlier" : "Mover página antes"}
                     >
                       ←
-                    </button>
-                    <button
+                    </HostlyButton>
+                    <HostlyButton
                       type="button"
+                      variant="icon"
+                      size="compact"
                       disabled={props.busy || index === batchFiles.length - 1}
                       onClick={() => movePage(index, 1)}
-                      aria-label={english ? "Move page later" : "Mover página después"}
-                      className="hostly-button-secondary min-h-[28px] px-2 py-1 text-[11px] disabled:opacity-35"
+                      iconOnlyLabel={english ? "Move page later" : "Mover página después"}
                     >
                       →
-                    </button>
-                    <button
+                    </HostlyButton>
+                    <HostlyButton
                       type="button"
+                      variant="destructive"
+                      size="compact"
                       disabled={props.busy}
                       onClick={() => removePage(index)}
-                      aria-label={english ? "Remove page" : "Quitar página"}
-                      className="hostly-button-secondary min-h-[28px] px-2 py-1 text-[11px] !text-[#b42318] disabled:opacity-35"
+                      iconOnlyLabel={english ? "Remove page" : "Quitar página"}
                     >
                       ×
-                    </button>
+                    </HostlyButton>
                   </div>
                 </div>
               </div>
