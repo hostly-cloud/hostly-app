@@ -1,5 +1,6 @@
 "use client";
 
+import { HostlyButton } from "@/components/ui/hostly";
 import {
   lineSelectionRequiresMixerStep,
   modifierSelectionFromLine,
@@ -70,23 +71,25 @@ export function TpvInlineMixerChips({
     >
       <span className="hostly-tpv-inline-mixer-label">Refresco</span>
       <div className="hostly-tpv-inline-mixer">
-      {mixer.options.map((option) => {
-        const active = selectedOptionId === option.id;
-        return (
-          <button
-            key={option.id}
-            type="button"
-            className={`hostly-tpv-inline-mixer-chip${active ? " is-active" : ""}`}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onSelect(option);
-            }}
-          >
-            {option.name}
-          </button>
-        );
-      })}
+        {mixer.options.map((option) => {
+          const active = selectedOptionId === option.id;
+          return (
+            <HostlyButton
+              key={option.id}
+              variant="chip"
+              size="touch"
+              active={active}
+              className={`hostly-tpv-inline-mixer-chip${active ? " is-active" : ""}`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onSelect(option);
+              }}
+            >
+              {option.name}
+            </HostlyButton>
+          );
+        })}
       </div>
     </div>
   );
