@@ -15,6 +15,9 @@ import {
 } from "@/lib/productos/product-category-navigation";
 import { filterProductCategoryNavigationOptions } from "@/lib/productos/product-ui-navigation";
 
+const TOOLBAR_TOUCH_STYLE = { minHeight: 40 } as const;
+const MENU_TOUCH_STYLE = { minHeight: 44 } as const;
+
 export type ConfigCartaListFilterId =
   | "activos"
   | "inactivos"
@@ -66,6 +69,7 @@ export function ConfigCartaStatusFilterSelect({
       </span>
       <select
         className="hostly-select hostly-select--toolbar-compact hostly-productos-carta-status-filter__select"
+        style={TOOLBAR_TOUCH_STYLE}
         value={selectValue}
         onChange={(e) => onChange(e.target.value as ConfigCartaListFilterId)}
         aria-label="Filtrar por estado del producto y publicación en carta"
@@ -192,6 +196,7 @@ export function ProductosCategoryNavigation({
       {allOption ? (
         <button
           type="button"
+          style={TOOLBAR_TOUCH_STYLE}
           aria-pressed={value === PRODUCT_CATEGORY_ALL_ID}
           className={`hostly-productos-category-navigation__all${
             value === PRODUCT_CATEGORY_ALL_ID ? " is-active" : ""
@@ -205,12 +210,13 @@ export function ProductosCategoryNavigation({
       <button
         ref={triggerRef}
         type="button"
+        style={TOOLBAR_TOUCH_STYLE}
         className={`hostly-productos-category-navigation__trigger${
           categorySelected ? " is-active" : ""
         }`}
-        aria-haspopup="menu"
+        aria-haspopup="listbox"
         aria-expanded={open}
-        aria-controls="hostly-productos-category-navigation-panel"
+        aria-controls="hostly-productos-category-navigation-options"
         disabled={categoryOptions.length === 0}
         onClick={() => setOpen((current) => !current)}
       >
@@ -230,7 +236,6 @@ export function ProductosCategoryNavigation({
         <div
           id="hostly-productos-category-navigation-panel"
           className="hostly-productos-category-navigation__panel"
-          role="menu"
         >
           <div className="hostly-productos-category-navigation__panel-head">
             <span>{categoriesLabel}</span>
@@ -247,10 +252,16 @@ export function ProductosCategoryNavigation({
                 placeholder="Buscar categoría..."
                 aria-label="Buscar categoría"
                 className="hostly-config-canonical-search hostly-productos-category-navigation__search"
+                style={TOOLBAR_TOUCH_STYLE}
               />
             </div>
           ) : null}
-          <div className="hostly-productos-category-navigation__options">
+          <div
+            id="hostly-productos-category-navigation-options"
+            className="hostly-productos-category-navigation__options"
+            role="listbox"
+            aria-label={categoriesLabel}
+          >
             {filteredCategoryOptions.length > 0 ? (
               filteredCategoryOptions.map((option, index) => (
                 <button
@@ -259,8 +270,9 @@ export function ProductosCategoryNavigation({
                     optionRefs.current[index] = element;
                   }}
                   type="button"
-                  role="menuitemradio"
-                  aria-checked={option.id === value}
+                  role="option"
+                  style={MENU_TOUCH_STYLE}
+                  aria-selected={option.id === value}
                   className={`hostly-productos-category-navigation__option${
                     option.id === value ? " is-active" : ""
                   }`}
@@ -351,6 +363,7 @@ export function ProductosCompactBulkActionsMenu({
       <button
         ref={triggerRef}
         type="button"
+        style={TOOLBAR_TOUCH_STYLE}
         className="hostly-button-secondary hostly-button-compact hostly-productos-bulk-actions-menu__trigger"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -371,6 +384,7 @@ export function ProductosCompactBulkActionsMenu({
               }}
               type="button"
               role="menuitem"
+              style={MENU_TOUCH_STYLE}
               className={`hostly-productos-bulk-actions-menu__item${
                 item.tone === "danger" ? " hostly-productos-bulk-actions-menu__item--danger" : ""
               }`}
