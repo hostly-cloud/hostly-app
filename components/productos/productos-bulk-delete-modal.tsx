@@ -1,5 +1,6 @@
 "use client";
 
+import { HostlyButton } from "@/components/ui/hostly";
 import type { TranslateFn } from "@/lib/i18n";
 
 export type ProductosBulkDeleteModalProps = {
@@ -49,22 +50,22 @@ export function ProductosBulkDeleteModal({
           {t("productos.bulkDeleteHintWithDeps")}
         </p>
         <div className="hostly-productos-bulk-course-modal__actions">
-          <button
-            type="button"
-            className="hostly-button-secondary hostly-button-compact"
+          <HostlyButton
+            variant="secondary"
+            size="compact"
             disabled={saving}
             onClick={onClose}
           >
             {t("common.cancel")}
-          </button>
-          <button
-            type="button"
-            className="hostly-button-danger hostly-button-compact"
+          </HostlyButton>
+          <HostlyButton
+            variant="destructive"
+            size="compact"
             disabled={saving || count < 1}
             onClick={onConfirm}
           >
             {saving ? t("common.saving") : t("productos.bulkDeleteConfirm")}
-          </button>
+          </HostlyButton>
         </div>
       </div>
     </div>
