@@ -1,7 +1,6 @@
 import {
   HOSTLY_ENTITLEMENTS,
   HOSTLY_PLAN_ENTITLEMENTS,
-  type HostlyEntitlement,
 } from "@/lib/subscription/hostly-entitlements";
 import {
   HOSTLY_PLANS,
@@ -10,9 +9,10 @@ import {
   type HostlyPlanSource,
 } from "@/lib/subscription/hostly-plan";
 
-export const CATALOG_IMAGE_CAPABILITIES = HOSTLY_ENTITLEMENTS;
+export const CATALOG_IMAGE_CAPABILITIES = HOSTLY_ENTITLEMENTS.catalogImages;
 
-export type CatalogImageCapability = HostlyEntitlement;
+export type CatalogImageCapability =
+  (typeof CATALOG_IMAGE_CAPABILITIES)[number];
 
 export const HOSTLY_CATALOG_IMAGE_PLANS = HOSTLY_PLANS;
 
