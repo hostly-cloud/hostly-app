@@ -26,6 +26,8 @@ function friendlyCatalogError(error: unknown): string {
         return "El código de barras guardado ya no coincide con esta referencia.";
       case "CATALOG_IMAGE_SEARCH_PLAN_REQUIRED":
         return "La búsqueda de catálogo está disponible en los planes Pro y Ultra.";
+      case "CATALOG_SEARCH_CONFIRMATION_REQUIRED":
+        return "Pulsa Buscar imagen exacta para confirmar la consulta al catálogo.";
       default:
         return error.message || error.code;
     }
@@ -52,6 +54,7 @@ export function ProductExactCatalogImageSuggestion({
   const [attaching, setAttaching] = useState(false);
   const [attached, setAttached] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [searched, setSearched] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +74,13 @@ export function ProductExactCatalogImageSuggestion({
     };
   }, []);
 
+  useEffect(() => {
+    setCandidate(null);
+    setMessage(null);
+    setAttached(false);
+    setSearched(false);
+  }, [barcode, productId, refreshKey]);
+
   const resolve = useCallback(async () => {
     const gtin = barcode.trim();
     if (!catalogAllowed || !productId || !gtin) {
@@ -80,9 +90,14 @@ export function ProductExactCatalogImageSuggestion({
     }
     setLoading(true);
     setAttached(false);
+    setSearched(true);
     setMessage(null);
     try {
-      const result = await searchCatalogProductImagesForReview(productId, "");
+      const result = await searchCatalogProductImagesForReview(
+        productId,
+        "",
+        { confirmedByUser: true },
+      );
       const exact = selectExactCatalogProductImageCandidate(result.candidates, gtin);
       setCandidate(exact);
       if (!exact) {
@@ -95,11 +110,6 @@ export function ProductExactCatalogImageSuggestion({
       setLoading(false);
     }
   }, [barcode, catalogAllowed, productId]);
-
-  useEffect(() => {
-    if (catalogAllowed !== true) return;
-    void resolve();
-  }, [catalogAllowed, resolve, refreshKey]);
 
   const attach = useCallback(async () => {
     if (!catalogAllowed || !candidate || attaching) return;
@@ -138,7 +148,7 @@ export function ProductExactCatalogImageSuggestion({
             Imagen exacta por EAN / GTIN
           </span>
           <p className="hostly-product-commercial-modal__hint" style={{ margin: "3px 0 0" }}>
-            Hostly consulta la referencia exacta; nunca la adjunta sin confirmación.
+            Hostly consulta la referencia exacta solo cuando tú lo indicas; nunca la adjunta sin confirmación.
           </p>
         </div>
         <HostlyButton
@@ -147,7 +157,7 @@ export function ProductExactCatalogImageSuggestion({
           disabled={disabled || loading || attaching}
           onClick={() => void resolve()}
         >
-          {loading ? "Buscando…" : "Reintentar"}
+          {loading ? "Buscando…" : searched ? "Buscar de nuevo" : "Buscar imagen exacta"}
         </HostlyButton>
       </div>
 
