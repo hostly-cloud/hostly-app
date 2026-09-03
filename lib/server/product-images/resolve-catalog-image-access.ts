@@ -1,24 +1,15 @@
 import type { Firestore } from "firebase-admin/firestore";
 import {
   HOSTLY_CATALOG_IMAGE_PLAN_POLICY,
-  HOSTLY_CATALOG_IMAGE_PLANS,
   type CatalogImageAccess,
   type CatalogImageCreditCosts,
   type CatalogImageCreditPeriod,
-  type HostlyCatalogImagePlan,
 } from "@/lib/productos/catalog-image-plan";
+import { resolveHostlyPlanFromRestaurant } from "@/lib/subscription/hostly-plan";
 
 function readObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
-    : null;
-}
-
-function normalizePlan(value: unknown): HostlyCatalogImagePlan | null {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim().toLowerCase();
-  return (HOSTLY_CATALOG_IMAGE_PLANS as readonly string[]).includes(normalized)
-    ? (normalized as HostlyCatalogImagePlan)
     : null;
 }
 
@@ -54,19 +45,11 @@ function readCreditPeriod(value: unknown): CatalogImageCreditPeriod | null {
   return { id, startsAt, endsAt, allocation };
 }
 
-/**
- * `subscription.plan` es el contrato canónico futuro. `billing.plan` y `plan`
- * se leen únicamente como aliases de transición para no romper tenants previos.
- */
 export function resolveCatalogImageAccessFromRestaurant(
   restaurant: Record<string, unknown> | null,
 ): CatalogImageAccess {
   const subscription = readObject(restaurant?.subscription);
-  const billing = readObject(restaurant?.billing);
-  const subscriptionPlan = normalizePlan(subscription?.plan);
-  const legacyPlan =
-    normalizePlan(billing?.plan) ?? normalizePlan(restaurant?.plan);
-  const configuredPlan = subscriptionPlan ?? legacyPlan;
+  const { effectivePlan, source } = resolveHostlyPlanFromRestaurant(restaurant);
   const catalogImages = readObject(subscription?.catalogImages);
   const creditCosts = readObject(catalogImages?.creditCosts);
   const meteringMode =
@@ -74,14 +57,9 @@ export function resolveCatalogImageAccessFromRestaurant(
       ? "credit_balance"
       : "usage_recorded";
 
-  const effectivePlan = configuredPlan ?? "pro";
   return {
     effectivePlan,
-    source: subscriptionPlan
-      ? "subscription"
-      : legacyPlan
-        ? "legacy_field"
-        : "legacy_compatibility",
+    source,
     capabilities: [...HOSTLY_CATALOG_IMAGE_PLAN_POLICY[effectivePlan]],
     meteringMode,
     creditBalance:
