@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { useAuth } from "@/components/auth/auth-context";
 import { useOperationFilter } from "@/components/kds/operation-filter-context";
+import { HostlyButton } from "@/components/ui/hostly";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
 import { resolveKdsSlaLevel } from "@/lib/kds/kds-sla";
@@ -252,6 +253,10 @@ export default function ServiceMetricsBar({
   }, [variant, scope, scopedItems, nowMs, selectedOperationStationId]);
 
   if (variant === "kitchenCompact" && scope === "kitchen") {
+    const detailsLabel = detailsOpen
+      ? "Ocultar métricas secundarias"
+      : "Ver T prep, T serv y otras métricas";
+
     return (
       <section
         className="hostly-kds-kitchen-metrics-strip"
@@ -278,22 +283,19 @@ export default function ServiceMetricsBar({
             value={kitchenCriticalCount}
             tone="danger"
           />
-          <button
-            type="button"
+          <HostlyButton
+            variant="icon"
             className="hostly-kds-kitchen-metrics-details-btn"
             aria-expanded={detailsOpen}
-            title={
-              detailsOpen
-                ? "Ocultar métricas secundarias"
-                : "Ver T prep, T serv y otras métricas"
-            }
+            iconOnlyLabel={detailsLabel}
+            title={detailsLabel}
             onClick={() => setDetailsOpen((open) => !open)}
           >
             {detailsOpen ? "▴" : "⋯"}
-          </button>
+          </HostlyButton>
           {listosPanelToggle ? (
-            <button
-              type="button"
+            <HostlyButton
+              variant="chip"
               aria-expanded={listosPanelToggle.open}
               aria-controls="kds-prepared-panel"
               title={
@@ -307,11 +309,11 @@ export default function ServiceMetricsBar({
               }`}
             >
               Listos · {listosPanelToggle.count}
-            </button>
+            </HostlyButton>
           ) : null}
           {servidosArchiveToggle ? (
-            <button
-              type="button"
+            <HostlyButton
+              variant="chip"
               aria-expanded={servidosArchiveToggle.open}
               aria-controls="kds-served-archive-panel"
               title={
@@ -325,7 +327,7 @@ export default function ServiceMetricsBar({
               }`}
             >
               Servidos · {servidosArchiveToggle.count}
-            </button>
+            </HostlyButton>
           ) : null}
         </div>
         {detailsOpen ? (
@@ -367,8 +369,9 @@ export default function ServiceMetricsBar({
           />
         </div>
         {servidosArchiveToggle ? (
-          <button
-            type="button"
+          <HostlyButton
+            variant="secondary"
+            size="touch"
             aria-expanded={servidosArchiveToggle.open}
             aria-controls="kds-served-archive-panel"
             title={
@@ -377,7 +380,7 @@ export default function ServiceMetricsBar({
                 : "Ver histórico de servidos"
             }
             onClick={() => servidosArchiveToggle.onToggle()}
-            className={`hostly-button-secondary !h-auto min-h-9 shrink-0 self-center !px-3 !py-2 !text-[13px] sm:self-stretch ${
+            className={`!h-auto min-h-9 shrink-0 self-center !px-3 !py-2 !text-[13px] sm:self-stretch ${
               servidosArchiveToggle.open
                 ? "!border-emerald-300 !bg-[var(--hostly-success-soft)] !text-emerald-950"
                 : ""
@@ -390,7 +393,7 @@ export default function ServiceMetricsBar({
                 ✕
               </span>
             ) : null}
-          </button>
+          </HostlyButton>
         ) : null}
       </div>
     </section>
