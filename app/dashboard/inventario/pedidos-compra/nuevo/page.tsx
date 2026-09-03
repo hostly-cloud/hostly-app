@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
 import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import ModulePageShell from "@/components/module-page-shell";
+import { HostlyButton } from "@/components/ui/hostly";
 import { listenProductsForInventory, type ProductDocument } from "@/lib/firestore/products";
 import { createManualPurchaseOrder } from "@/lib/firestore/purchase-orders";
 import type { PurchaseOrderLine } from "@/lib/purchases/purchase-order-types";
@@ -155,7 +156,10 @@ export default function NuevoPedidoCompraPage() {
                 Después podrás recibir el pedido total o parcialmente y actualizar el stock.
               </div>
             </div>
-            <Link href="/dashboard/inventario/pedidos-compra" style={{ fontSize: 13, fontWeight: 700 }}>
+            <Link
+              href="/dashboard/inventario/pedidos-compra"
+              className="hostly-touch-nav-link hostly-nav-aux hostly-button-compact"
+            >
               Volver a pedidos
             </Link>
           </div>
@@ -244,35 +248,35 @@ export default function NuevoPedidoCompraPage() {
                       style={inputStyle}
                     />
                   </label>
-                  <button
-                    type="button"
+                  <HostlyButton
+                    variant="secondary"
+                    size="compact"
                     onClick={() => removeLine(index)}
                     disabled={lines.length <= 1}
-                    style={{ minHeight: 40, padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(148,163,184,.28)" }}
                   >
                     Quitar
-                  </button>
+                  </HostlyButton>
                 </div>
               );
             })}
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-            <button
-              type="button"
+            <HostlyButton
+              variant="secondary"
+              size="compact"
               onClick={() => setLines((prev) => [...prev, { productId: "", quantity: "", unitCost: "" }])}
-              style={{ minHeight: 40, padding: "8px 14px", borderRadius: 10, border: "1px solid rgba(148,163,184,.28)" }}
             >
               + Añadir producto
-            </button>
-            <button
-              type="button"
+            </HostlyButton>
+            <HostlyButton
+              variant="primary"
+              size="compact"
               onClick={() => void handleSave()}
               disabled={saving || loadingProducts}
-              style={{ minHeight: 40, padding: "8px 16px", borderRadius: 10, border: 0, background: "var(--hostly-ink-strong)", color: "white", fontWeight: 800 }}
             >
               {saving ? "Creando…" : "Crear pedido"}
-            </button>
+            </HostlyButton>
           </div>
         </div>
       </div>
