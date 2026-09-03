@@ -1,20 +1,10 @@
 import type { Firestore } from "firebase-admin/firestore";
-import {
-  getHostlyPlanEntitlements,
-  hasHostlyPlanEntitlement,
-  type HostlyEntitlement,
-} from "@/lib/subscription/hostly-entitlements";
-import {
-  resolveHostlyPlanFromRestaurant,
-  type HostlyPlan,
-  type HostlyPlanSource,
-} from "@/lib/subscription/hostly-plan";
+import { getHostlyPlanEntitlements } from "@/lib/subscription/hostly-entitlements";
+import { resolveHostlyPlanFromRestaurant } from "@/lib/subscription/hostly-plan";
+import type { HostlySubscriptionAccess } from "@/lib/subscription/hostly-subscription-access";
 
-export type HostlySubscriptionAccess = {
-  effectivePlan: HostlyPlan;
-  source: HostlyPlanSource;
-  entitlements: readonly HostlyEntitlement[];
-};
+export type { HostlySubscriptionAccess } from "@/lib/subscription/hostly-subscription-access";
+export { subscriptionAccessHasEntitlement } from "@/lib/subscription/hostly-subscription-access";
 
 export function resolveHostlySubscriptionAccessFromRestaurant(
   restaurant: Record<string, unknown> | null,
@@ -25,13 +15,6 @@ export function resolveHostlySubscriptionAccessFromRestaurant(
     source,
     entitlements: [...getHostlyPlanEntitlements(effectivePlan)],
   };
-}
-
-export function subscriptionAccessHasEntitlement(
-  access: HostlySubscriptionAccess,
-  entitlement: HostlyEntitlement,
-): boolean {
-  return hasHostlyPlanEntitlement(access.effectivePlan, entitlement);
 }
 
 export async function resolveHostlySubscriptionAccess(params: {
