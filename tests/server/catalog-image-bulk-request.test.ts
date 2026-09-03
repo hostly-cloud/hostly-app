@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Firestore } from "firebase-admin/firestore";
 import type { AuthenticatedRestaurantContext } from "@/lib/server/auth/require-authenticated-restaurant";
 import type { CatalogImageBulkJob } from "@/lib/productos/catalog-image-bulk-contract";
+import { buildCatalogImageBulkConfirmationToken } from "@/lib/server/product-images/catalog-image-bulk-confirmation";
 import {
   handleCatalogImageBulkPreflightRequest,
   handleControlCatalogImageBulkJobRequest,
@@ -105,6 +106,38 @@ function job(overrides: Partial<CatalogImageBulkJob> = {}): CatalogImageBulkJob 
   };
 }
 
+function analysis(overrides: { productId?: string; kind?: "ai_generate" | "catalog_search" } = {}) {
+  const kind = overrides.kind ?? "ai_generate";
+  const baseJob = job();
+  const summary = {
+    ...baseJob.summary,
+    aiGenerable: kind === "ai_generate" ? 1 : 0,
+    catalogSearchable: kind === "catalog_search" ? 1 : 0,
+  };
+  const estimate = {
+    ...baseJob.estimate,
+    aiGenerationRequests: summary.aiGenerable,
+    catalogSearchRequests: summary.catalogSearchable,
+  };
+  return {
+    access: ULTRA_ACCESS,
+    summary,
+    estimate,
+    classified: [
+      {
+        productId: overrides.productId ?? "dish-1",
+        productName: "Croquetas caseras",
+        kind,
+        status: "pending" as const,
+      },
+    ],
+  };
+}
+
+function confirmationToken(current = analysis()): string {
+  return buildCatalogImageBulkConfirmationToken(current);
+}
+
 for (const [label, access] of [
   ["Basic", BASIC_ACCESS],
   ["Pro", PRO_ACCESS],
@@ -131,22 +164,22 @@ for (const [label, access] of [
   });
 }
 
-test("Ultra can run bulk preflight", async () => {
+test("Ultra preflight returns a deterministic confirmation token", async () => {
+  const current = analysis();
   const response = await handleCatalogImageBulkPreflightRequest(
     request("/api/catalog/product-image-bulk/preflight"),
     {
       authenticate: async () => authContext(),
       resolveAccess: async () => ULTRA_ACCESS,
-      analyze: async (params) => ({
-        access: params.access,
-        summary: job().summary,
-        estimate: job().estimate,
-        classified: [],
-      }),
+      analyze: async () => current,
     },
   );
   assert.equal(response.status, 200);
-  assert.equal((await json(response)).ok, true);
+  const body = await json(response);
+  assert.equal(body.ok, true);
+  const preflight = body.preflight as Record<string, unknown>;
+  assert.equal(preflight.confirmationToken, confirmationToken(current));
+  assert.match(String(preflight.confirmationToken), /^[a-f0-9]{64}$/);
 });
 
 test("bulk creation requires explicit confirmation before any job is written", async () => {
@@ -170,6 +203,63 @@ test("bulk creation requires explicit confirmation before any job is written", a
     "BULK_GENERATION_CONFIRMATION_REQUIRED",
   );
   assert.equal(created, false);
+});
+
+test("bulk creation requires a preflight confirmation token", async () => {
+  let created = false;
+  const response = await handleCreateCatalogImageBulkJobRequest(
+    request("/api/catalog/product-image-bulk/jobs", {
+      idempotencyKey: "bulk-job-123",
+      confirmBulkGeneration: true,
+    }),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => ULTRA_ACCESS,
+      createJob: async () => {
+        created = true;
+        return job();
+      },
+    },
+  );
+  assert.equal(response.status, 400);
+  assert.equal(
+    (await json(response)).error,
+    "MISSING_BULK_PREFLIGHT_CONFIRMATION",
+  );
+  assert.equal(created, false);
+});
+
+test("bulk creation rejects a stale preflight before writing or enqueueing", async () => {
+  let created = false;
+  let enqueued = false;
+  const confirmed = analysis();
+  const changed = analysis({ productId: "brand-2", kind: "catalog_search" });
+  const response = await handleCreateCatalogImageBulkJobRequest(
+    request("/api/catalog/product-image-bulk/jobs", {
+      idempotencyKey: "bulk-job-123",
+      confirmationToken: confirmationToken(confirmed),
+      confirmBulkGeneration: true,
+    }),
+    {
+      authenticate: async () => authContext(),
+      resolveAccess: async () => ULTRA_ACCESS,
+      analyze: async () => changed,
+      createJob: async () => {
+        created = true;
+        return job();
+      },
+      enqueueJob: async () => {
+        enqueued = true;
+      },
+    },
+  );
+  assert.equal(response.status, 409);
+  assert.equal(
+    (await json(response)).error,
+    "CATALOG_IMAGE_BULK_PREFLIGHT_STALE",
+  );
+  assert.equal(created, false);
+  assert.equal(enqueued, false);
 });
 
 test("bulk creation does not start when the configured credit period is inactive", async () => {
@@ -200,9 +290,12 @@ test("bulk creation rejects client restaurantId and uses the authenticated tenan
   let receivedRestaurantId = "";
   let enqueuedRestaurantId = "";
   let enqueuedRevision = -1;
+  const current = analysis();
+  const token = confirmationToken(current);
   const rejected = await handleCreateCatalogImageBulkJobRequest(
     request("/api/catalog/product-image-bulk/jobs", {
       idempotencyKey: "bulk-job-123",
+      confirmationToken: token,
       confirmBulkGeneration: true,
       restaurantId: "attacker-tenant",
     }),
@@ -218,11 +311,13 @@ test("bulk creation rejects client restaurantId and uses the authenticated tenan
   const accepted = await handleCreateCatalogImageBulkJobRequest(
     request("/api/catalog/product-image-bulk/jobs", {
       idempotencyKey: "bulk-job-123",
+      confirmationToken: token,
       confirmBulkGeneration: true,
     }),
     {
       authenticate: async () => authContext(),
       resolveAccess: async () => ULTRA_ACCESS,
+      analyze: async () => current,
       createJob: async (params) => {
         receivedRestaurantId = params.restaurantId;
         return job();
