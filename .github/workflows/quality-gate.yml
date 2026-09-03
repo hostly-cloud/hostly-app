@@ -39,6 +39,9 @@ jobs:
       - name: TypeScript
         run: npx tsc --noEmit
 
+      - name: Hostly plan contract tests
+        run: npx tsx --test tests/lib/hostly-plan.test.ts tests/lib/catalog-image-plan.test.ts
+
       - name: TPV critical unit tests
         run: npm run test:tpv-unit
 
