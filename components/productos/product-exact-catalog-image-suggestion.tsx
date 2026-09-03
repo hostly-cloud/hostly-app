@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { CatalogProductImageCandidate } from "@/lib/productos/catalog-product-image-contract";
 import { selectExactCatalogProductImageCandidate } from "@/lib/productos/catalog-product-image-exact-suggestion";
 import {
@@ -140,14 +141,14 @@ export function ProductExactCatalogImageSuggestion({
             Hostly consulta la referencia exacta; nunca la adjunta sin confirmación.
           </p>
         </div>
-        <button
-          type="button"
-          className="hostly-button-secondary hostly-button-compact"
+        <HostlyButton
+          variant="tool"
+          size="compact"
           disabled={disabled || loading || attaching}
           onClick={() => void resolve()}
         >
           {loading ? "Buscando…" : "Reintentar"}
-        </button>
+        </HostlyButton>
       </div>
 
       {candidate ? (
@@ -179,14 +180,14 @@ export function ProductExactCatalogImageSuggestion({
               </p>
             ) : null}
           </div>
-          <button
-            type="button"
-            className="hostly-button-primary hostly-button-compact"
+          <HostlyButton
+            variant="primary"
+            size="compact"
             disabled={disabled || attaching || attached}
             onClick={() => void attach()}
           >
             {attached ? "Preparada" : attaching ? "Preparando…" : "Usar esta imagen"}
-          </button>
+          </HostlyButton>
         </div>
       ) : null}
 
