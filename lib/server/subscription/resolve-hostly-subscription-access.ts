@@ -1,12 +1,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { getHostlyPlanEntitlements } from "@/lib/subscription/hostly-entitlements";
-import {
-  resolveHostlyPlanFromRestaurant,
-} from "@/lib/subscription/hostly-plan";
-import {
-  type HostlySubscriptionAccess,
-  subscriptionAccessHasEntitlement,
-} from "@/lib/subscription/hostly-subscription-access";
+import { resolveHostlyPlanFromRestaurant } from "@/lib/subscription/hostly-plan";
+import type { HostlySubscriptionAccess } from "@/lib/subscription/hostly-subscription-access";
 
 export type { HostlySubscriptionAccess } from "@/lib/subscription/hostly-subscription-access";
 export { subscriptionAccessHasEntitlement } from "@/lib/subscription/hostly-subscription-access";
