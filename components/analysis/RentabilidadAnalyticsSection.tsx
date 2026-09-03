@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { AnalyticsDateRangeFields } from "@/components/analysis/AnalyticsDateRangeFields";
 import { AnalyticsEmptyState } from "@/components/analysis/AnalyticsEmptyState";
 import { AnalyticsSectionHeader } from "@/components/analysis/AnalyticsSectionHeader";
-import { HostlyKpiCard } from "@/components/ui/hostly";
+import { HostlyButton, HostlyKpiCard } from "@/components/ui/hostly";
 import {
   buildInventoryMarginAnalytics,
   normalizeInventoryMarginOrders,
@@ -130,6 +130,7 @@ export function RentabilidadAnalyticsSection({
 
   const { summary, byProduct } = analytics;
   const hasCompleteData = summary.completeLineCount > 0;
+  const hasActiveMarginFilters = familyFilter !== "all" || categoryFilter !== "all";
   const emptyDescription =
     marginOrders.length === 0
       ? "No hay ventas completamente cobradas en este periodo."
@@ -148,137 +149,152 @@ export function RentabilidadAnalyticsSection({
   return (
     <div className="hostly-analytics-panel">
       <div className="hostly-analytics-stack">
-      <AnalyticsSectionHeader
-        eyebrow="Margen y costes"
-        title="Rentabilidad real"
-        description={`${formatDateEs(dateFrom)} – ${formatDateEs(dateTo)} · Costes congelados al enviar`}
-        icon={<BadgeEuro size={21} strokeWidth={2.1} />}
-      />
-
-      {dataState === "loading" ? (
-        <AnalyticsEmptyState
-          compact
-          role="status"
-          icon={<TrendingUp size={22} strokeWidth={2.1} />}
-          title="Calculando la rentabilidad"
-          description="Estamos cruzando ventas cobradas y costes de inventario."
-        />
-      ) : dataState === "error" ? (
-        <AnalyticsEmptyState
-          compact
-          role="alert"
-          icon={<TriangleAlert size={22} strokeWidth={2.1} />}
-          title="No pudimos calcular la rentabilidad"
-          description="Revisa tu conexión o tus permisos e inténtalo de nuevo."
-        />
-      ) : (
-        <>
-
-      <div className="hostly-analysis-filterbar hostly-analysis-filterbar--rentabilidad">
-          <AnalyticsDateRangeFields
-            dateFrom={dateFrom}
-            dateTo={dateTo}
-            onDateFromChange={setDateFrom}
-            onDateToChange={setDateTo}
+        <div className="hostly-analysis-header-card">
+          <AnalyticsSectionHeader
+            eyebrow="Margen y costes"
+            title="Rentabilidad real"
+            description={`${formatDateEs(dateFrom)} – ${formatDateEs(dateTo)} · Costes congelados al enviar`}
+            icon={<BadgeEuro size={21} strokeWidth={2.1} />}
           />
-          <label className="hostly-analysis-select-field">
-            <span>Familia</span>
-            <select
-              value={familyFilter}
-              onChange={(e) => setFamilyFilter(e.target.value)}
-              className="hostly-select hostly-select--toolbar-compact"
-              aria-label="Filtrar por familia"
-            >
-              <option value="all">Todas las familias</option>
-              {baseAnalytics.filterOptions.families.map((family) => (
-                <option key={family} value={family}>
-                  {family}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="hostly-analysis-select-field">
-            <span>Categoría</span>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="hostly-select hostly-select--toolbar-compact"
-              aria-label="Filtrar por categoría"
-            >
-              <option value="all">Todas las categorías</option>
-              {baseAnalytics.filterOptions.categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </label>
-      </div>
 
-      {!hasCompleteData ? (
-        <AnalyticsEmptyState
-          icon={<TrendingUp size={22} strokeWidth={2.1} />}
-          title="Aún no hay margen calculable"
-          description={emptyDescription}
-          hint={coverageHint || "Cuando haya ventas con coste registrado, verás el margen real por producto."}
-        />
-      ) : (
-        <>
-          <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics">
-            <HostlyKpiCard title="Ventas" value={formatEur(summary.salesTotal)} icon={<BadgeEuro size={17} />} className="hostly-analysis-kpi hostly-analysis-kpi--primary" />
-            <HostlyKpiCard title="Coste inventario" value={formatEur(summary.costTotal)} icon={<PackageSearch size={17} />} className="hostly-analysis-kpi" />
-            <HostlyKpiCard title="Margen bruto" value={formatEur(summary.grossMargin)} icon={<TrendingUp size={17} />} className="hostly-analysis-kpi hostly-analysis-kpi--success" />
-            <HostlyKpiCard
-              title="Margen %"
-              value={formatPercent(summary.grossMarginPercent)}
-              helper={`${summary.completeLineCount} líneas con coste`}
-              icon={<Percent size={17} />}
-              className="hostly-analysis-kpi hostly-analysis-kpi--success"
-            />
-          </div>
-
-          {(summary.incompleteCostCount > 0 || summary.excludedNoCostCount > 0) && (
-            <div
-              style={{
-                fontSize: 12,
-                color: "var(--hostly-ink-muted)",
-                padding: "0 2px",
-              }}
-            >
-              {summary.incompleteCostCount > 0
-                ? `${lineCountLabel(summary.incompleteCostCount)} con coste incompleto excluidas del margen. `
-                : ""}
-              {summary.excludedNoCostCount > 0
-                ? `${lineCountLabel(summary.excludedNoCostCount)} antiguas sin historial de coste excluidas.`
-                : ""}
+          {dataState === "ready" ? (
+            <div className="hostly-analysis-filterbar hostly-analysis-filterbar--rentabilidad">
+              <AnalyticsDateRangeFields
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                onDateFromChange={setDateFrom}
+                onDateToChange={setDateTo}
+              />
+              <label className="hostly-analysis-select-field">
+                <span>Familia</span>
+                <select
+                  value={familyFilter}
+                  onChange={(e) => setFamilyFilter(e.target.value)}
+                  className="hostly-select hostly-select--toolbar-compact"
+                  aria-label="Filtrar por familia"
+                >
+                  <option value="all">Todas las familias</option>
+                  {baseAnalytics.filterOptions.families.map((family) => (
+                    <option key={family} value={family}>
+                      {family}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="hostly-analysis-select-field">
+                <span>Categoría</span>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="hostly-select hostly-select--toolbar-compact"
+                  aria-label="Filtrar por categoría"
+                >
+                  <option value="all">Todas las categorías</option>
+                  {baseAnalytics.filterOptions.categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {hasActiveMarginFilters ? (
+                <HostlyButton
+                  variant="tool"
+                  size="compact"
+                  onClick={() => {
+                    setFamilyFilter("all");
+                    setCategoryFilter("all");
+                  }}
+                >
+                  Limpiar filtros
+                </HostlyButton>
+              ) : null}
             </div>
-          )}
+          ) : null}
+        </div>
 
-          <MarginProductsTable
-            title="Productos"
-            rows={byProduct}
-            emptyLabel="Sin productos con margen completo en el filtro actual."
+        {dataState === "loading" ? (
+          <AnalyticsEmptyState
+            compact
+            role="status"
+            icon={<TrendingUp size={22} strokeWidth={2.1} />}
+            title="Calculando la rentabilidad"
+            description="Estamos cruzando ventas cobradas y costes de inventario."
           />
+        ) : dataState === "error" ? (
+          <AnalyticsEmptyState
+            compact
+            role="alert"
+            icon={<TriangleAlert size={22} strokeWidth={2.1} />}
+            title="No pudimos calcular la rentabilidad"
+            description="Revisa tu conexión o tus permisos e inténtalo de nuevo."
+          />
+        ) : (
+          <>
+            {!hasCompleteData ? (
+              <AnalyticsEmptyState
+                icon={<TrendingUp size={22} strokeWidth={2.1} />}
+                title="Aún no hay margen calculable"
+                description={emptyDescription}
+                hint={coverageHint || "Cuando haya ventas con coste registrado, verás el margen real por producto."}
+              />
+            ) : (
+              <>
+                <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics">
+                  <HostlyKpiCard title="Ventas" value={formatEur(summary.salesTotal)} icon={<BadgeEuro size={17} />} className="hostly-analysis-kpi hostly-analysis-kpi--primary" />
+                  <HostlyKpiCard title="Coste inventario" value={formatEur(summary.costTotal)} icon={<PackageSearch size={17} />} className="hostly-analysis-kpi" />
+                  <HostlyKpiCard title="Margen bruto" value={formatEur(summary.grossMargin)} icon={<TrendingUp size={17} />} className="hostly-analysis-kpi hostly-analysis-kpi--success" />
+                  <HostlyKpiCard
+                    title="Margen %"
+                    value={formatPercent(summary.grossMarginPercent)}
+                    helper={`${summary.completeLineCount} líneas con coste`}
+                    icon={<Percent size={17} />}
+                    className="hostly-analysis-kpi hostly-analysis-kpi--success"
+                  />
+                </div>
 
-          {analytics.topProfitableProducts.length > 0 ? (
-            <MarginProductsTable
-              title="Top rentables"
-              rows={analytics.topProfitableProducts}
-              emptyLabel=""
-            />
-          ) : null}
+                {(summary.incompleteCostCount > 0 || summary.excludedNoCostCount > 0) && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--hostly-ink-muted)",
+                      padding: "0 2px",
+                    }}
+                  >
+                    {summary.incompleteCostCount > 0
+                      ? `${lineCountLabel(summary.incompleteCostCount)} con coste incompleto excluidas del margen. `
+                      : ""}
+                    {summary.excludedNoCostCount > 0
+                      ? `${lineCountLabel(summary.excludedNoCostCount)} antiguas sin historial de coste excluidas.`
+                      : ""}
+                  </div>
+                )}
 
-          {analytics.highVolumeLowMarginProducts.length > 0 ? (
-            <MarginProductsTable
-              title="Menor margen entre productos con 2 o más unidades"
-              rows={analytics.highVolumeLowMarginProducts}
-              emptyLabel=""
-            />
-          ) : null}
-        </>
-      )}
-        </>
-      )}
+                <MarginProductsTable
+                  title="Productos"
+                  rows={byProduct}
+                  emptyLabel="Sin productos con margen completo en el filtro actual."
+                />
+
+                {analytics.topProfitableProducts.length > 0 ? (
+                  <MarginProductsTable
+                    title="Top rentables"
+                    rows={analytics.topProfitableProducts}
+                    emptyLabel=""
+                  />
+                ) : null}
+
+                {analytics.highVolumeLowMarginProducts.length > 0 ? (
+                  <MarginProductsTable
+                    title="Menor margen entre productos con 2 o más unidades"
+                    rows={analytics.highVolumeLowMarginProducts}
+                    emptyLabel=""
+                  />
+                ) : null}
+              </>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
