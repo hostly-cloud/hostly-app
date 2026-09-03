@@ -1,6 +1,6 @@
 "use client";
 
-import { HostlySurface, hostlyCx } from "@/components/ui/hostly";
+import { HostlyButton, HostlySurface, hostlyCx } from "@/components/ui/hostly";
 import {
   MENU_IMPORT_STATUS_LABELS,
   menuImportDraftListHint,
@@ -67,9 +67,9 @@ export function ImportMenuRecentList({
           </p>
         </div>
         {onNewImport ? (
-          <button type="button" className="hostly-button-secondary shrink-0 px-3 py-1.5 text-xs" onClick={onNewImport}>
+          <HostlyButton variant="secondary" size="compact" className="shrink-0" onClick={onNewImport}>
             Nueva
-          </button>
+          </HostlyButton>
         ) : null}
       </div>
 

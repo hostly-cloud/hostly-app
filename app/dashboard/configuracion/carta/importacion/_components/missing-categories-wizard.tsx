@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { HostlySurface, hostlyCx } from "@/components/ui/hostly";
+import { HostlyButton, HostlySurface, hostlyCx } from "@/components/ui/hostly";
 import type { CategoryOutcomeMap } from "@/lib/carta/create-categories-types";
 import type { CreateMenuImportCategoriesResult } from "@/lib/carta/create-categories-types";
 import type { PublishPreviewMissingCategory } from "@/lib/carta/publish-preview-types";
@@ -79,13 +79,9 @@ export function MissingCategoriesWizard({
             Crea las categorías en Hostly para desbloquear productos antes de publicar.
           </p>
         </div>
-        <button
-          type="button"
-          className="hostly-button-secondary shrink-0 px-3 py-1.5 text-xs"
-          onClick={onDismiss}
-        >
+        <HostlyButton variant="secondary" size="compact" className="shrink-0" onClick={onDismiss}>
           Omitir por ahora
-        </button>
+        </HostlyButton>
       </div>
 
       {lastResult ? (
@@ -156,14 +152,15 @@ export function MissingCategoriesWizard({
 
       {missingCategories.length > 0 ? (
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            className="hostly-button-primary w-full px-4 py-2 text-sm sm:w-auto"
+          <HostlyButton
+            variant="primary"
+            size="compact"
+            className="w-full sm:w-auto"
             disabled={loading || selectedCount === 0}
             onClick={onCreate}
           >
             {loading ? "Creando categorías…" : `Crear categorías (${selectedCount})`}
-          </button>
+          </HostlyButton>
         </div>
       ) : null}
     </HostlySurface>
