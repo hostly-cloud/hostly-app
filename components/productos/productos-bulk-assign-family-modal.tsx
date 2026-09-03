@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import { CATEGORY_PRODUCT_FAMILY_NONE } from "@/lib/carta/category-product-family";
 import {
   PRODUCT_FAMILY_TYPE_LABELS,
@@ -106,17 +107,17 @@ function ProductosBulkAssignFamilyModalContent({
           ))}
         </select>
         <div className="hostly-productos-bulk-course-modal__actions">
-          <button
-            type="button"
-            className="hostly-button-secondary hostly-button-compact"
+          <HostlyButton
+            variant="secondary"
+            size="compact"
             disabled={saving}
             onClick={onClose}
           >
             {t("common.cancel")}
-          </button>
-          <button
-            type="button"
-            className="hostly-button-primary hostly-button-compact"
+          </HostlyButton>
+          <HostlyButton
+            variant="primary"
+            size="compact"
             disabled={saving || count < 1 || isBulkSelectMixedValue(familyId)}
             onClick={() => {
               if (familyId === CATEGORY_PRODUCT_FAMILY_NONE) {
@@ -128,7 +129,7 @@ function ProductosBulkAssignFamilyModalContent({
             }}
           >
             {saving ? t("common.saving") : t("productos.bulkAssignFamilyApply")}
-          </button>
+          </HostlyButton>
         </div>
       </div>
     </div>

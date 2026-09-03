@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { TranslateFn } from "@/lib/i18n";
 import {
   BULK_SELECT_MIXED_VALUE,
@@ -94,22 +95,22 @@ function ProductosBulkAssignCourseModalContent({
           ))}
         </select>
         <div className="hostly-productos-bulk-course-modal__actions">
-          <button
-            type="button"
-            className="hostly-button-secondary hostly-button-compact"
+          <HostlyButton
+            variant="secondary"
+            size="compact"
             disabled={saving}
             onClick={onClose}
           >
             {t("common.cancel")}
-          </button>
-          <button
-            type="button"
-            className="hostly-button-primary hostly-button-compact"
+          </HostlyButton>
+          <HostlyButton
+            variant="primary"
+            size="compact"
             disabled={saving || count < 1 || isBulkSelectMixedValue(courseValue)}
             onClick={() => onConfirm(courseValue)}
           >
             {saving ? t("common.saving") : t("productos.bulkAssignPassApply")}
-          </button>
+          </HostlyButton>
         </div>
       </div>
     </div>
