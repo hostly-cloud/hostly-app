@@ -3,6 +3,7 @@
 import type { CSSProperties, Dispatch, SetStateAction } from "react";
 import Link from "next/link";
 import { useI18n } from "@/components/i18n-provider";
+import { HostlyButton, HostlyFormToggle } from "@/components/ui/hostly";
 import {
   RECIPE_INVENTORY_UNITS,
   type RecipeInventoryUnit,
@@ -394,22 +395,15 @@ export function ProductRecipeEditorSection({
           </>
         )}
       </div>
-      <label
-        className={isSheet ? "hostly-product-recipe-editor__toggle" : undefined}
-        style={{
-          ...theme.toggleLabel,
-          cursor: disabled ? "not-allowed" : "pointer",
-        }}
-      >
-        <input
-          type="checkbox"
+      <div style={{ flexShrink: 0, maxWidth: 180 }}>
+        <HostlyFormToggle
+          className={isSheet ? "hostly-product-recipe-editor__toggle" : undefined}
           checked={enabled}
           disabled={disabled}
           onChange={(e) => onEnabledChange(e.target.checked)}
-          style={{ width: 20, height: 20, accentColor: "#22c55e", flexShrink: 0 }}
+          label={t("carta.recipeEditor.enableToggle")}
         />
-        {t("carta.recipeEditor.enableToggle")}
-      </label>
+      </div>
     </div>
   );
 
@@ -429,14 +423,15 @@ export function ProductRecipeEditorSection({
           >
             {displayName ?? sheetLabels.pendingName}
           </p>
-          <button
-            type="button"
+          <HostlyButton
+            variant="destructive"
+            size="compact"
             className="hostly-product-recipe-editor__remove"
             disabled={disabled}
             onClick={() => removeRow(row.clientRowId)}
           >
             {t("carta.recipeEditor.remove")}
-          </button>
+          </HostlyButton>
         </div>
 
         <div>
@@ -517,8 +512,9 @@ export function ProductRecipeEditorSection({
               {displayName}
               {displayAmount ? <span style={theme.rowMeta}> · {displayAmount}</span> : null}
             </p>
-            <button
-              type="button"
+            <HostlyButton
+              variant="destructive"
+              size="compact"
               disabled={disabled}
               onClick={() => removeRow(row.clientRowId)}
               style={{
@@ -527,13 +523,14 @@ export function ProductRecipeEditorSection({
               }}
             >
               {t("carta.recipeEditor.remove")}
-            </button>
+            </HostlyButton>
           </div>
         ) : (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <span style={theme.newLine}>{t("carta.recipeEditor.newLine")}</span>
-            <button
-              type="button"
+            <HostlyButton
+              variant="destructive"
+              size="compact"
               disabled={disabled}
               onClick={() => removeRow(row.clientRowId)}
               style={{
@@ -542,7 +539,7 @@ export function ProductRecipeEditorSection({
               }}
             >
               {t("carta.recipeEditor.remove")}
-            </button>
+            </HostlyButton>
           </div>
         )}
 
@@ -656,14 +653,15 @@ export function ProductRecipeEditorSection({
                 <p className="hostly-product-recipe-editor__empty-body">
                   {t("carta.recipeEditor.emptyBody")}
                 </p>
-                <button
-                  type="button"
+                <HostlyButton
+                  variant="secondary"
+                  size="touch"
                   className="hostly-product-recipe-editor__add"
                   disabled={disabled}
                   onClick={addRow}
                 >
                   {t("carta.recipeEditor.addIngredient")}
-                </button>
+                </HostlyButton>
               </div>
             ) : (
               <>
@@ -671,14 +669,15 @@ export function ProductRecipeEditorSection({
                   {sheetLabels.listHeading}
                 </p>
                 <ul className="hostly-product-recipe-editor__list">{sheetIngredientRows}</ul>
-                <button
-                  type="button"
+                <HostlyButton
+                  variant="secondary"
+                  size="touch"
                   className="hostly-product-recipe-editor__add"
                   disabled={disabled}
                   onClick={addRow}
                 >
                   {t("carta.recipeEditor.addIngredient")}
-                </button>
+                </HostlyButton>
               </>
             )}
           </div>
@@ -688,8 +687,9 @@ export function ProductRecipeEditorSection({
               <div style={theme.emptyBox}>
                 <p style={theme.emptyTitle}>{t("carta.recipeEditor.emptyTitle")}</p>
                 <p style={theme.emptyBody}>{t("carta.recipeEditor.emptyBody")}</p>
-                <button
-                  type="button"
+                <HostlyButton
+                  variant="secondary"
+                  size="touch"
                   disabled={disabled}
                   onClick={addRow}
                   style={{
@@ -699,7 +699,7 @@ export function ProductRecipeEditorSection({
                   }}
                 >
                   {t("carta.recipeEditor.addIngredient")}
-                </button>
+                </HostlyButton>
               </div>
             ) : (
               <>
@@ -734,8 +734,9 @@ export function ProductRecipeEditorSection({
 
                 <p style={theme.sectionHeading}>{t("carta.recipeEditor.editHeading")}</p>
                 {embeddedIngredientRows}
-                <button
-                  type="button"
+                <HostlyButton
+                  variant="secondary"
+                  size="touch"
                   disabled={disabled}
                   onClick={addRow}
                   style={{
@@ -745,7 +746,7 @@ export function ProductRecipeEditorSection({
                   }}
                 >
                   {t("carta.recipeEditor.addIngredient")}
-                </button>
+                </HostlyButton>
               </>
             )}
           </div>
