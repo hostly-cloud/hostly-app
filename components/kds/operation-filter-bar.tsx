@@ -1,6 +1,7 @@
 "use client";
 
 import { useOperationFilter } from "@/components/kds/operation-filter-context";
+import { HostlyButton } from "@/components/ui/hostly";
 
 export default function OperationFilterBar() {
   const {
@@ -67,13 +68,9 @@ export default function OperationFilterBar() {
           role="alert"
         >
           <span>No se pudo cargar el equipo</span>
-          <button
-            type="button"
-            className="hostly-button-secondary hostly-button-compact"
-            onClick={retryWaiters}
-          >
+          <HostlyButton variant="secondary" size="compact" onClick={retryWaiters}>
             Reintentar
-          </button>
+          </HostlyButton>
         </div>
       ) : null}
     </div>
