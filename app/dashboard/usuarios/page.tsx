@@ -5,7 +5,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
 import { UsuariosCapabilityShell } from "@/components/auth/configuracion-capability-shell";
-import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
+import { HostlyButton, HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import {
   type UsuarioLocal,
   type UsuarioModulo,
@@ -196,7 +196,6 @@ export default function UsuariosPage() {
   const [draftActivo, setDraftActivo] = useState(true);
   const [draftModulos, setDraftModulos] = useState<UsuarioModulos>(defaultModulosForRol("operativo"));
   const [formError, setFormError] = useState<string | null>(null);
-  const [ctaHover, setCtaHover] = useState(false);
   const [hoverRowId, setHoverRowId] = useState<string | null>(null);
 
   const roleFiltered = useMemo(() => {
@@ -354,28 +353,9 @@ export default function UsuariosPage() {
       lockViewport
       shellSurface="configLight"
       headerRight={
-        <button
-          type="button"
-          onClick={openCreate}
-          onMouseEnter={() => setCtaHover(true)}
-          onMouseLeave={() => setCtaHover(false)}
-          style={{
-            border: "none",
-            background: ctaHover ? "#16a34a" : "#22c55e",
-            color: "#fff",
-            padding: "7px 14px",
-            borderRadius: 10,
-            fontWeight: 700,
-            cursor: "pointer",
-            fontSize: 13,
-            lineHeight: 1.2,
-            whiteSpace: "nowrap",
-            boxShadow: ctaHover ? "0 4px 14px rgba(34, 197, 94, 0.35)" : "0 2px 10px rgba(34, 197, 94, 0.2)",
-            transition: "background 0.15s ease, box-shadow 0.15s ease",
-          }}
-        >
+        <HostlyButton variant="primary" size="compact" onClick={openCreate}>
           {t("users.newUserCta")}
-        </button>
+        </HostlyButton>
       }
     >
       <HostlySection stack="sm" className="min-h-0 flex-1 overflow-hidden">
@@ -436,23 +416,9 @@ export default function UsuariosPage() {
             >
               <p className="m-0 text-sm font-semibold text-[color:var(--hostly-ink-strong)]">{t("users.emptyTitle")}</p>
               <p className="hostly-muted mt-2 max-w-[360px] !text-[12px] !leading-snug">{t("users.emptyBody")}</p>
-              <button
-                type="button"
-                onClick={openCreate}
-                style={{
-                  marginTop: 12,
-                  border: "none",
-                  background: "#22c55e",
-                  color: "#fff",
-                  padding: "7px 16px",
-                  borderRadius: 8,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  fontSize: 13,
-                }}
-              >
+              <HostlyButton variant="primary" size="compact" onClick={openCreate} className="mt-3">
                 {t("users.emptyCta")}
-              </button>
+              </HostlyButton>
             </div>
           ) : (
             <>
@@ -491,28 +457,15 @@ export default function UsuariosPage() {
                 ).map((f) => {
                   const active = listFilter === f.id;
                   return (
-                    <button
+                    <HostlyButton
                       key={f.id}
-                      type="button"
+                      variant="chip"
+                      size="compact"
+                      active={active}
                       onClick={() => setListFilter(f.id)}
-                      style={{
-                        border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-table-divider-soft)",
-                        background: active ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
-                        color: active ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
-                        padding: "6px 11px",
-                        borderRadius: 999,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        fontSize: 13,
-                        lineHeight: 1.25,
-                        maxWidth: "100%",
-                        minHeight: 38,
-                        boxSizing: "border-box",
-                        touchAction: "manipulation",
-                      }}
                     >
                       {f.label}
-                    </button>
+                    </HostlyButton>
                   );
                 })}
               </div>
@@ -676,40 +629,16 @@ export default function UsuariosPage() {
                           </div>
 
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
-                            <button
-                              type="button"
-                              onClick={() => openEdit(u)}
-                              style={{
-                                border: "1px solid var(--hostly-table-divider-soft)",
-                                background: "var(--hostly-surface-page-soft)",
-                                color: "var(--hostly-ink-muted)",
-                                padding: "10px 14px",
-                                borderRadius: 10,
-                                cursor: "pointer",
-                                fontWeight: 600,
-                                fontSize: 13,
-                                lineHeight: 1.2,
-                              }}
-                            >
+                            <HostlyButton variant="secondary" size="compact" onClick={() => openEdit(u)}>
                               {t("common.edit")}
-                            </button>
-                            <button
-                              type="button"
+                            </HostlyButton>
+                            <HostlyButton
+                              variant={u.activo ? "destructive" : "primary"}
+                              size="compact"
                               onClick={() => toggleActivo(u)}
-                              style={{
-                                border: u.activo ? "1px solid rgba(220, 38, 38, 0.35)" : "1px solid rgba(22, 163, 74, 0.35)",
-                                background: u.activo ? "var(--hostly-danger-soft)" : "var(--hostly-success-soft)",
-                                color: u.activo ? "#991b1b" : "#166534",
-                                padding: "10px 14px",
-                                borderRadius: 10,
-                                cursor: "pointer",
-                                fontWeight: 600,
-                                fontSize: 13,
-                                lineHeight: 1.2,
-                              }}
                             >
                               {u.activo ? t("users.actionDeactivate") : t("users.actionActivate")}
-                            </button>
+                            </HostlyButton>
                           </div>
                         </div>
                       );
@@ -816,36 +745,12 @@ export default function UsuariosPage() {
             ) : null}
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 20 }}>
-              <button
-                type="button"
-                onClick={submitForm}
-                style={{
-                  border: "none",
-                  background: "var(--hostly-accent)",
-                  color: "#ffffff",
-                  padding: "10px 18px",
-                  borderRadius: 10,
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: "pointer",
-                  flex: "1 1 140px",
-                }}
-              >
+              <HostlyButton variant="primary" onClick={submitForm} style={{ flex: "1 1 140px" }}>
                 {t("users.saveUser")}
-              </button>
-              <button
-                type="button"
-                onClick={closeForm}
-                style={{
-                  border: "1px solid var(--hostly-table-divider-soft)",
-                  borderRadius: 10,
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: "pointer",
-                }}
-              >
+              </HostlyButton>
+              <HostlyButton variant="secondary" onClick={closeForm}>
                 {t("common.cancel")}
-              </button>
+              </HostlyButton>
             </div>
           </HostlySurface>
         </div>
