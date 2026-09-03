@@ -132,7 +132,7 @@ test("manual and legacy images remain protected in the UI", () => {
   assert.equal(legacy.reviewStatus, "protected");
 });
 
-test("brands are routed only to real catalog search", () => {
+test("brands recommend real catalog but expose an explicit individual AI fallback", () => {
   const state = buildProductImageReviewStateFromDocument(
     "product-1",
     importedDish({
@@ -146,9 +146,9 @@ test("brands are routed only to real catalog search", () => {
   );
 
   assert.equal(state.recommendedAction, "catalog_search");
-  assert.equal(state.canGenerate, false);
+  assert.equal(state.canGenerate, true);
   assert.equal(state.canSearchCatalog, true);
-  assert.deepEqual(buildProductImageReviewView(state).actions, []);
+  assert.deepEqual(buildProductImageReviewView(state).actions, ["generate"]);
   assert.match(buildProductImageReviewView(state).guidance ?? "", /catálogo/);
 });
 
