@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { useI18n } from "@/components/i18n-provider";
+import { HostlyButton } from "@/components/ui/hostly";
 import {
   clearCrossNavPayload,
   QS_FOCUS,
@@ -85,8 +86,9 @@ export function HostlyComprasCrossNavClient() {
       >
         {t(ctx.labelKey)}
       </Link>
-      <button
-        type="button"
+      <HostlyButton
+        variant="ghost"
+        size="compact"
         onClick={dismiss}
         style={{
           border: "none",
@@ -100,7 +102,7 @@ export function HostlyComprasCrossNavClient() {
         }}
       >
         {t("crossNav.dismissContext")}
-      </button>
+      </HostlyButton>
     </div>
   );
 }
