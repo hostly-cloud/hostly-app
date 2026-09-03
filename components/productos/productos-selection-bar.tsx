@@ -1,5 +1,6 @@
 "use client";
 
+import { HostlyButton } from "@/components/ui/hostly";
 import { HostlyTableBulkBar } from "@/components/ui/hostly/data-table";
 import type { TranslateFn } from "@/lib/i18n";
 import { ProductosCompactBulkActionsMenu, type BulkMenuItem } from "./productos-config-carta-compact-controls";
@@ -112,13 +113,14 @@ export function ProductosSelectionBar({
         </span>
         <div className="hostly-data-table-bulk-bar__actions hostly-data-table-bulk-bar__actions--compact">
           <ProductosCompactBulkActionsMenu items={menuItems} />
-          <button
-            type="button"
-            className="hostly-button-ghost hostly-button-compact hostly-data-table-bulk-bar__btn hostly-data-table-bulk-bar__btn--clear"
+          <HostlyButton
+            variant="ghost"
+            size="compact"
+            className="hostly-data-table-bulk-bar__btn hostly-data-table-bulk-bar__btn--clear"
             onClick={onClear}
           >
             {t("productos.clearSelection")}
-          </button>
+          </HostlyButton>
         </div>
       </HostlyTableBulkBar>
     );
@@ -131,20 +133,22 @@ export function ProductosSelectionBar({
       </span>
       <div className="hostly-data-table-bulk-bar__actions">
         {onAssignPass ? (
-          <button
-            type="button"
-            className="hostly-button-primary hostly-button-compact hostly-data-table-bulk-bar__btn"
+          <HostlyButton
+            variant="primary"
+            size="compact"
+            className="hostly-data-table-bulk-bar__btn"
             disabled={assignPassDisabled}
             title={assignPassDisabled ? assignPassDisabledTitle : undefined}
             onClick={onAssignPass}
           >
             {t("productos.bulkAssignPass")}
-          </button>
+          </HostlyButton>
         ) : null}
         {onAssignDestination ? (
-          <button
-            type="button"
-            className="hostly-button-secondary hostly-button-compact hostly-data-table-bulk-bar__btn"
+          <HostlyButton
+            variant="secondary"
+            size="compact"
+            className="hostly-data-table-bulk-bar__btn"
             disabled={assignDestinationDisabled}
             title={
               assignDestinationDisabled ? assignDestinationDisabledTitle : undefined
@@ -152,12 +156,13 @@ export function ProductosSelectionBar({
             onClick={onAssignDestination}
           >
             {t("productos.bulkAssignDestination")}
-          </button>
+          </HostlyButton>
         ) : null}
         {onAssignCategory ? (
-          <button
-            type="button"
-            className="hostly-button-secondary hostly-button-compact hostly-data-table-bulk-bar__btn"
+          <HostlyButton
+            variant="secondary"
+            size="compact"
+            className="hostly-data-table-bulk-bar__btn"
             disabled={assignCategoryDisabled}
             title={
               assignCategoryDisabled ? assignCategoryDisabledTitle : undefined
@@ -165,37 +170,40 @@ export function ProductosSelectionBar({
             onClick={onAssignCategory}
           >
             {t("productos.bulkAssignCategory")}
-          </button>
+          </HostlyButton>
         ) : null}
         {onAssignFamily ? (
-          <button
-            type="button"
-            className="hostly-button-secondary hostly-button-compact hostly-data-table-bulk-bar__btn"
+          <HostlyButton
+            variant="secondary"
+            size="compact"
+            className="hostly-data-table-bulk-bar__btn"
             disabled={assignFamilyDisabled}
             title={assignFamilyDisabled ? assignFamilyDisabledTitle : undefined}
             onClick={onAssignFamily}
           >
             {t("productos.bulkAssignFamily")}
-          </button>
+          </HostlyButton>
         ) : null}
         {onBulkDelete ? (
-          <button
-            type="button"
-            className="hostly-button-danger hostly-button-compact hostly-data-table-bulk-bar__btn"
+          <HostlyButton
+            variant="destructive"
+            size="compact"
+            className="hostly-data-table-bulk-bar__btn"
             disabled={bulkDeleteDisabled}
             title={bulkDeleteDisabled ? bulkDeleteDisabledTitle : undefined}
             onClick={onBulkDelete}
           >
             {t("productos.bulkDelete")}
-          </button>
+          </HostlyButton>
         ) : null}
-        <button
-          type="button"
-          className="hostly-button-secondary hostly-button-compact hostly-data-table-bulk-bar__btn"
+        <HostlyButton
+          variant="secondary"
+          size="compact"
+          className="hostly-data-table-bulk-bar__btn"
           onClick={onClear}
         >
           {t("productos.clearSelection")}
-        </button>
+        </HostlyButton>
       </div>
     </HostlyTableBulkBar>
   );
