@@ -1,7 +1,7 @@
 "use client";
 
 import type { RefObject } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   HostlyDataCell,
   HostlyDataGroupBar,
@@ -32,6 +32,10 @@ import type {
   ResolverParityFilterId,
 } from "@/lib/productos/product-operational-routing-audit";
 import { requestProductCommercialEdit } from "@/lib/productos/product-commercial-edit-intent";
+import {
+  countProductsMissingResolvedImage,
+  filterProductsMissingResolvedImage,
+} from "@/lib/productos/product-image-list-filter";
 import type { PlatoCarta, TipoProductoVenta } from "@/lib/platos-local";
 import {
   getPublicationFlags,
@@ -948,6 +952,7 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
     selectAllRef,
     isLegacyReadOnly,
     t,
+    toggleRowSelected,
     toggleSelectAllDisplayed,
     clearSelection,
     onAssignPass,
@@ -972,6 +977,29 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
     reorderFocusLayout = false,
     inlineEdit,
   } = props;
+
+  const [missingImageOnly, setMissingImageOnly] = useState(false);
+  const missingImageSelectAllRef = useRef<HTMLInputElement | null>(null);
+  const missingImageCount = useMemo(
+    () => countProductsMissingResolvedImage(displayed, productImageUrlFromPlato),
+    [displayed],
+  );
+  const visibleDisplayed = useMemo(
+    () =>
+      missingImageOnly && !reorderMode
+        ? filterProductsMissingResolvedImage(displayed, productImageUrlFromPlato)
+        : displayed,
+    [displayed, missingImageOnly, reorderMode],
+  );
+  const visibleGroupedByCategoria = useMemo(() => {
+    if (!missingImageOnly || reorderMode) return groupedByCategoria;
+    return groupedByCategoria
+      .map((group) => ({
+        ...group,
+        items: filterProductsMissingResolvedImage(group.items, productImageUrlFromPlato),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [groupedByCategoria, missingImageOnly, reorderMode]);
 
   const inlineEditEnabled = Boolean(
     inlineEdit?.enabled && !reorderMode && !isLegacyReadOnly,
@@ -998,15 +1026,46 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
   const inlineTabProductIds = useMemo(() => {
     if (!inlineEditEnabled) return [];
     if (viewMode === "grouped") {
-      return groupedByCategoria.flatMap((group) => group.items.map((item) => item.id));
+      return visibleGroupedByCategoria.flatMap((group) => group.items.map((item) => item.id));
     }
-    return displayed.map((item) => item.id);
-  }, [inlineEditEnabled, viewMode, groupedByCategoria, displayed]);
+    return visibleDisplayed.map((item) => item.id);
+  }, [inlineEditEnabled, viewMode, visibleGroupedByCategoria, visibleDisplayed]);
 
-  const allSelected = displayed.length > 0 && displayed.every((p) => selectedIds.has(p.id));
-  const rowCount = displayed.length;
+  const allSelected =
+    visibleDisplayed.length > 0 &&
+    visibleDisplayed.every((p) => selectedIds.has(p.id));
+  const selectedVisibleCount = visibleDisplayed.filter((p) => selectedIds.has(p.id)).length;
+  const rowCount = visibleDisplayed.length;
   const sortableReorderEnabled = reorderMode && viewMode === "list" && Boolean(onReorderProducts);
   const dragHandleLabel = t("productos.dragHandleAria");
+
+  useEffect(() => {
+    const input = missingImageSelectAllRef.current;
+    if (!input || !missingImageOnly || reorderMode) return;
+    input.indeterminate =
+      selectedVisibleCount > 0 && selectedVisibleCount < visibleDisplayed.length;
+  }, [missingImageOnly, reorderMode, selectedVisibleCount, visibleDisplayed.length]);
+
+  const toggleMissingImageFilter = () => {
+    clearSelection();
+    setMissingImageOnly((current) => !current);
+  };
+
+  const toggleSelectAllVisible = () => {
+    if (!missingImageOnly || reorderMode) {
+      toggleSelectAllDisplayed();
+      return;
+    }
+    const deselect = allSelected;
+    for (const product of visibleDisplayed) {
+      if (deselect ? selectedIds.has(product.id) : !selectedIds.has(product.id)) {
+        toggleRowSelected(product.id);
+      }
+    }
+  };
+
+  const activeSelectAllRef =
+    missingImageOnly && !reorderMode ? missingImageSelectAllRef : selectAllRef;
 
   const renderDragPreview = (p: PlatoCarta) => (
     <div
@@ -1105,7 +1164,7 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
 
   const tableBodyContent =
     viewMode === "grouped"
-      ? groupedByCategoria.map((g, gi) => (
+      ? visibleGroupedByCategoria.map((g, gi) => (
           <div key={`${g.sectionKey}-${gi}`} className="hostly-data-table-group">
             <HostlyDataGroupBar first={gi === 0}>
               <span className="hostly-data-table-group-bar__title">{g.categoria}</span>
@@ -1114,16 +1173,16 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
             {g.items.map((p, idx) => renderDesktopRow(p, idx, g.items.length, false))}
           </div>
         ))
-      : displayed.map((p, idx) => renderDesktopRow(p, idx, rowCount, false));
+      : visibleDisplayed.map((p, idx) => renderDesktopRow(p, idx, rowCount, false));
 
   const mobileListContent =
     viewMode === "grouped"
-      ? groupedByCategoria.map((g, gi) => (
+      ? visibleGroupedByCategoria.map((g, gi) => (
           <HostlyMobileListGroup key={`m-${g.sectionKey}-${gi}`} title={g.categoria} count={g.items.length}>
             {g.items.map((p, idx) => renderMobileRow(p, idx, g.items.length, false))}
           </HostlyMobileListGroup>
         ))
-      : displayed.map((p, idx) => renderMobileRow(p, idx, rowCount, false));
+      : visibleDisplayed.map((p, idx) => renderMobileRow(p, idx, rowCount, false));
 
   const listContent = (localItems: PlatoCarta[], isMobile: boolean, withDrag: boolean) => (
     <>
@@ -1137,9 +1196,9 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
               allSelected,
               displayedCount: localItems.length,
               isLegacyReadOnly,
-              selectAllRef,
+              selectAllRef: activeSelectAllRef,
               t,
-              toggleSelectAllDisplayed,
+              toggleSelectAllDisplayed: toggleSelectAllVisible,
               reorderMode,
               inlineEditEnabled,
             })}
@@ -1181,6 +1240,29 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
       className={`hostly-data-table-viewport${reorderMode ? " hostly-data-table-viewport--reorder-mode" : ""}`}
     >
       {reorderMode ? null : (
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--hostly-line)] px-2 py-1.5">
+          <HostlyButton
+            variant="chip"
+            size="compact"
+            active={missingImageOnly}
+            aria-pressed={missingImageOnly}
+            aria-label={`Filtrar productos sin imagen (${missingImageCount})`}
+            onClick={toggleMissingImageFilter}
+          >
+            <span>Sin imagen</span>
+            <span className="tabular-nums" aria-hidden>
+              {missingImageCount}
+            </span>
+          </HostlyButton>
+          {missingImageOnly ? (
+            <span className="text-[11px] font-medium text-[var(--hostly-ink-muted)]" role="status">
+              {visibleDisplayed.length} pendientes de imagen en esta vista
+            </span>
+          ) : null}
+        </div>
+      )}
+
+      {reorderMode ? null : (
       <ProductosSelectionBar
         count={selectedIds.size}
         variant={compactBulkBar ? "compact" : "default"}
@@ -1204,7 +1286,11 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
       />
       )}
 
-      {sortableReorderEnabled ? (
+      {visibleDisplayed.length === 0 && missingImageOnly ? (
+        <div className="hostly-productos-carta-muted-empty" role="status">
+          Todos los productos de esta vista ya tienen imagen.
+        </div>
+      ) : sortableReorderEnabled ? (
         <ProductosCartaSortableRoot
           items={displayed}
           disabled={Boolean(reorderBusyId)}
@@ -1224,11 +1310,11 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
               <HostlyDataTableHead>
                 {renderProductosCartaHeaderCells({
                   allSelected,
-                  displayedCount: displayed.length,
+                  displayedCount: visibleDisplayed.length,
                   isLegacyReadOnly,
-                  selectAllRef,
+                  selectAllRef: activeSelectAllRef,
                   t,
-                  toggleSelectAllDisplayed,
+                  toggleSelectAllDisplayed: toggleSelectAllVisible,
                   reorderMode,
                   inlineEditEnabled,
                 })}
