@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { HostlyButton } from "@/components/ui/hostly";
 import {
   CATALOG_IMAGE_BULK_QUEUE_RETRY_EXHAUSTED,
   type CatalogImageBulkCatalogSelection,
@@ -327,10 +328,17 @@ export function ProductCatalogImageBulkPanel() {
 
   return (
     <>
-      <button ref={triggerRef} type="button" className={styles.trigger} onClick={openPanel}>
+      <HostlyButton
+        ref={triggerRef}
+        type="button"
+        variant="tool"
+        size="compact"
+        className={styles.trigger}
+        onClick={openPanel}
+      >
         Completar imágenes
         <span className={styles.planBadge}>Ultra</span>
-      </button>
+      </HostlyButton>
 
       {open ? (
         <div
@@ -409,9 +417,9 @@ export function ProductCatalogImageBulkPanel() {
                           <span className={styles.hint}>
                             {reviewSelectionCount} seleccionadas · {approvableProductIds.length} ya preparadas
                           </span>
-                          <button
-                            type="button"
-                            className={styles.buttonSecondary}
+                          <HostlyButton
+                            variant="secondary"
+                            size="compact"
                             disabled={approvalRequest}
                             onClick={() => {
                               setConfirmingApproval(false);
@@ -425,7 +433,7 @@ export function ProductCatalogImageBulkPanel() {
                             {validSelectedProductIds.length === approvableProductIds.length
                               ? "Quitar selección"
                               : "Seleccionar aprobables"}
-                          </button>
+                          </HostlyButton>
                         </div>
                       ) : null}
                       {confirmingApproval ? (
@@ -438,22 +446,22 @@ export function ProductCatalogImageBulkPanel() {
                             Hostly adjuntará las coincidencias de catálogo elegidas y publicará {reviewSelectionCount} imágenes. Quedarán protegidas frente a sustituciones automáticas.
                           </span>
                           <div className={styles.confirmationActions}>
-                            <button
-                              type="button"
-                              className={styles.buttonSecondary}
+                            <HostlyButton
+                              variant="secondary"
+                              size="compact"
                               disabled={approvalRequest}
                               onClick={() => setConfirmingApproval(false)}
                             >
                               Volver
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.buttonPrimary}
+                            </HostlyButton>
+                            <HostlyButton
+                              variant="primary"
+                              size="compact"
                               disabled={approvalRequest}
                               onClick={() => void approveSelection()}
                             >
                               {approvalRequest ? "Publicando…" : "Confirmar publicación"}
-                            </button>
+                            </HostlyButton>
                           </div>
                         </div>
                       ) : null}
@@ -530,78 +538,78 @@ export function ProductCatalogImageBulkPanel() {
               </p>
               <div className={styles.actions}>
                 {payload && reviewSelectionCount > 0 && !confirmingApproval ? (
-                  <button
-                    type="button"
-                    className={styles.buttonPrimary}
+                  <HostlyButton
+                    variant="primary"
+                    size="compact"
                     disabled={approvalRequest || controlRequest}
                     onClick={() => setConfirmingApproval(true)}
                   >
                     Aprobar selección ({reviewSelectionCount})
-                  </button>
+                  </HostlyButton>
                 ) : null}
                 {!payload && preflight ? (
-                  <button
-                    type="button"
-                    className={styles.buttonPrimary}
+                  <HostlyButton
+                    variant="primary"
+                    size="compact"
                     disabled={controlRequest || preflight.summary.withoutApprovedImage === 0}
                     onClick={() => void start()}
                   >
                     {controlRequest ? "Preparando…" : "Confirmar e iniciar"}
-                  </button>
+                  </HostlyButton>
                 ) : null}
                 {payload?.job.status === "running" || payload?.job.status === "queued" ? (
-                  <button
-                    type="button"
-                    className={styles.buttonSecondary}
+                  <HostlyButton
+                    variant="secondary"
+                    size="compact"
                     disabled={controlRequest}
                     onClick={() => void runControl("pause")}
                   >
                     Pausar
-                  </button>
+                  </HostlyButton>
                 ) : null}
                 {payload?.job.status === "paused" ? (
-                  <button
-                    type="button"
-                    className={styles.buttonPrimary}
+                  <HostlyButton
+                    variant="primary"
+                    size="compact"
                     disabled={controlRequest}
                     onClick={() => void runControl("resume")}
                   >
                     Reanudar
-                  </button>
+                  </HostlyButton>
                 ) : null}
                 {payload && payload.job.counters.failed > 0 ? (
-                  <button
-                    type="button"
-                    className={styles.buttonSecondary}
+                  <HostlyButton
+                    variant="tool"
+                    size="compact"
                     disabled={controlRequest}
                     onClick={() => void runControl("retry_failed")}
                   >
                     Reintentar fallos
-                  </button>
+                  </HostlyButton>
                 ) : null}
                 {payload && ["completed", "cancelled"].includes(payload.job.status) ? (
-                  <button
-                    type="button"
-                    className={styles.buttonSecondary}
+                  <HostlyButton
+                    variant="secondary"
+                    size="compact"
                     disabled={controlRequest}
                     onClick={() => void prepareNewJob()}
                   >
                     Nuevo análisis
-                  </button>
+                  </HostlyButton>
                 ) : null}
                 {payload && !["completed", "cancelled"].includes(payload.job.status) ? (
-                  <button
-                    type="button"
-                    className={styles.buttonDanger}
+                  <HostlyButton
+                    variant="destructive"
+                    size="compact"
                     disabled={controlRequest || payload.job.counters.processing > 0}
                     onClick={() => void runControl("cancel")}
                   >
                     Cancelar
-                  </button>
+                  </HostlyButton>
                 ) : null}
-                <button type="button" className={styles.buttonSecondary} onClick={closePanel}>
+                <HostlyButton variant="secondary" size="compact" onClick={closePanel}>
                   Cerrar
-                </button>
+                </HostlyButton>
               </div>
             </footer>
           </section>
