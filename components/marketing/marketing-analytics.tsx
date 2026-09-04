@@ -3,6 +3,7 @@
 import Script from "next/script";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 
 type MarketingConsent = "granted" | "denied" | null;
 
@@ -180,31 +181,34 @@ export function MarketingAnalytics() {
             </p>
           </div>
           <div className="mt-3 flex shrink-0 gap-2 md:mt-0">
-            <button
-              type="button"
+            <HostlyButton
+              variant="secondary"
+              size="compact"
               onClick={() => chooseConsent("denied")}
-              className="min-h-10 rounded-xl border border-[color:var(--hostly-line-strong)] bg-white px-4 text-sm font-semibold text-[color:var(--hostly-ink-strong)]"
+              className="min-h-10 rounded-xl px-4"
             >
               Rechazar
-            </button>
-            <button
-              type="button"
+            </HostlyButton>
+            <HostlyButton
+              variant="primary"
+              size="compact"
               onClick={() => chooseConsent("granted")}
-              className="min-h-10 rounded-xl bg-[color:var(--hostly-navy-deep)] px-4 text-sm font-semibold text-white"
+              className="min-h-10 rounded-xl px-4"
             >
               Aceptar
-            </button>
+            </HostlyButton>
           </div>
         </div>
       ) : (
-        <button
-          type="button"
+        <HostlyButton
+          variant="ghost"
+          size="compact"
           onClick={() => setConsent(null)}
-          className="fixed bottom-3 left-3 z-[90] rounded-lg border border-[color:var(--hostly-line-strong)] bg-white/90 px-2.5 py-1.5 text-[11px] font-medium text-[color:var(--hostly-ink-muted)] shadow-sm backdrop-blur"
+          className="fixed bottom-3 left-3 z-[90] rounded-lg bg-white/90 px-2.5 py-1.5 text-[11px] font-medium text-[color:var(--hostly-ink-muted)] shadow-sm backdrop-blur"
           aria-label="Cambiar preferencias de privacidad"
         >
           Privacidad
-        </button>
+        </HostlyButton>
       )}
     </>
   );
