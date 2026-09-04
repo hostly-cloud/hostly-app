@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { HostlyButton } from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { useAuth } from "@/components/auth/auth-context";
 import { logout } from "@/lib/auth/auth";
@@ -68,13 +69,14 @@ export function DashboardGate({ children }: { children: ReactNode }) {
               ? "Tu cuenta está desactivada. Contacta con un administrador de Hostly."
               : "No se puede autorizar el restaurante hasta revisar la coherencia del perfil."}
           </p>
-          <button
-            type="button"
-            className="hostly-button-secondary mt-4"
+          <HostlyButton
+            variant="secondary"
+            size="compact"
+            className="mt-4"
             onClick={() => void logout()}
           >
             Cerrar sesión
-          </button>
+          </HostlyButton>
         </div>
       </div>
     );
