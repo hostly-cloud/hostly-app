@@ -1,10 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import ModulePageShell from "@/components/module-page-shell";
+import { useAuth } from "@/components/auth/auth-context";
+import { canAccessDashboardPath } from "@/lib/auth/hostly-capabilities";
 import {
   getOperacionLauncherDiagnostic,
   isOperacionModuleSlug,
@@ -132,29 +134,41 @@ const MODULE_ICONS: Record<OperacionModuleSlug, () => ReactNode> = {
 export default function OperacionMenuPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { role } = useAuth();
   const legacyTab = searchParams.get("tab");
   const shouldRedirect = isOperacionModuleSlug(legacyTab);
+  const accessibleModules = useMemo(
+    () => OPERACION_LAUNCHER_MODULES.filter((module) => canAccessDashboardPath(role, operacionModuleHref(module.slug))),
+    [role],
+  );
 
   useEffect(() => {
     if (!shouldRedirect || !legacyTab) return;
+    const destination = operacionModuleHref(legacyTab);
+    if (!canAccessDashboardPath(role, destination)) {
+      router.replace("/dashboard/operacion");
+      return;
+    }
     const next = new URLSearchParams(searchParams.toString());
     next.delete("tab");
     const qs = next.toString();
-    router.replace(`${operacionModuleHref(legacyTab)}${qs ? `?${qs}` : ""}`);
-  }, [shouldRedirect, legacyTab, searchParams, router]);
+    router.replace(`${destination}${qs ? `?${qs}` : ""}`);
+  }, [shouldRedirect, legacyTab, searchParams, router, role]);
 
   useEffect(() => {
-    const modules = OPERACION_LAUNCHER_MODULES;
     console.log(
       "[operation-launcher] render",
-      modules.map((module) => ({
+      accessibleModules.map((module) => ({
         slug: module.slug,
         label: module.label,
         href: operacionModuleHref(module.slug),
       })),
     );
-    console.log("[operation-launcher] diagnostic", getOperacionLauncherDiagnostic());
-  }, []);
+    console.log("[operation-launcher] diagnostic", {
+      ...getOperacionLauncherDiagnostic(),
+      visibleModuleCount: accessibleModules.length,
+    });
+  }, [accessibleModules]);
 
   if (shouldRedirect) return null;
 
@@ -171,9 +185,9 @@ export default function OperacionMenuPage() {
         aria-label="Módulos de operación"
         className="hostly-op-launcher-grid"
         data-launcher-build={OPERACION_LAUNCHER_BUILD_ID}
-        data-launcher-count={OPERACION_LAUNCHER_MODULES.length}
+        data-launcher-count={accessibleModules.length}
       >
-        {OPERACION_LAUNCHER_MODULES.map((module) => {
+        {accessibleModules.map((module) => {
           const Icon = MODULE_ICONS[module.slug];
           return (
             <Link key={module.slug} href={operacionModuleHref(module.slug)} className="hostly-op-launcher-card">
