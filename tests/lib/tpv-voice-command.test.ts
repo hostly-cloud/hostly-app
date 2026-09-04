@@ -67,6 +67,24 @@ test("interpreta varios productos y cantidades directos a una mesa", () => {
   );
 });
 
+test("separa productos consecutivos aunque el dictado se coma la conjunción", () => {
+  assert.deepEqual(
+    parseTpvVoiceCommand(
+      "un neste una coca-cola y una fanta de naranja a la mesa nueve",
+    ),
+    {
+      type: "add_products_to_table",
+      tableQuery: "nueve",
+      items: [
+        { productQuery: "neste", quantity: 1 },
+        { productQuery: "coca cola", quantity: 1 },
+        { productQuery: "fanta de naranja", quantity: 1 },
+      ],
+      sendOrder: true,
+    },
+  );
+});
+
 test("recupera cantidad cuando el dictado mete una palabra basura delante", () => {
   assert.deepEqual(
     parseTpvVoiceCommand("rosca dos caños a la mesa cinco"),
