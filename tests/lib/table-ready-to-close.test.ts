@@ -45,6 +45,19 @@ test("las líneas con cantidad cero no ocultan una línea real ya servida", () =
   assert.deepEqual([...computeTablesReadyToClose([order])], ["mesa-1"]);
 });
 
+test("una comanda con solo líneas canceladas no marca una mesa libre", () => {
+  const order = {
+    status: "open",
+    tableId: "mesa-7",
+    items: [
+      { qty: 1, status: "cancelled" },
+      { qty: 2, status: "cancelado" },
+    ],
+  };
+  assert.equal(isOrderReadyToClose(order), false);
+  assert.deepEqual([...computeTablesReadyToClose([order])], []);
+});
+
 test("solo marca lista cuando todas las líneas activas están servidas", () => {
   const orders = [
     {
