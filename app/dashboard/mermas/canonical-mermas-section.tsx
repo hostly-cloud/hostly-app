@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -61,6 +62,11 @@ type InventoryProduct = {
   costPerUnit: number;
 };
 
+type PendingWasteMutation = {
+  fingerprint: string;
+  idempotencyKey: string;
+};
+
 function todayIso(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -101,6 +107,8 @@ function apiErrorMessage(code: string): string {
       return "El producto ya no está habilitado en inventario.";
     case "PRODUCT_NOT_FOUND":
       return "El producto ya no existe en el inventario central.";
+    case "IDEMPOTENCY_CONFLICT":
+      return "La operación cambió durante un reintento. Revisa los datos y vuelve a registrar la merma.";
     case "INVENTORY_EDIT_REQUIRED":
       return "No tienes permiso para registrar mermas.";
     case "UNAUTHORIZED":
@@ -108,6 +116,20 @@ function apiErrorMessage(code: string): string {
     default:
       return "No se pudo registrar la merma. Inténtalo de nuevo.";
   }
+}
+
+function buildWasteMutationFingerprint(input: {
+  productId: string;
+  quantity: number;
+  reason: WasteReason;
+  notes: string | null;
+  occurredOn: string;
+}): string {
+  return JSON.stringify(input);
+}
+
+function createWasteIdempotencyKey(): string {
+  return crypto.randomUUID();
 }
 
 export default function CanonicalMermasSection() {
@@ -130,6 +152,7 @@ export default function CanonicalMermasSection() {
   const [notes, setNotes] = useState("");
   const [occurredOn, setOccurredOn] = useState(todayIso());
   const [search, setSearch] = useState("");
+  const pendingMutationRef = useRef<PendingWasteMutation | null>(null);
 
   const loadCanonical = useCallback(async () => {
     if (!user || !canViewInventory) return;
@@ -243,6 +266,7 @@ export default function CanonicalMermasSection() {
     setNotes("");
     setOccurredOn(todayIso());
     setFormError(null);
+    pendingMutationRef.current = null;
   }
 
   async function submit(event: FormEvent) {
@@ -270,6 +294,21 @@ export default function CanonicalMermasSection() {
       return;
     }
 
+    const payload = {
+      productId,
+      quantity: parsedQuantity,
+      reason,
+      notes: notes.trim() || null,
+      occurredOn,
+    };
+    const fingerprint = buildWasteMutationFingerprint(payload);
+    const pending = pendingMutationRef.current;
+    const idempotencyKey =
+      pending?.fingerprint === fingerprint
+        ? pending.idempotencyKey
+        : createWasteIdempotencyKey();
+    pendingMutationRef.current = { fingerprint, idempotencyKey };
+
     setSaving(true);
     try {
       const token = await user.getIdToken();
@@ -278,14 +317,9 @@ export default function CanonicalMermasSection() {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
         },
-        body: JSON.stringify({
-          productId,
-          quantity: parsedQuantity,
-          reason,
-          notes: notes.trim() || null,
-          occurredOn,
-        }),
+        body: JSON.stringify(payload),
       });
       const body = (await response.json().catch(() => null)) as
         | { ok?: boolean; error?: string }

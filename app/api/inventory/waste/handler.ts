@@ -8,6 +8,7 @@ import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import {
   createInventoryWaste,
   listInventoryWaste,
+  normalizeWasteIdempotencyKey,
   WASTE_REASONS,
   type WasteReason,
 } from "@/lib/server/inventory/waste";
@@ -50,9 +51,11 @@ export async function handleInventoryWastePost(
   if (!body) return jsonError(400, "INVALID_JSON");
   const productId = typeof body.productId === "string" ? body.productId.trim() : "";
   const quantity = typeof body.quantity === "number" ? body.quantity : Number(body.quantity);
+  const idempotencyKey = normalizeWasteIdempotencyKey(req.headers.get("Idempotency-Key"));
   if (!productId) return jsonError(400, "PRODUCT_REQUIRED");
   if (!Number.isFinite(quantity) || quantity <= 0) return jsonError(400, "INVALID_QUANTITY");
   if (!isWasteReason(body.reason)) return jsonError(400, "INVALID_REASON");
+  if (!idempotencyKey) return jsonError(400, "INVALID_IDEMPOTENCY_KEY");
 
   try {
     const item = await createInventoryWaste({
@@ -64,14 +67,23 @@ export async function handleInventoryWastePost(
       reason: body.reason,
       notes: typeof body.notes === "string" ? body.notes : null,
       occurredOn: typeof body.occurredOn === "string" ? body.occurredOn : null,
+      idempotencyKey,
     });
     return NextResponse.json({ ok: true, item }, { status: 201 });
   } catch (error) {
     const code = error instanceof Error ? error.message : "WASTE_CREATE_FAILED";
     if (code === "PRODUCT_NOT_FOUND") return jsonError(404, code);
-    if (code === "INSUFFICIENT_STOCK") return jsonError(409, code);
+    if (code === "INSUFFICIENT_STOCK" || code === "IDEMPOTENCY_CONFLICT") {
+      return jsonError(409, code);
+    }
     if (code === "INVENTORY_DISABLED" || code === "INVALID_CURRENT_STOCK") return jsonError(409, code);
-    if (code === "INVALID_QUANTITY" || code === "INVALID_CONTEXT") return jsonError(400, code);
+    if (
+      code === "INVALID_QUANTITY" ||
+      code === "INVALID_CONTEXT" ||
+      code === "INVALID_IDEMPOTENCY_KEY"
+    ) {
+      return jsonError(400, code);
+    }
     if (code === "PRODUCT_TENANT_MISMATCH") return jsonError(403, code);
     return jsonError(500, "WASTE_CREATE_FAILED");
   }
