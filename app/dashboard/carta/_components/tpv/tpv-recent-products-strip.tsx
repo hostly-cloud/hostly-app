@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { TpvRecentProductEntry } from "./tpv-recent-products";
 
 type TpvRecentProductsStripProps = {
@@ -61,8 +62,9 @@ function RecentProductChip({
   };
 
   return (
-    <button
-      type="button"
+    <HostlyButton
+      variant="chip"
+      size="compact"
       role="listitem"
       className="hostly-tpv-recent-chip"
       title={label}
@@ -79,6 +81,6 @@ function RecentProductChip({
       onPointerCancel={clearTimer}
     >
       {label}
-    </button>
+    </HostlyButton>
   );
 }
