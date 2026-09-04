@@ -18,6 +18,7 @@ export type HostlyCapability =
   | "tpv.join_tables"
   | "kds.manage"
   | "reservations.manage"
+  | "operations.audit"
   | "catalog.manage"
   | "inventory.view"
   | "inventory.edit"
@@ -53,6 +54,7 @@ export const ALL_HOSTLY_CAPABILITIES: readonly HostlyCapability[] = [
   "tpv.join_tables",
   "kds.manage",
   "reservations.manage",
+  "operations.audit",
   "catalog.manage",
   "inventory.view",
   "inventory.edit",
@@ -74,6 +76,7 @@ const MANAGER_CAPABILITIES: readonly HostlyCapability[] = [
   "tpv.join_tables",
   "kds.manage",
   "reservations.manage",
+  "operations.audit",
   "catalog.manage",
   "inventory.view",
   "inventory.edit",
@@ -112,6 +115,7 @@ export const HOSTLY_CAPABILITY_LABELS: Readonly<Record<HostlyCapability, string>
   "tpv.join_tables": "Unir/separar mesas",
   "kds.manage": "Gestionar cocina y KDS",
   "reservations.manage": "Gestionar reservas",
+  "operations.audit": "Supervisar actividad y sesiones",
   "catalog.manage": "Gestionar carta y productos",
   "inventory.view": "Ver inventario",
   "inventory.edit": "Editar inventario",
@@ -164,7 +168,9 @@ const DASHBOARD_ACCESS: readonly { prefix: string; capability: HostlyCapability 
   { prefix: "/dashboard/empleados", capability: "employees.manage" },
   { prefix: "/dashboard/usuarios", capability: "users.manage" },
   { prefix: "/dashboard/invitaciones", capability: "users.manage" },
+  { prefix: "/dashboard/onboarding", capability: "settings.manage" },
   { prefix: "/dashboard/configuracion/carta", capability: "catalog.manage" },
+  { prefix: "/dashboard/validacion-inteligente", capability: "catalog.manage" },
   { prefix: "/dashboard/productos", capability: "catalog.manage" },
   { prefix: "/dashboard/escandallos", capability: "catalog.manage" },
   { prefix: "/dashboard/inventario", capability: "inventory.view" },
@@ -176,19 +182,23 @@ const DASHBOARD_ACCESS: readonly { prefix: string; capability: HostlyCapability 
   { prefix: "/dashboard/analisis", capability: "analytics.view" },
   { prefix: "/dashboard/reportes", capability: "analytics.view" },
   { prefix: "/dashboard/metrics", capability: "analytics.view" },
+  { prefix: "/dashboard/operacion/activity", capability: "operations.audit" },
+  { prefix: "/dashboard/operacion/sesiones", capability: "operations.audit" },
   { prefix: "/dashboard/operacion/reservas", capability: "reservations.manage" },
+  { prefix: "/dashboard/operacion/cocteleria", capability: "kds.manage" },
   { prefix: "/dashboard/operacion/cocina", capability: "kds.manage" },
   { prefix: "/dashboard/operacion/barra", capability: "kds.manage" },
   { prefix: "/dashboard/cocina", capability: "kds.manage" },
   { prefix: "/dashboard/operacion/tpv", capability: "tpv.sell" },
   { prefix: "/dashboard/operacion/sala", capability: "tpv.sell" },
   { prefix: "/dashboard/sala", capability: "tpv.sell" },
+  { prefix: "/dashboard/carta", capability: "tpv.sell" },
   { prefix: "/dashboard/mesas", capability: "tpv.sell" },
   { prefix: "/dashboard/tables", capability: "tpv.sell" },
   { prefix: "/dashboard/orders", capability: "tpv.sell" },
   { prefix: "/dashboard/caja", capability: "tpv.charge" },
   { prefix: "/dashboard/configuracion", capability: "settings.manage" },
-  { prefix: "/dashboard/config/", capability: "settings.manage" },
+  { prefix: "/dashboard/config", capability: "settings.manage" },
 ];
 
 export function requiredCapabilityForDashboardPath(pathname: string): HostlyCapability | null {
