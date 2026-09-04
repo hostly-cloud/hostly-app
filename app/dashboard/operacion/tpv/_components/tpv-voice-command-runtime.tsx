@@ -8,6 +8,7 @@ import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { chooseTpvVoiceProductCandidate } from "@/lib/tpv/voice-product-match";
 import { chooseTpvVoiceTableCandidate } from "@/lib/tpv/voice-table-match";
 import { listTpvV2TableControllers } from "@/lib/tpv/v2-table-controller-registry";
+import { waitForTpvVoiceSendConfirmation } from "@/lib/tpv/voice-send-confirmation";
 import {
   normalizeTpvVoiceText,
   parseTpvVoiceCommand,
@@ -284,7 +285,7 @@ async function executeAddProduct(query: string, quantity: number, products: Prod
   );
 }
 
-function executeSendOrder(): boolean {
+async function executeSendOrder(announceSuccess = true): Promise<boolean> {
   const button = document.querySelector<HTMLButtonElement>(
     ".carta-tpv-payment-dock .carta-comanda-button",
   );
@@ -292,8 +293,26 @@ function executeSendOrder(): boolean {
     emitFeedback("No hay líneas de comanda listas para enviar.", "error");
     return false;
   }
+
   button.click();
-  emitFeedback("Comanda enviada.", "success");
+  emitFeedback("Enviando comanda…", "info");
+
+  const confirmed = await waitForTpvVoiceSendConfirmation(() => {
+    const currentButton = document.querySelector<HTMLButtonElement>(
+      ".carta-tpv-payment-dock .carta-comanda-button",
+    );
+    return currentButton?.classList.contains("is-success") ? "success" : "pending";
+  });
+
+  if (!confirmed) {
+    emitFeedback(
+      "No he podido confirmar el envío de la comanda. La mesa se mantiene abierta para revisarla.",
+      "error",
+    );
+    return false;
+  }
+
+  if (announceSuccess) emitFeedback("Comanda enviada.", "success");
   return true;
 }
 
@@ -376,7 +395,7 @@ async function executeProductsToTable(
   }
 
   await wait(220);
-  if (!executeSendOrder()) return;
+  if (!(await executeSendOrder(false))) return;
   const summary = resolved.resolvedItems
     .map(({ product, quantity }) => `${quantity} × ${product.nombre}`)
     .join(", ");
@@ -607,7 +626,7 @@ export function TpvVoiceCommandRuntime() {
           );
           break;
         case "send_order":
-          executeSendOrder();
+          void executeSendOrder();
           break;
         case "march_course":
           executeMarchCourse(command.course);
