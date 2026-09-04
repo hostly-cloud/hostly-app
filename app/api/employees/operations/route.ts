@@ -28,6 +28,8 @@ function isClockAction(value: unknown): value is ClockAction {
   );
 }
 
+// Un manager operativo puede gestionar turnos/fichajes/perfiles, pero la gestión
+// de cuentas y documentos sensibles sigue en `users.manage` (owner/admin).
 function canManageEmployees(role: unknown): boolean {
   return serverRoleHasCapability(role, "employees.manage");
 }
