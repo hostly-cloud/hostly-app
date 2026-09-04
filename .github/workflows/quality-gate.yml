@@ -48,6 +48,9 @@ jobs:
       - name: Production security config tests
         run: node --test tests/config/next-security-headers.test.mjs
 
+      - name: Public API surface audit
+        run: node --test tests/security/public-api-surface.test.mjs
+
       - name: Marketing lead abuse protection tests
         run: npx tsx --test tests/lib/marketing-lead-abuse.test.ts
 

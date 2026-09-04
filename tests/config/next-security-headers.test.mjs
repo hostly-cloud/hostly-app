@@ -43,3 +43,18 @@ test("all Hostly routes receive conservative production security headers", async
   // operational workflows, while cross-origin microphone access stays blocked.
   assert.doesNotMatch(permissions, /camera=\(\)/);
 });
+
+test("Hostly does not opt every route into cross-origin API access", async () => {
+  const rules = await nextConfig.headers();
+
+  for (const rule of rules) {
+    const headers = toHeaderMap(rule.headers);
+    const allowOrigin = headers.get("access-control-allow-origin");
+
+    assert.notEqual(
+      allowOrigin,
+      "*",
+      `Unexpected global CORS wildcard on ${rule.source}`,
+    );
+  }
+});

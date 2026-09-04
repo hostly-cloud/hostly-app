@@ -3,49 +3,42 @@ import test from "node:test";
 
 import { buildHostlyHealthSnapshot } from "@/lib/observability/hostly-health";
 
-test("health snapshot exposes safe release metadata", () => {
+test("health snapshot exposes only minimal public metadata", () => {
   const snapshot = buildHostlyHealthSnapshot({
     env: {
       VERCEL_ENV: "production",
-      VERCEL_GIT_COMMIT_SHA: "abc123",
-      VERCEL_DEPLOYMENT_ID: "dpl_test",
+      VERCEL_GIT_COMMIT_SHA: "abcdef1234567890fedcba",
+      VERCEL_DEPLOYMENT_ID: "dpl_should_not_leak",
       VERCEL_REGION: "cdg1",
     },
     now: new Date("2026-09-04T14:00:00.000Z"),
-    uptimeSeconds: 42,
-    nodeVersion: "v24.0.0",
   });
 
-  assert.equal(snapshot.status, "ok");
-  assert.equal(snapshot.service, "hostly-app");
-  assert.equal(snapshot.environment, "production");
-  assert.deepEqual(snapshot.release, {
-    commit: "abc123",
-    deploymentId: "dpl_test",
-    region: "cdg1",
+  assert.deepEqual(snapshot, {
+    status: "ok",
+    service: "hostly-app",
+    environment: "production",
+    release: {
+      commit: "abcdef123456",
+    },
+    timestamp: "2026-09-04T14:00:00.000Z",
   });
-  assert.deepEqual(snapshot.runtime, {
-    node: "v24.0.0",
-    uptimeSeconds: 42,
-  });
-  assert.equal(snapshot.timestamp, "2026-09-04T14:00:00.000Z");
+  assert.equal("runtime" in snapshot, false);
+  assert.equal("deploymentId" in snapshot.release, false);
+  assert.equal("region" in snapshot.release, false);
 });
 
-test("health snapshot does not invent unavailable deployment metadata", () => {
+test("health snapshot does not invent unavailable release metadata", () => {
   const snapshot = buildHostlyHealthSnapshot({
     env: { NODE_ENV: "development" },
     now: new Date("2026-09-04T14:00:00.000Z"),
-    uptimeSeconds: 0,
-    nodeVersion: "v24.0.0",
   });
 
   assert.equal(snapshot.environment, "development");
   assert.equal(snapshot.release.commit, null);
-  assert.equal(snapshot.release.deploymentId, null);
-  assert.equal(snapshot.release.region, null);
 });
 
-test("health snapshot trims blank environment metadata", () => {
+test("health snapshot trims blank environment and release metadata", () => {
   const snapshot = buildHostlyHealthSnapshot({
     env: {
       VERCEL_ENV: "   ",
@@ -53,8 +46,6 @@ test("health snapshot trims blank environment metadata", () => {
       VERCEL_GIT_COMMIT_SHA: "   ",
     },
     now: new Date("2026-09-04T14:00:00.000Z"),
-    uptimeSeconds: 1,
-    nodeVersion: "v24.0.0",
   });
 
   assert.equal(snapshot.environment, "production");
