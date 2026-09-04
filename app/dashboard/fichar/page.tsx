@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { HostlyAlert, HostlyButton, HostlyCard } from "@/components/ui/hostly";
 import type { ClockAction } from "@/lib/employees/types";
 import {
@@ -67,13 +66,16 @@ function isGeolocationError(value: unknown): value is GeolocationPositionError {
 }
 
 export default function EmployeeClockingPage() {
-  const searchParams = useSearchParams();
-  const token = searchParams.get("token") || "";
+  const [token, setToken] = useState("");
   const [state, setState] = useState<ClockingSelfState | null>(null);
   const [loading, setLoading] = useState(true);
   const [workingAction, setWorkingAction] = useState<ClockAction | null>(null);
   const [message, setMessage] = useState<string>("");
   const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    setToken(new URLSearchParams(window.location.search).get("token") || "");
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
