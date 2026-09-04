@@ -12,6 +12,7 @@ export function VentasEmptyState({ placeholder, role }: VentasEmptyStateProps) {
 
   return (
     <AnalyticsEmptyState
+      compact
       role={role}
       icon={
         isError ? (
