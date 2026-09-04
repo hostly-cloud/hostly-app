@@ -251,11 +251,23 @@ function splitCompositeOrderItems(value: string): string[] {
     const token = tokens[index]!;
     const next = tokens[index + 1];
     const isSeparator = token === "y" || token === "e" || token === "mas";
+
     if (isSeparator && current.length > 0 && parseQuantityToken(next) != null) {
       parts.push(current.join(" "));
       current = [];
       continue;
     }
+
+    const startsAnotherQuantifiedItem =
+      current.length >= 2 &&
+      parseQuantityToken(current[0]) != null &&
+      parseQuantityToken(token) != null;
+    if (startsAnotherQuantifiedItem) {
+      parts.push(current.join(" "));
+      current = [token];
+      continue;
+    }
+
     current.push(token);
   }
 
