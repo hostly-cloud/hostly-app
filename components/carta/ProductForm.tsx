@@ -2,6 +2,7 @@
 
 import { type CSSProperties, type ReactNode } from "react";
 import Image from "next/image";
+import { HostlyButton } from "@/components/ui/hostly";
 import { PRODUCT_IMAGE_ACCEPT } from "@/lib/firebase/product-image-contract";
 
 const inputStyle: CSSProperties = {
@@ -126,42 +127,27 @@ export function ProductForm({
           />
           {pendingImageFile ? (
             <div>
-              <button
-                type="button"
+              <HostlyButton
+                variant="secondary"
+                size="compact"
                 disabled={fieldsDisabled}
                 onClick={() => onImageFileChange(null)}
-                style={{
-                  marginTop: 8,
-                  padding: "6px 10px",
-                  borderRadius: 6,
-                  border: "1px solid #666",
-                  background: "#333",
-                  color: "#fff",
-                  cursor: fieldsDisabled ? "not-allowed" : "pointer",
-                }}
+                style={{ marginTop: 8 }}
               >
                 Quitar imagen seleccionada
-              </button>
+              </HostlyButton>
             </div>
           ) : null}
         </div>
       ) : null}
-      <button
-        type="button"
+      <HostlyButton
+        variant="primary"
+        size="touch"
         onClick={() => onSubmit()}
         disabled={submitDisabled}
-        style={{
-          backgroundColor: "#27ae60",
-          color: "white",
-          padding: 10,
-          borderRadius: 8,
-          border: "none",
-          cursor: submitDisabled ? "not-allowed" : "pointer",
-          opacity: submitDisabled ? 0.6 : 1,
-        }}
       >
         {submitLabel}
-      </button>
+      </HostlyButton>
     </div>
   );
 }
