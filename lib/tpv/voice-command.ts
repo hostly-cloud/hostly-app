@@ -162,6 +162,10 @@ const EXPLICIT_INLINE_CORRECTIONS = [
   " perdona mejor ",
   " no queria decir ",
   " no quiero decir ",
+  " rectifico ",
+  " corrijo ",
+  " perdon ",
+  " perdona ",
 ] as const;
 const PACKAGING_WORDS = new Set([
   "botella",
@@ -318,7 +322,7 @@ function normalizeTableQuery(value: string): string {
   const cleaned = stripLeadingFillers(stripSpeechDisfluencies(value))
     .replace(/^(?:la|el)\s+/, "")
     .replace(/^(?:mesa\s+)+/, "")
-    .replace(/^(?:numero|num|nro)\s+/, "")
+    .replace(/^(?:numero|num|nro|n)\s+/, "")
     .trim();
   const spokenNumber = parseSpokenNumberPhrase(cleaned);
   return spokenNumber != null ? String(spokenNumber) : cleaned;
@@ -497,7 +501,7 @@ type OrderTableParts = {
 
 function splitNumberPrefix(value: string): { tableQuery: string; rest: string } | null {
   const tokens = value.split(" ").filter(Boolean);
-  if (tokens[0] === "numero") tokens.shift();
+  if (["numero", "num", "nro", "n"].includes(tokens[0]!)) tokens.shift();
 
   for (const consumed of [3, 1]) {
     if (tokens.length <= consumed) continue;
@@ -521,17 +525,28 @@ function extractTrailingTableTarget(cleaned: string): OrderTableParts | null {
     };
   }
 
+  const directMesa = cleaned.match(/^(.+?)\s+mesa\s+(.+)$/);
+  if (directMesa?.[1] && directMesa[2]) {
+    const tableQuery = normalizeTableQuery(directMesa[2]);
+    if (parseSpokenNumberPhrase(tableQuery) != null || /^\d+$/.test(tableQuery)) {
+      return { orderText: directMesa[1].trim(), tableQuery };
+    }
+  }
+
   const bareTargetPatterns = [
     /^(.*?)\s+a\s+la\s+(.+)$/,
     /^(.*?)\s+al\s+(.+)$/,
+    /^(.*?)\s+a\s+(.+)$/,
     /^(.*?)\s+para\s+la\s+(.+)$/,
     /^(.*?)\s+para\s+el\s+(.+)$/,
     /^(.*?)\s+para\s+(.+)$/,
     /^(.*?)\s+pa\s+la\s+(.+)$/,
+    /^(.*?)\s+pa\s+l\s+(.+)$/,
     /^(.*?)\s+pal\s+(.+)$/,
     /^(.*?)\s+pa\s+(.+)$/,
     /^(.*?)\s+en\s+la\s+(.+)$/,
     /^(.*?)\s+en\s+el\s+(.+)$/,
+    /^(.*?)\s+en\s+(.+)$/,
   ];
 
   for (const pattern of bareTargetPatterns) {
@@ -539,7 +554,9 @@ function extractTrailingTableTarget(cleaned: string): OrderTableParts | null {
     const orderText = match?.[1]?.trim() ?? "";
     const rawTable = match?.[2]?.trim() ?? "";
     if (!orderText || !rawTable) continue;
-    const tableNumber = parseSpokenNumberPhrase(rawTable.replace(/^(?:numero)\s+/, ""));
+    const tableNumber = parseSpokenNumberPhrase(
+      rawTable.replace(/^(?:numero|num|nro|n)\s+/, ""),
+    );
     if (tableNumber == null) continue;
     return { orderText, tableQuery: String(tableNumber) };
   }
@@ -568,7 +585,9 @@ function extractLeadingTableTarget(cleaned: string): OrderTableParts | null {
     }
   }
 
-  const bare = cleaned.match(/^(?:para|pa|a|en)\s+(?:la\s+|el\s+)?(.+)$/);
+  const bare = cleaned.match(
+    /^(?:(?:para|pa|a|en)\s+(?:la\s+|el\s+)?|pa\s+l\s+|pal\s+|(?:la|el)\s+)(.+)$/,
+  );
   if (bare?.[1]) {
     const numeric = splitNumberPrefix(bare[1].trim());
     if (numeric) return { orderText: numeric.rest, tableQuery: numeric.tableQuery };
@@ -579,7 +598,9 @@ function extractLeadingTableTarget(cleaned: string): OrderTableParts | null {
 
 function parseOrderForTable(normalized: string): TpvVoiceCommand | null {
   const cleaned = stripSpeechDisfluencies(normalized);
-  const parts = extractTrailingTableTarget(cleaned) ?? extractLeadingTableTarget(cleaned);
+  const targetInput = stripLeadingOrderRequest(cleaned);
+  const parts =
+    extractTrailingTableTarget(targetInput) ?? extractLeadingTableTarget(targetInput);
   if (!parts) return null;
 
   const orderText = stripLeadingOrderRequest(
