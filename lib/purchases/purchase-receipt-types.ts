@@ -17,6 +17,10 @@ export type PurchaseReceiptLine = {
   orderedQuantity?: number;
   previouslyReceivedQuantity?: number;
   remainingAfterQuantity?: number;
+  /** Coste unitario esperado del pedido en el momento de la recepción. */
+  estimatedUnitCost?: number | null;
+  /** Proveedor resuelto para esta línea en el momento de la recepción. */
+  supplierName?: string | null;
 };
 
 export type PurchaseReceiptApplySummary = {
@@ -70,6 +74,7 @@ export function sanitizePurchaseReceiptLine(raw: unknown): PurchaseReceiptLine |
   const orderedQuantity = readFiniteNumber(rec.orderedQuantity);
   const previouslyReceivedQuantity = readFiniteNumber(rec.previouslyReceivedQuantity);
   const remainingAfterQuantity = readFiniteNumber(rec.remainingAfterQuantity);
+  const estimatedUnitCost = readFiniteNumber(rec.estimatedUnitCost);
 
   return {
     productId,
@@ -88,6 +93,11 @@ export function sanitizePurchaseReceiptLine(raw: unknown): PurchaseReceiptLine |
       remainingAfterQuantity != null && remainingAfterQuantity >= 0
         ? roundInventoryQuantity(remainingAfterQuantity)
         : undefined,
+    estimatedUnitCost:
+      estimatedUnitCost != null && estimatedUnitCost >= 0
+        ? roundInventoryQuantity(estimatedUnitCost)
+        : null,
+    supplierName: readTrimmedString(rec.supplierName, MAX_NAME_LENGTH),
   };
 }
 
@@ -217,6 +227,9 @@ export function buildPurchaseReceiptLinesFromOrder(params: {
       remainingAfterQuantity: roundInventoryQuantity(
         Math.max(0, orderLine.quantity - previouslyReceived - quantity),
       ),
+      estimatedUnitCost: orderLine.estimatedUnitCost ?? null,
+      supplierName:
+        orderLine.supplierName?.trim() || params.order.supplierName?.trim() || null,
     });
   }
 
