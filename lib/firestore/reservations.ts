@@ -15,23 +15,25 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
+import {
+  normalizeOperationalReservationStatus,
+  normalizeReservationDuration,
+  type OperationalReservationStatus,
+} from "@/lib/reservas/reservation-operations";
 
-export type ReservationStatus =
-  | "booked"
-  | "seated"
-  | "completed"
-  | "no_show"
-  | "cancelled";
+export type ReservationStatus = OperationalReservationStatus;
 
 export type Reservation = {
   id: string;
   restaurantId: string;
   customerName: string;
   customerPhone: string;
-  date: string; // YYYY-MM-DD
-  time: string; // HH:mm
+  customerEmail?: string;
+  date: string;
+  time: string;
   partySize: number;
   status: ReservationStatus;
+  durationMinutes?: number;
   tableId?: string;
   tableLabel?: string;
   /** Plano operativo (colección `floorPlans`); opcional en reservas legacy. */
@@ -41,8 +43,16 @@ export type Reservation = {
   zoneId?: string;
   zoneName?: string;
   notes?: string;
+  allergies?: string;
+  preferences?: string;
+  occasion?: string;
   createdAt?: number;
   updatedAt?: number;
+  confirmedAt?: number;
+  seatedAt?: number;
+  completedAt?: number;
+  cancelledAt?: number;
+  noShowAt?: number;
 };
 
 const COLLECTION = "reservations";
@@ -63,16 +73,12 @@ function readTsMs(data: Record<string, unknown>, key: string): number | undefine
 }
 
 function parseStatus(v: unknown): ReservationStatus {
-  if (
-    v === "booked" ||
-    v === "seated" ||
-    v === "completed" ||
-    v === "no_show" ||
-    v === "cancelled"
-  ) {
-    return v;
-  }
-  return "booked";
+  return normalizeOperationalReservationStatus(v);
+}
+
+function readOptionalString(data: Record<string, unknown>, key: string): string | undefined {
+  const value = data[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function mapDocToReservation(d: QueryDocumentSnapshot): Reservation {
@@ -82,23 +88,32 @@ function mapDocToReservation(d: QueryDocumentSnapshot): Reservation {
     restaurantId: typeof data.restaurantId === "string" ? data.restaurantId.trim() : "",
     customerName: typeof data.customerName === "string" ? data.customerName.trim() : "",
     customerPhone: typeof data.customerPhone === "string" ? data.customerPhone.trim() : "",
+    ...(readOptionalString(data, "customerEmail") ? { customerEmail: readOptionalString(data, "customerEmail") } : {}),
     date: typeof data.date === "string" ? data.date.trim() : "",
     time: typeof data.time === "string" ? data.time.trim() : "",
-    partySize: typeof data.partySize === "number" && Number.isFinite(data.partySize) ? data.partySize : Number(data.partySize) || 0,
+    partySize:
+      typeof data.partySize === "number" && Number.isFinite(data.partySize)
+        ? data.partySize
+        : Number(data.partySize) || 0,
     status: parseStatus(data.status),
-    ...(typeof data.tableId === "string" && data.tableId.trim() ? { tableId: data.tableId.trim() } : {}),
-    ...(typeof data.tableLabel === "string" && data.tableLabel.trim() ? { tableLabel: data.tableLabel.trim() } : {}),
-    ...(typeof data.floorPlanId === "string" && data.floorPlanId.trim()
-      ? { floorPlanId: data.floorPlanId.trim() }
-      : {}),
-    ...(typeof data.floorName === "string" && data.floorName.trim()
-      ? { floorName: data.floorName.trim() }
-      : {}),
-    ...(typeof data.zoneId === "string" && data.zoneId.trim() ? { zoneId: data.zoneId.trim() } : {}),
-    ...(typeof data.zoneName === "string" && data.zoneName.trim() ? { zoneName: data.zoneName.trim() } : {}),
-    ...(typeof data.notes === "string" && data.notes.trim() ? { notes: data.notes.trim() } : {}),
+    durationMinutes: normalizeReservationDuration(data.durationMinutes),
+    ...(readOptionalString(data, "tableId") ? { tableId: readOptionalString(data, "tableId") } : {}),
+    ...(readOptionalString(data, "tableLabel") ? { tableLabel: readOptionalString(data, "tableLabel") } : {}),
+    ...(readOptionalString(data, "floorPlanId") ? { floorPlanId: readOptionalString(data, "floorPlanId") } : {}),
+    ...(readOptionalString(data, "floorName") ? { floorName: readOptionalString(data, "floorName") } : {}),
+    ...(readOptionalString(data, "zoneId") ? { zoneId: readOptionalString(data, "zoneId") } : {}),
+    ...(readOptionalString(data, "zoneName") ? { zoneName: readOptionalString(data, "zoneName") } : {}),
+    ...(readOptionalString(data, "notes") ? { notes: readOptionalString(data, "notes") } : {}),
+    ...(readOptionalString(data, "allergies") ? { allergies: readOptionalString(data, "allergies") } : {}),
+    ...(readOptionalString(data, "preferences") ? { preferences: readOptionalString(data, "preferences") } : {}),
+    ...(readOptionalString(data, "occasion") ? { occasion: readOptionalString(data, "occasion") } : {}),
     createdAt: readTsMs(data, "createdAt"),
     updatedAt: readTsMs(data, "updatedAt"),
+    confirmedAt: readTsMs(data, "confirmedAt"),
+    seatedAt: readTsMs(data, "seatedAt"),
+    completedAt: readTsMs(data, "completedAt"),
+    cancelledAt: readTsMs(data, "cancelledAt"),
+    noShowAt: readTsMs(data, "noShowAt"),
   };
 }
 
@@ -197,9 +212,13 @@ export async function createReservation(
     time,
     partySize,
     status,
+    durationMinutes: normalizeReservationDuration(payload.durationMinutes),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
+
+  const customerEmail = String(payload.customerEmail ?? "").trim();
+  if (customerEmail) docPayload.customerEmail = customerEmail;
 
   const tid = String(payload.tableId ?? "").trim();
   if (tid) {
@@ -217,15 +236,14 @@ export async function createReservation(
     const fn = String(payload.floorName ?? "").trim();
     if (fn) docPayload.floorName = fn;
   }
-  if (payload.notes && String(payload.notes).trim()) {
-    docPayload.notes = String(payload.notes).trim();
+  for (const key of ["notes", "allergies", "preferences", "occasion"] as const) {
+    const value = String(payload[key] ?? "").trim();
+    if (value) docPayload[key] = value;
   }
-
-  console.log("saving reservation", docPayload);
+  if (status === "booked") docPayload.confirmedAt = serverTimestamp();
 
   try {
     const ref = await addDoc(collection(db, COLLECTION), docPayload);
-    console.log("reservation saved", ref.id);
     return ref.id;
   } catch (e) {
     console.error("createReservation failed", e);
@@ -246,23 +264,37 @@ export async function updateReservation(
       | "zoneId"
       | "zoneName"
       | "notes"
+      | "allergies"
+      | "preferences"
+      | "occasion"
       | "customerName"
       | "customerPhone"
+      | "customerEmail"
       | "partySize"
       | "date"
       | "time"
+      | "durationMinutes"
     >
   >,
 ): Promise<void> {
   const id = String(reservationId ?? "").trim();
   if (!id) throw new Error("updateReservation: reservationId no disponible");
   const payload: DocumentData = { updatedAt: serverTimestamp() };
-  if (updates.status) payload.status = parseStatus(updates.status);
+  if (updates.status) {
+    payload.status = parseStatus(updates.status);
+    if (updates.status === "booked") payload.confirmedAt = serverTimestamp();
+    if (updates.status === "seated") payload.seatedAt = serverTimestamp();
+    if (updates.status === "completed") payload.completedAt = serverTimestamp();
+    if (updates.status === "cancelled") payload.cancelledAt = serverTimestamp();
+    if (updates.status === "no_show") payload.noShowAt = serverTimestamp();
+  }
   if (updates.customerName !== undefined) payload.customerName = String(updates.customerName ?? "").trim();
   if (updates.customerPhone !== undefined) payload.customerPhone = String(updates.customerPhone ?? "").trim();
+  if (updates.customerEmail !== undefined) payload.customerEmail = String(updates.customerEmail ?? "").trim() || null;
   if (updates.date !== undefined) payload.date = String(updates.date ?? "").trim();
   if (updates.time !== undefined) payload.time = String(updates.time ?? "").trim();
   if (updates.partySize !== undefined) payload.partySize = Math.max(1, Math.round(Number(updates.partySize) || 0));
+  if (updates.durationMinutes !== undefined) payload.durationMinutes = normalizeReservationDuration(updates.durationMinutes);
 
   if (updates.tableId !== undefined) payload.tableId = updates.tableId ? String(updates.tableId).trim() : null;
   if (updates.tableLabel !== undefined) payload.tableLabel = updates.tableLabel ? String(updates.tableLabel).trim() : null;
@@ -274,7 +306,9 @@ export async function updateReservation(
   }
   if (updates.zoneId !== undefined) payload.zoneId = updates.zoneId ? String(updates.zoneId).trim() : null;
   if (updates.zoneName !== undefined) payload.zoneName = updates.zoneName ? String(updates.zoneName).trim() : null;
-  if (updates.notes !== undefined) payload.notes = updates.notes ? String(updates.notes).trim() : null;
+  for (const key of ["notes", "allergies", "preferences", "occasion"] as const) {
+    if (updates[key] !== undefined) payload[key] = updates[key] ? String(updates[key]).trim() : null;
+  }
   try {
     await updateDoc(doc(db, COLLECTION, id), payload);
   } catch (e) {
