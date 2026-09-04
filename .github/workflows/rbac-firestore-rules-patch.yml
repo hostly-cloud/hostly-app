@@ -1,0 +1,37 @@
+name: One-shot RBAC Firestore rules patch
+
+on:
+  push:
+    branches:
+      - feat/operational-rbac
+    paths:
+      - scripts/patch-rbac-firestore-rules.mjs
+      - .github/workflows/rbac-firestore-rules-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/operational-rbac
+          fetch-depth: 0
+
+      - name: Patch rules
+        run: node scripts/patch-rbac-firestore-rules.mjs
+
+      - name: Remove one-shot helper
+        run: rm scripts/patch-rbac-firestore-rules.mjs .github/workflows/rbac-firestore-rules-patch.yml
+
+      - name: Commit hardened rules
+        run: |
+          git config user.name "hostly-rbac-bot"
+          git config user.email "fer@hostlyapp.app"
+          git add firestore.rules scripts/patch-rbac-firestore-rules.mjs .github/workflows/rbac-firestore-rules-patch.yml
+          git commit -m "fix(rbac): harden Firestore operational access"
+          git push origin HEAD:feat/operational-rbac
