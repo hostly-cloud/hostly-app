@@ -1,0 +1,145 @@
+name: One-shot stream-json compatibility backport
+
+on:
+  push:
+    branches:
+      - fix/security-zero-moderate-audit
+
+permissions:
+  contents: write
+
+jobs:
+  backport-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Vendor legacy-compatible stream-json
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf vendor/stream-json-compat /tmp/stream-json-hostly
+          mkdir -p vendor/stream-json-compat /tmp/stream-json-hostly
+          cd /tmp/stream-json-hostly
+          TARBALL="$(npm pack stream-json@1.9.1 --silent)"
+          tar -xzf "$TARBALL"
+          cp -R package/. "$GITHUB_WORKSPACE/vendor/stream-json-compat/"
+          cd "$GITHUB_WORKSPACE"
+
+          node <<'NODE'
+          const fs = require('fs');
+          const pkgPath = 'vendor/stream-json-compat/package.json';
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          pkg.version = '3.5.0-hostly.1';
+          pkg.description = 'Hostly compatibility backport of stream-json 1.9.1 with the upstream maxDepth security fix';
+          pkg.private = true;
+          pkg.hostlySecurityBackport = {
+            upstreamBase: 'stream-json@1.9.1',
+            advisory: 'GHSA-528h-pc64-c93x',
+            upstreamFix: 'a869fb98aaef9225556f49901a8f55954ff856e6',
+            defaultMaxDepth: 1024
+          };
+          delete pkg.devDependencies;
+          delete pkg.scripts;
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+
+          const filterPath = 'vendor/stream-json-compat/filters/FilterBase.js';
+          let source = fs.readFileSync(filterPath, 'utf8');
+          const constructorNeedle = "    this._stack = [];\n\n    const filter = options && options.filter,";
+          const constructorReplacement = "    this._stack = [];\n    this._maxDepth = options && Object.prototype.hasOwnProperty.call(options, 'maxDepth') ? options.maxDepth : 1024;\n\n    const filter = options && options.filter,";
+          if (!source.includes(constructorNeedle)) throw new Error('FilterBase constructor anchor not found');
+          source = source.replace(constructorNeedle, constructorReplacement);
+
+          const checkNeedle = "    this._previousToken = chunk.name;\n    // check, if we allow a chunk\n    if (this._checkChunk(chunk)) {";
+          const checkReplacement = "    this._previousToken = chunk.name;\n    // Security backport of GHSA-528h-pc64-c93x: bound path evaluation depth.\n    if (this._stack.length > this._maxDepth) {\n      return callback(new RangeError(`filter: JSON nesting depth exceeds maxDepth (${this._maxDepth})`));\n    }\n    // check, if we allow a chunk\n    if (this._checkChunk(chunk)) {";
+          if (!source.includes(checkNeedle)) throw new Error('FilterBase check anchor not found');
+          source = source.replace(checkNeedle, checkReplacement);
+          fs.writeFileSync(filterPath, source);
+
+          const rootPath = 'package.json';
+          const root = JSON.parse(fs.readFileSync(rootPath, 'utf8'));
+          root.overrides = root.overrides || {};
+          root.overrides['firebase-tools'] = root.overrides['firebase-tools'] || {};
+          root.overrides['firebase-tools']['stream-json'] = 'file:vendor/stream-json-compat';
+          fs.writeFileSync(rootPath, JSON.stringify(root, null, 2) + '\n');
+          NODE
+
+      - name: Add compatibility security regression test
+        shell: bash
+        run: |
+          cat > tests/security/stream-json-compat.test.mjs <<'EOF'
+          import assert from 'node:assert/strict';
+          import test from 'node:test';
+          import { createRequire } from 'node:module';
+
+          const require = createRequire(import.meta.url);
+          const firebaseRequire = createRequire(require.resolve('firebase-tools/package.json'));
+
+          function runPipeline(input, maxDepth) {
+            return new Promise((resolve, reject) => {
+              const streamJson = firebaseRequire('stream-json');
+              const Pick = firebaseRequire('stream-json/filters/Pick');
+              const { chain } = firebaseRequire('stream-chain');
+              const output = [];
+              const pipeline = chain([
+                streamJson.parser(),
+                Pick.pick({ filter: 'never.matches', ...(maxDepth === undefined ? {} : { maxDepth }) })
+              ]);
+              pipeline.on('data', chunk => output.push(chunk));
+              pipeline.on('error', reject);
+              pipeline.on('end', () => resolve(output));
+              pipeline.end(input);
+            });
+          }
+
+          test('Firebase CLI keeps its legacy stream-json CommonJS import surface', () => {
+            assert.equal(typeof firebaseRequire('stream-json').parser, 'function');
+            assert.equal(typeof firebaseRequire('stream-json/filters/Pick').pick, 'function');
+            assert.equal(typeof firebaseRequire('stream-json/filters/Filter').filter, 'function');
+            assert.equal(typeof firebaseRequire('stream-json/streamers/StreamArray').streamArray, 'function');
+            assert.equal(typeof firebaseRequire('stream-json/streamers/StreamObject').streamObject, 'function');
+          });
+
+          test('Hostly backport rejects pathological JSON nesting by default', async () => {
+            const depth = 1100;
+            const input = '{"a":'.repeat(depth) + '1' + '}'.repeat(depth);
+            await assert.rejects(runPipeline(input), error => {
+              assert.equal(error instanceof RangeError, true);
+              assert.match(error.message, /maxDepth \(1024\)/);
+              return true;
+            });
+          });
+
+          test('Hostly backport preserves explicit maxDepth configuration', async () => {
+            const input = '{"a":{"b":1}}';
+            await assert.rejects(runPipeline(input, 0), RangeError);
+          });
+          EOF
+
+      - name: Refresh lockfile
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Install and audit
+        run: |
+          npm ci
+          npm audit
+
+      - name: Verify Firebase CLI and security backport
+        run: |
+          npx firebase --version
+          node --test tests/security/stream-json-compat.test.mjs
+
+      - name: Commit compatibility backport
+        run: |
+          rm .github/workflows/one-shot-stream-json-compat.yml
+          git config user.name "hostly-cloud"
+          git config user.email "fer@hostlyapp.app"
+          git add package.json package-lock.json vendor/stream-json-compat tests/security/stream-json-compat.test.mjs .github/workflows/one-shot-stream-json-compat.yml
+          git commit -m "fix(security): backport stream-json depth guard for Firebase CLI"
+          git push
