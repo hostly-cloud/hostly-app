@@ -41,8 +41,8 @@ function statusForError(code: string): number {
 export async function POST(req: Request) {
   const authCtx = await requireAuthenticatedRestaurant(req);
   if (isAuthErrorResponse(authCtx)) return authCtx;
-  if (!serverRoleHasCapability(authCtx.role, "tpv.sell")) {
-    return jsonError(403, "RESERVATIONS_OPERATION_REQUIRED");
+  if (!serverRoleHasCapability(authCtx.role, "reservations.manage")) {
+    return jsonError(403, "RESERVATIONS_MANAGE_REQUIRED");
   }
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;

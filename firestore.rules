@@ -247,6 +247,18 @@ service cloud.firestore {
       return isManagerOrAbove();
     }
 
+    function canManageReservations() {
+      return canonicalNormalizedRole().matches('^(owner|admin|manager|waiter)$');
+    }
+
+    function canAuditOperations() {
+      return canonicalNormalizedRole().matches('^(owner|admin|manager)$');
+    }
+
+    function canManageCatalog() {
+      return isManagerOrAbove();
+    }
+
     function isAllowedOrderItemCreate() {
       let data = request.resource.data;
       let profile = canonicalProfileData();
@@ -789,13 +801,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // PRODUCTS
+    // PRODUCTS (legacy root collection): lectura operativa, escritura manager+.
     match /products/{productId} {
       allow read: if sameRestaurant(resource.data.restaurantId);
-      allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId)
+        && canManageCatalog();
       allow update: if sameRestaurant(resource.data.restaurantId)
-        && request.resource.data.restaurantId == resource.data.restaurantId;
-      allow delete: if sameRestaurant(resource.data.restaurantId);
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && canManageCatalog();
+      allow delete: if sameRestaurant(resource.data.restaurantId)
+        && canManageCatalog();
     }
 
     // INVITES
@@ -865,8 +880,10 @@ service cloud.firestore {
       match /floorPlanSnapshots/{snapshotId} {
         allow read: if sameRestaurant(restaurantId);
         allow create: if sameRestaurant(restaurantId)
+          && canManageSettings()
           && request.resource.data.restaurantId == restaurantId;
         allow update: if sameRestaurant(restaurantId)
+          && canManageSettings()
           && resource.data.restaurantId == restaurantId
           && request.resource.data.restaurantId == restaurantId;
         allow delete: if false;
@@ -1053,9 +1070,9 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      // Registro operacional append-only (trazabilidad multi-tablet).
+      // Registro operacional append-only: solo supervisión puede leerlo.
       match /activityLogs/{logId} {
-        allow read: if sameRestaurant(restaurantId);
+        allow read: if sameRestaurant(restaurantId) && canAuditOperations();
         allow create: if sameRestaurant(restaurantId)
           && request.resource.data.restaurantId == restaurantId;
         allow update, delete: if false;
@@ -1073,9 +1090,9 @@ service cloud.firestore {
           && resource.data.restaurantId == restaurantId;
       }
 
-      // Sesiones activas por dispositivo/pestaña (trazabilidad operacional).
+      // Sesiones: cada dispositivo mantiene su presencia; solo supervisión las lista.
       match /activeSessions/{sessionId} {
-        allow read: if sameRestaurant(restaurantId);
+        allow read: if sameRestaurant(restaurantId) && canAuditOperations();
         allow create: if sameRestaurant(restaurantId)
           && request.resource.data.restaurantId == restaurantId;
         allow update: if sameRestaurant(restaurantId)
@@ -1106,50 +1123,68 @@ service cloud.firestore {
             'groupId',
             'mainTableId',
           ])
-          && affected.hasOnly([
-            'name',
-            'label',
-            'zoneId',
-            'zoneName',
-            'guestCount',
-            'dinersCount',
-            'assignedOperatorId',
-            'assignedOperatorName',
-            'assignedAt',
-            'updatedAt',
-            'x',
-            'y',
-            'width',
-            'height',
-            'rotation',
-            'shape',
-            'capacity',
-            'notes',
-            'metadata',
-          ]);
+          && (
+            (canSellTpv() && affected.hasOnly([
+              'guestCount',
+              'dinersCount',
+              'assignedOperatorId',
+              'assignedOperatorName',
+              'assignedAt',
+              'updatedAt',
+              'notes',
+              'metadata',
+            ]))
+            ||
+            (canManageSettings() && affected.hasOnly([
+              'name',
+              'label',
+              'zoneId',
+              'zoneName',
+              'guestCount',
+              'dinersCount',
+              'assignedOperatorId',
+              'assignedOperatorName',
+              'assignedAt',
+              'updatedAt',
+              'x',
+              'y',
+              'width',
+              'height',
+              'rotation',
+              'shape',
+              'capacity',
+              'notes',
+              'metadata',
+            ]))
+          );
       }
 
       allow read: if sameRestaurant(resource.data.restaurantId);
-      allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId)
+        && canManageSettings();
       allow update: if isAllowedTableClientUpdate();
       allow delete: if false;
     }
 
-    // FLOOR PLAN ZONES
+    // FLOOR PLAN ZONES — el editor de sala es configuración owner/admin.
     match /zones/{zoneId} {
       allow read: if sameRestaurant(resource.data.restaurantId);
-      allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId)
+        && canManageSettings();
       allow update: if sameRestaurant(resource.data.restaurantId)
-        && request.resource.data.restaurantId == resource.data.restaurantId;
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && canManageSettings();
       allow delete: if false;
     }
 
-    // FLOOR PLANS
+    // FLOOR PLANS — el editor de sala es configuración owner/admin.
     match /floorPlans/{floorPlanId} {
       allow read: if sameRestaurant(resource.data.restaurantId);
-      allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId)
+        && canManageSettings();
       allow update: if sameRestaurant(resource.data.restaurantId)
-        && request.resource.data.restaurantId == resource.data.restaurantId;
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && canManageSettings();
       allow delete: if false;
     }
 
@@ -1169,13 +1204,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // RESERVATIONS
+    // RESERVATIONS — mutaciones exclusivamente vía API Admin server-authoritative.
     match /reservations/{reservationId} {
-      allow read: if sameRestaurant(resource.data.restaurantId);
-      allow create: if sameRestaurant(request.resource.data.restaurantId);
-      allow update: if sameRestaurant(resource.data.restaurantId)
-        && request.resource.data.restaurantId == resource.data.restaurantId;
-      allow delete: if false;
+      allow read: if sameRestaurant(resource.data.restaurantId)
+        && canManageReservations();
+      allow create, update, delete: if false;
     }
 
     // PAYMENTS (cobros, tickets, pagos parciales split_by_items)

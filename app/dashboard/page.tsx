@@ -134,19 +134,19 @@ const OPERATION: Action[] = [
     href: "/dashboard/operacion/barra",
     label: "Barra",
     kind: "bar",
-    visible: (can) => can("kds.manage") || can("tpv.sell"),
+    visible: (can) => can("kds.manage"),
   },
   {
     href: "/dashboard/operacion/cocteleria",
     label: "Coctelería",
     kind: "cocktail",
-    visible: (can) => can("kds.manage") || can("tpv.sell"),
+    visible: (can) => can("kds.manage"),
   },
   {
     href: "/dashboard/operacion/reservas",
     label: "Reservas",
     kind: "reservations",
-    visible: (can) => can("tpv.sell"),
+    visible: (can) => can("reservations.manage"),
   },
 ];
 const SUBTITLES: Record<string, string> = {
@@ -161,7 +161,7 @@ const MANAGEMENT = [
     label: "Productos",
     subtitle: "Carta y catálogo",
     kind: "products" as const,
-    capability: "settings.manage" as HostlyCapability,
+    capability: "catalog.manage" as HostlyCapability,
   },
   {
     path: "/dashboard/configuracion",

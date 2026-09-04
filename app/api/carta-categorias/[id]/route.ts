@@ -53,7 +53,7 @@ function docToCategory(restauranteId: string, id: string, d: DocumentData): Cart
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const authContext = await requireLegacyRestaurantApi(
     req,
-    "settings.manage",
+    "catalog.manage",
   );
   if (isAuthErrorResponse(authContext)) return authContext;
 
@@ -176,7 +176,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const authContext = await requireLegacyRestaurantApi(
     req,
-    "settings.manage",
+    "catalog.manage",
   );
   if (isAuthErrorResponse(authContext)) return authContext;
 

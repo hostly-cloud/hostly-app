@@ -3,6 +3,7 @@ import {
   isAuthErrorResponse,
   requireAuthenticatedRestaurant,
 } from "@/lib/server/auth/require-authenticated-restaurant";
+import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import {
   applyClockAction,
   deleteEmployeeShift,
@@ -27,11 +28,17 @@ function isClockAction(value: unknown): value is ClockAction {
   );
 }
 
+// Un manager operativo puede gestionar turnos/fichajes/perfiles, pero la gestión
+// de cuentas y documentos sensibles sigue en `users.manage` (owner/admin).
+function canManageEmployees(role: unknown): boolean {
+  return serverRoleHasCapability(role, "employees.manage");
+}
+
 export async function GET(req: Request) {
   try {
     const auth = await requireAuthenticatedRestaurant(req);
     if (isAuthErrorResponse(auth)) return auth;
-    if (!auth.canManageUsers) return jsonError(403, "USERS_MANAGE_REQUIRED");
+    if (!canManageEmployees(auth.role)) return jsonError(403, "EMPLOYEES_MANAGE_REQUIRED");
 
     const url = new URL(req.url);
     const today = new Intl.DateTimeFormat("en-CA", {
@@ -73,8 +80,8 @@ export async function POST(req: Request) {
           ? body.employeeId.trim()
           : auth.uid;
       const actingOnOtherEmployee = requestedEmployeeId !== auth.uid;
-      if (actingOnOtherEmployee && !auth.canManageUsers) {
-        return jsonError(403, "USERS_MANAGE_REQUIRED");
+      if (actingOnOtherEmployee && !canManageEmployees(auth.role)) {
+        return jsonError(403, "EMPLOYEES_MANAGE_REQUIRED");
       }
       await applyClockAction({
         db: auth.db,
@@ -87,7 +94,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    if (!auth.canManageUsers) return jsonError(403, "USERS_MANAGE_REQUIRED");
+    if (!canManageEmployees(auth.role)) return jsonError(403, "EMPLOYEES_MANAGE_REQUIRED");
 
     if (action === "profile.save") {
       await upsertEmployeeProfile({

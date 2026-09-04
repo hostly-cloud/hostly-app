@@ -6,12 +6,17 @@ import { HostlyButton } from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { useAuth } from "@/components/auth/auth-context";
 import { logout } from "@/lib/auth/auth";
+import {
+  canAccessDashboardPath,
+  requireCapabilityLabel,
+  requiredCapabilityForDashboardPath,
+} from "@/lib/auth/hostly-capabilities";
 
 export function DashboardGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname() ?? "/dashboard";
   const searchParams = useSearchParams();
-  const { user, ready, profileReady, profileAccessIssue } = useAuth();
+  const { user, role, ready, profileReady, profileAccessIssue } = useAuth();
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
@@ -76,6 +81,29 @@ export function DashboardGate({ children }: { children: ReactNode }) {
             onClick={() => void logout()}
           >
             Cerrar sesión
+          </HostlyButton>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canAccessDashboardPath(role, pathname)) {
+    const required = requiredCapabilityForDashboardPath(pathname);
+    return (
+      <div className="hostly-session-state">
+        <div className="hostly-session-state__panel" role="alert">
+          <p className="m-0 font-semibold">Acceso restringido</p>
+          <p className="mb-0 mt-2 text-sm">
+            Tu rol no permite abrir esta sección.
+            {required ? ` Permiso necesario: ${requireCapabilityLabel(required)}.` : ""}
+          </p>
+          <HostlyButton
+            variant="secondary"
+            size="compact"
+            className="mt-4"
+            onClick={() => router.replace("/dashboard")}
+          >
+            Volver al inicio
           </HostlyButton>
         </div>
       </div>
