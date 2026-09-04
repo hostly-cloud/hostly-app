@@ -3,6 +3,7 @@ import type { ModifierInventoryUnit } from "@/lib/modifiers/modifier-types";
 /** Origen del movimiento en el ledger central del restaurante. */
 export const STOCK_MOVEMENT_SOURCES = [
   "inventory_receipt",
+  "inventory_waste",
   "modifier_sale",
   "modifier_sale_reversal",
   "recipe_sale",
