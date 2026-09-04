@@ -25,18 +25,18 @@ jobs:
           ref: feat/operational-rbac
           fetch-depth: 0
 
-      - name: Apply one-shot rules patch when helper exists
+      - name: Apply one-shot RBAC alignment when helper exists
         run: |
           if [ ! -f scripts/patch-rbac-firestore-rules.mjs ]; then
-            echo "RBAC rules patch already applied"
+            echo "RBAC alignment already applied"
             exit 0
           fi
           node scripts/patch-rbac-firestore-rules.mjs
           rm -f scripts/patch-rbac-firestore-rules.mjs .github/workflows/rbac-firestore-rules-patch.yml
           git config user.name "hostly-rbac-bot"
           git config user.email "fer@hostlyapp.app"
-          git add firestore.rules scripts/patch-rbac-firestore-rules.mjs .github/workflows/rbac-firestore-rules-patch.yml
-          git commit -m "fix(rbac): harden Firestore operational access"
+          git add -A
+          git commit -m "fix(rbac): align catalog APIs and table access"
           git push origin HEAD:feat/operational-rbac
 
   quality:
