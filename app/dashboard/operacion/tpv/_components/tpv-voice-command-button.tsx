@@ -38,6 +38,16 @@ type SpeechRecognitionLike = {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
+type VoicePreviewDetail = {
+  transcript: string;
+  summary: string;
+  canConfirm: boolean;
+  tone: TpvVoiceFeedbackTone;
+};
+
+const TPV_VOICE_PREVIEW_REQUEST_EVENT = "hostly:tpv-voice-preview-request";
+const TPV_VOICE_PREVIEW_EVENT = "hostly:tpv-voice-preview";
+
 declare global {
   interface Window {
     SpeechRecognition?: SpeechRecognitionConstructor;
@@ -70,6 +80,7 @@ export function TpvVoiceCommandButton() {
   const [listening, setListening] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<TpvVoiceFeedbackTone>("info");
+  const [preview, setPreview] = useState<VoicePreviewDetail | null>(null);
 
   const showMessage = useCallback(
     (nextMessage: string, tone: TpvVoiceFeedbackTone = "info") => {
@@ -89,11 +100,28 @@ export function TpvVoiceCommandButton() {
       const detail = (event as CustomEvent<TpvVoiceFeedbackDetail>).detail;
       const nextMessage = detail?.message?.trim() ?? "";
       if (!nextMessage) return;
+      setPreview(null);
       showMessage(nextMessage, detail.tone ?? "info");
     };
     window.addEventListener(TPV_VOICE_FEEDBACK_EVENT, feedbackHandler);
     return () => window.removeEventListener(TPV_VOICE_FEEDBACK_EVENT, feedbackHandler);
   }, [showMessage]);
+
+  useEffect(() => {
+    const previewHandler = (event: Event) => {
+      const detail = (event as CustomEvent<VoicePreviewDetail>).detail;
+      if (!detail?.transcript?.trim() || !detail?.summary?.trim()) return;
+      if (messageTimerRef.current != null) {
+        window.clearTimeout(messageTimerRef.current);
+        messageTimerRef.current = null;
+      }
+      setMessage(null);
+      setPreview(detail);
+    };
+
+    window.addEventListener(TPV_VOICE_PREVIEW_EVENT, previewHandler);
+    return () => window.removeEventListener(TPV_VOICE_PREVIEW_EVENT, previewHandler);
+  }, []);
 
   useEffect(() => {
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
@@ -106,6 +134,7 @@ export function TpvVoiceCommandButton() {
 
     recognition.onstart = () => {
       setListening(true);
+      setPreview(null);
       setMessage("Escuchando…");
       setMessageTone("info");
       if (messageTimerRef.current != null) {
@@ -120,16 +149,17 @@ export function TpvVoiceCommandButton() {
       const transcript = lastResult?.[0]?.transcript?.trim() ?? "";
       if (!transcript) return;
 
-      setMessage(`Procesando: “${transcript}”`);
+      setMessage(`Interpretando: “${transcript}”`);
       setMessageTone("info");
-      const detail: TpvVoiceCommandDetail = { transcript, source: "tpv" };
+      const detail = { transcript, source: "tpv" as const };
       window.dispatchEvent(
-        new CustomEvent<TpvVoiceCommandDetail>(TPV_VOICE_COMMAND_EVENT, { detail }),
+        new CustomEvent(TPV_VOICE_PREVIEW_REQUEST_EVENT, { detail }),
       );
     };
 
     recognition.onerror = (event) => {
       setListening(false);
+      setPreview(null);
       showMessage(getVoiceErrorMessage(event.error), "error");
     };
 
@@ -165,9 +195,79 @@ export function TpvVoiceCommandButton() {
     }
   };
 
+  const confirmPreview = () => {
+    if (!preview?.canConfirm) return;
+    const detail: TpvVoiceCommandDetail = {
+      transcript: preview.transcript,
+      source: "tpv",
+    };
+    setPreview(null);
+    setMessage("Enviando comando…");
+    setMessageTone("info");
+    window.dispatchEvent(
+      new CustomEvent<TpvVoiceCommandDetail>(TPV_VOICE_COMMAND_EVENT, { detail }),
+    );
+  };
+
+  const cancelPreview = () => {
+    setPreview(null);
+    setMessage(null);
+  };
+
   return (
     <>
-      {message ? (
+      {preview ? (
+        <div
+          role="dialog"
+          aria-label="Confirmar comando por voz"
+          className={`fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-[72] w-[min(24rem,calc(100vw-2rem))] rounded-2xl border p-3 shadow-[var(--hostly-shadow-card)] sm:bottom-[5.5rem] sm:right-6 ${feedbackToneClass(preview.tone)}`}
+        >
+          <div className="text-[11px] font-bold uppercase tracking-[0.08em] opacity-65">
+            Has dicho
+          </div>
+          <div className="mt-1 text-sm font-semibold">“{preview.transcript}”</div>
+
+          <div className="mt-3 text-[11px] font-bold uppercase tracking-[0.08em] opacity-65">
+            He entendido
+          </div>
+          <div className="mt-1 text-sm font-bold leading-5">{preview.summary}</div>
+
+          <div className="mt-3 flex gap-2">
+            <HostlyButton
+              variant="secondary"
+              size="compact"
+              onClick={cancelPreview}
+              className="flex-1"
+            >
+              Cancelar
+            </HostlyButton>
+            {preview.canConfirm ? (
+              <HostlyButton
+                variant="primary"
+                size="compact"
+                onClick={confirmPreview}
+                className="flex-1"
+              >
+                OK, enviar
+              </HostlyButton>
+            ) : (
+              <HostlyButton
+                variant="primary"
+                size="compact"
+                onClick={() => {
+                  cancelPreview();
+                  window.setTimeout(() => toggleVoiceCommand(), 80);
+                }}
+                className="flex-1"
+              >
+                Repetir
+              </HostlyButton>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {message && !preview ? (
         <div
           role="status"
           aria-live="polite"
