@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import {
   HOSTLY_HELP_INTENTS,
@@ -60,9 +61,10 @@ export function HostlyHelpAssistant() {
 
   return (
     <>
-      <button
+      <HostlyButton
         ref={triggerRef}
-        type="button"
+        variant="primary"
+        size="touch"
         aria-expanded={open}
         aria-controls="hostly-help-panel"
         data-hostly-help-trigger
@@ -71,7 +73,7 @@ export function HostlyHelpAssistant() {
       >
         <span aria-hidden className="text-base">✦</span>
         <span className="hostly-help-trigger__label">Ayuda</span>
-      </button>
+      </HostlyButton>
 
       {open ? (
         <section
@@ -91,14 +93,14 @@ export function HostlyHelpAssistant() {
                 Te explico el camino y te llevo a la pantalla correcta. No ejecuto cambios por ti.
               </p>
             </div>
-            <button
-              type="button"
-              aria-label="Cerrar ayuda"
+            <HostlyButton
+              variant="icon"
+              iconOnlyLabel="Cerrar ayuda"
               onClick={close}
               className="inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-[var(--hostly-line)] text-xl text-[var(--hostly-ink-muted)] hover:bg-[var(--hostly-ice-50)]"
             >
               ×
-            </button>
+            </HostlyButton>
           </div>
 
           <form onSubmit={onSubmit} className="mt-4 flex gap-2">
@@ -111,9 +113,9 @@ export function HostlyHelpAssistant() {
               placeholder="Ej.: ¿Cómo enlazo la impresora?"
               className="min-h-12 min-w-0 flex-1 rounded-[14px] border border-[var(--hostly-line-strong)] bg-white px-3 text-sm text-[var(--hostly-ink)] outline-none focus:border-[var(--hostly-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--hostly-accent)_18%,transparent)]"
             />
-            <button type="submit" className="hostly-button-primary min-h-12 shrink-0 px-4">
+            <HostlyButton type="submit" variant="primary" size="touch" className="min-h-12 shrink-0 px-4">
               Preguntar
-            </button>
+            </HostlyButton>
           </form>
 
           {!searched ? (
@@ -123,14 +125,15 @@ export function HostlyHelpAssistant() {
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {quickIntents.map((intent) => (
-                  <button
+                  <HostlyButton
                     key={intent.id}
-                    type="button"
+                    variant="chip"
+                    size="touch"
                     onClick={() => runQuery(intent.keywords[0])}
                     className="min-h-11 rounded-full border border-[var(--hostly-line)] bg-[var(--hostly-ice-50)] px-3 text-left text-xs font-semibold text-[var(--hostly-navy-deep)] hover:border-[var(--hostly-accent)]"
                   >
                     {intent.title}
-                  </button>
+                  </HostlyButton>
                 ))}
               </div>
             </div>
