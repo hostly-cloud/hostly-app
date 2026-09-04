@@ -4,12 +4,53 @@ import type { Product } from "@/types/product";
 export type TpvVoiceProductMatch = {
   product: Product;
   score: number;
-  matchedBy: "name" | "category" | "service_alias" | "catalog_context";
+  matchedBy:
+    | "name"
+    | "category"
+    | "family"
+    | "service_alias"
+    | "catalog_context"
+    | "catalog_unique";
 };
 
 const PRODUCT_MATCH_MIN_SCORE = 0.61;
 const PRODUCT_MATCH_AMBIGUITY_GAP = 0.1;
-const PRODUCT_NAME_CONNECTORS = new Set(["de", "del", "la", "el", "los", "las"]);
+const PRODUCT_NAME_CONNECTORS = new Set([
+  "a",
+  "al",
+  "de",
+  "del",
+  "la",
+  "el",
+  "los",
+  "las",
+  "con",
+]);
+const SERVICE_PRESENTATION_WORDS = new Set([
+  "botella",
+  "botellas",
+  "copa",
+  "copas",
+  "vaso",
+  "vasos",
+  "jarra",
+  "jarras",
+  "racion",
+  "raciones",
+  "unidad",
+  "unidades",
+  "plato",
+  "platos",
+]);
+const NON_DISTINCTIVE_CATALOG_WORDS = new Set([
+  ...PRODUCT_NAME_CONNECTORS,
+  ...SERVICE_PRESENTATION_WORDS,
+  "comida",
+  "bebida",
+  "bebidas",
+  "producto",
+  "productos",
+]);
 
 const SERVICE_ALIASES: Record<string, string[]> = {
   cana: ["cerveza", "cervezas", "barril", "grifo"],
@@ -18,7 +59,22 @@ const SERVICE_ALIASES: Record<string, string[]> = {
   cervezas: ["cana", "canas", "barril", "grifo"],
   birra: ["cerveza", "cervezas", "cana"],
   birras: ["cerveza", "cervezas", "cana"],
+  champan: ["champagne", "cava"],
+  champagne: ["champan", "cava"],
+  cava: ["champagne", "champan"],
+  refresco: ["refrescos", "soda"],
+  refrescos: ["refresco", "soda"],
+  soda: ["refresco", "refrescos"],
 };
+
+const ZERO_VARIANT_TOKENS = new Set(["zero", "0", "light"]);
+const REGULAR_VARIANT_TOKENS = new Set([
+  "normal",
+  "regular",
+  "clasica",
+  "clasico",
+  "original",
+]);
 
 function phoneticSpanishToken(value: string): string {
   return canonicalTpvVoiceSearchText(value)
@@ -153,6 +209,18 @@ function comparableProductName(value: string): string {
     .join(" ");
 }
 
+function stripServicePresentationWords(value: string): string {
+  const tokens = canonicalTpvVoiceSearchText(value)
+    .split(" ")
+    .filter(Boolean)
+    .filter((token) => !SERVICE_PRESENTATION_WORDS.has(token));
+
+  while (tokens.length > 1 && PRODUCT_NAME_CONNECTORS.has(tokens[0]!)) {
+    tokens.shift();
+  }
+  return tokens.join(" ");
+}
+
 function queryVariants(
   query: string,
 ): Array<{ value: string; matchedBy: TpvVoiceProductMatch["matchedBy"] }> {
@@ -164,65 +232,199 @@ function queryVariants(
     matchedBy: TpvVoiceProductMatch["matchedBy"];
   }> = [{ value: normalized, matchedBy: "name" }];
 
-  const tokens = normalized.split(" ").filter(Boolean);
-  for (const token of tokens) {
-    for (const alias of SERVICE_ALIASES[token] ?? []) {
-      variants.push({
-        value: tokens.map((current) => (current === token ? alias : current)).join(" "),
-        matchedBy: "service_alias",
+  const withoutPresentation = stripServicePresentationWords(normalized);
+  if (withoutPresentation && withoutPresentation !== normalized) {
+    variants.push({ value: withoutPresentation, matchedBy: "catalog_context" });
+  }
+
+  for (const base of [...variants]) {
+    const tokens = base.value.split(" ").filter(Boolean);
+    for (const token of tokens) {
+      for (const alias of SERVICE_ALIASES[token] ?? []) {
+        variants.push({
+          value: tokens.map((current) => (current === token ? alias : current)).join(" "),
+          matchedBy: "service_alias",
+        });
+      }
+    }
+  }
+
+  const seen = new Set<string>();
+  return variants.filter((variant) => {
+    const key = `${variant.value}:${variant.matchedBy}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function catalogIdentityTokens(value: string): string[] {
+  return canonicalTpvVoiceSearchText(value)
+    .split(" ")
+    .filter(
+      (token) =>
+        token.length >= 3 &&
+        !NON_DISTINCTIVE_CATALOG_WORDS.has(token) &&
+        !/^\d+$/.test(token),
+    );
+}
+
+function buildCatalogTokenFrequency(products: Product[]): ReadonlyMap<string, number> {
+  const frequency = new Map<string, number>();
+  for (const product of products) {
+    const seenForProduct = new Set(catalogIdentityTokens(product.nombre));
+    for (const token of seenForProduct) {
+      frequency.set(token, (frequency.get(token) ?? 0) + 1);
+    }
+  }
+  return frequency;
+}
+
+function uniqueCatalogIdentityScore(
+  query: string,
+  product: Product,
+  tokenFrequency: ReadonlyMap<string, number>,
+): number {
+  const queryTokens = catalogIdentityTokens(query);
+  const productTokens = catalogIdentityTokens(product.nombre).filter(
+    (token) => tokenFrequency.get(token) === 1,
+  );
+  if (queryTokens.length === 0 || productTokens.length === 0) return 0;
+
+  let strongest = 0;
+  for (const queryToken of queryTokens) {
+    for (const productToken of productTokens) {
+      strongest = Math.max(strongest, tokenSimilarity(queryToken, productToken));
+    }
+  }
+  if (strongest < 0.74) return 0;
+  return Math.min(0.97, 0.72 + strongest * 0.25);
+}
+
+function productContextLabels(product: Product): Array<{
+  value: string;
+  weight: number;
+  matchedBy: TpvVoiceProductMatch["matchedBy"];
+}> {
+  const labels: Array<{
+    value: string;
+    weight: number;
+    matchedBy: TpvVoiceProductMatch["matchedBy"];
+  }> = [{ value: product.nombre, weight: 1, matchedBy: "name" }];
+
+  const category = product.categoria?.trim();
+  const family = product.productFamilyName?.trim();
+  const saleType = product.tipoVenta?.trim();
+  const familyType = product.productFamilyType?.trim();
+  const preparationArea = product.preparationArea?.trim();
+  const operationStation = product.operationStationName?.trim();
+
+  if (category) {
+    labels.push(
+      { value: `${product.nombre} ${category}`, weight: 0.985, matchedBy: "catalog_context" },
+      { value: category, weight: 0.9, matchedBy: "category" },
+    );
+  }
+  if (family) {
+    labels.push(
+      { value: `${product.nombre} ${family}`, weight: 0.98, matchedBy: "catalog_context" },
+      { value: family, weight: 0.88, matchedBy: "family" },
+    );
+  }
+  if (category && family) {
+    labels.push({
+      value: `${product.nombre} ${category} ${family}`,
+      weight: 0.975,
+      matchedBy: "catalog_context",
+    });
+  }
+  for (const context of [saleType, familyType, preparationArea, operationStation]) {
+    if (context) {
+      labels.push({
+        value: `${product.nombre} ${context}`,
+        weight: 0.9,
+        matchedBy: "catalog_context",
       });
     }
   }
 
-  return variants;
+  return labels;
+}
+
+type RequestedVariant = "zero" | "regular" | null;
+
+function requestedVariant(value: string): RequestedVariant {
+  const normalized = canonicalTpvVoiceSearchText(value);
+  const tokens = new Set(normalized.split(" ").filter(Boolean));
+  if (
+    [...ZERO_VARIANT_TOKENS].some((token) => tokens.has(token)) ||
+    normalized.includes("sin azucar")
+  ) {
+    return "zero";
+  }
+  if ([...REGULAR_VARIANT_TOKENS].some((token) => tokens.has(token))) {
+    return "regular";
+  }
+  return null;
+}
+
+function productVariant(productName: string): RequestedVariant {
+  const normalized = canonicalTpvVoiceSearchText(productName);
+  const tokens = new Set(normalized.split(" ").filter(Boolean));
+  if (
+    [...ZERO_VARIANT_TOKENS].some((token) => tokens.has(token)) ||
+    normalized.includes("sin azucar")
+  ) {
+    return "zero";
+  }
+  return null;
+}
+
+function applyVariantPreference(score: number, query: string, product: Product): number {
+  const requested = requestedVariant(query);
+  if (!requested) return score;
+  const candidateVariant = productVariant(product.nombre);
+
+  if (requested === "zero") {
+    return candidateVariant === "zero"
+      ? Math.min(1, score + 0.07)
+      : score * 0.72;
+  }
+
+  return candidateVariant === "zero"
+    ? score * 0.74
+    : Math.min(1, score + 0.055);
 }
 
 function scoreProductVariant(
   variant: { value: string; matchedBy: TpvVoiceProductMatch["matchedBy"] },
   product: Product,
+  tokenFrequency: ReadonlyMap<string, number>,
 ): TpvVoiceProductMatch {
-  const directNameScore = scoreTpvVoiceCandidate(variant.value, product.nombre);
-  const contextualNameScore = contextualTokenScore(variant.value, product.nombre);
-  const nameScore = Math.max(directNameScore, contextualNameScore);
+  let bestScore = 0;
+  let matchedBy: TpvVoiceProductMatch["matchedBy"] = variant.matchedBy;
 
-  const categoryScore = product.categoria
-    ? Math.max(
-        scoreTpvVoiceCandidate(variant.value, product.categoria),
-        contextualTokenScore(variant.value, product.categoria),
-      )
-    : 0;
-
-  const combinedLabel = product.categoria
-    ? `${product.nombre} ${product.categoria}`
-    : product.nombre;
-  const contextualCombinedScore = contextualTokenScore(variant.value, combinedLabel);
-
-  if (nameScore >= categoryScore && nameScore >= contextualCombinedScore) {
-    return {
-      product,
-      score: nameScore,
-      matchedBy:
-        variant.matchedBy === "service_alias"
-          ? "service_alias"
-          : directNameScore >= contextualNameScore
-            ? "name"
-            : "catalog_context",
-    };
+  for (const label of productContextLabels(product)) {
+    const directScore = scoreTpvVoiceCandidate(variant.value, label.value);
+    const contextualScore = contextualTokenScore(variant.value, label.value);
+    const score = Math.max(directScore, contextualScore) * label.weight;
+    if (score > bestScore) {
+      bestScore = score;
+      matchedBy =
+        variant.matchedBy === "service_alias" ? "service_alias" : label.matchedBy;
+    }
   }
 
-  if (contextualCombinedScore >= categoryScore) {
-    return {
-      product,
-      score: contextualCombinedScore * 0.97,
-      matchedBy:
-        variant.matchedBy === "service_alias" ? "service_alias" : "catalog_context",
-    };
+  const uniqueScore = uniqueCatalogIdentityScore(variant.value, product, tokenFrequency);
+  if (uniqueScore > bestScore) {
+    bestScore = uniqueScore;
+    matchedBy = "catalog_unique";
   }
 
   return {
     product,
-    score: categoryScore * 0.94,
-    matchedBy: variant.matchedBy === "service_alias" ? "service_alias" : "category",
+    score: applyVariantPreference(bestScore, variant.value, product),
+    matchedBy,
   };
 }
 
@@ -231,7 +433,7 @@ export function chooseTpvVoiceProductCandidate(
   products: Product[],
 ): TpvVoiceProductMatch | null | "ambiguous" {
   const literalQuery = canonicalTpvVoiceSearchText(query);
-  if (!literalQuery) return null;
+  if (!literalQuery || products.length === 0) return null;
 
   const literalExactMatches = products.filter(
     (product) => canonicalTpvVoiceSearchText(product.nombre) === literalQuery,
@@ -253,9 +455,12 @@ export function chooseTpvVoiceProductCandidate(
   const variants = queryVariants(query);
   if (variants.length === 0) return null;
 
+  const tokenFrequency = buildCatalogTokenFrequency(products);
   const ranked = products
     .map((product) => {
-      const matches = variants.map((variant) => scoreProductVariant(variant, product));
+      const matches = variants.map((variant) =>
+        scoreProductVariant(variant, product, tokenFrequency),
+      );
       return matches.sort((a, b) => b.score - a.score)[0]!;
     })
     .filter((candidate) => candidate.score >= PRODUCT_MATCH_MIN_SCORE)
