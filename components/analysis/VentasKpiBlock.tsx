@@ -3,7 +3,7 @@ import type {
   VentasZonaMasVentas,
 } from "@/components/analysis/hooks/useVentasSelectors";
 import { HostlyKpiCard } from "@/components/ui/hostly";
-import { formatCurrency } from "@/components/analysis/utils";
+import { formatCurrencyEs } from "@/components/analysis/formatCurrencyEs";
 import { Banknote, CircleDollarSign, MapPinned, ReceiptText } from "lucide-react";
 
 export type VentasKpiBlockData = VentasSelectorsKpis & {
@@ -21,7 +21,7 @@ export function VentasKpiBlock({ data }: VentasKpiBlockProps) {
     <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics">
       <HostlyKpiCard
         title="Ventas totales"
-        value={formatCurrency(totalVentas)}
+        value={formatCurrencyEs(totalVentas)}
         icon={<Banknote size={17} />}
         className="hostly-analysis-kpi hostly-analysis-kpi--primary"
       />
@@ -33,14 +33,14 @@ export function VentasKpiBlock({ data }: VentasKpiBlockProps) {
       />
       <HostlyKpiCard
         title="Cobro medio"
-        value={formatCurrency(ticketMedio)}
+        value={formatCurrencyEs(ticketMedio)}
         icon={<CircleDollarSign size={17} />}
         className="hostly-analysis-kpi hostly-analysis-kpi--success"
       />
       <HostlyKpiCard
         title="Zona top"
         value={zonaMasVentas?.zoneName ?? "—"}
-        helper={zonaMasVentas ? formatCurrency(zonaMasVentas.total) : "Sin datos"}
+        helper={zonaMasVentas ? formatCurrencyEs(zonaMasVentas.total) : "Sin datos"}
         icon={<MapPinned size={17} />}
         className="hostly-analysis-kpi"
       />
