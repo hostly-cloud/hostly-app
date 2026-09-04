@@ -66,23 +66,77 @@ const NUMBER_WORDS: Record<string, number> = {
   dieciocho: 18,
   diecinueve: 19,
   veinte: 20,
+  veintiun: 21,
+  veintiuno: 21,
+  veintiuna: 21,
+  veintidos: 22,
+  veintitres: 23,
+  veinticuatro: 24,
+  veinticinco: 25,
+  veintiseis: 26,
+  veintisiete: 27,
+  veintiocho: 28,
+  veintinueve: 29,
+  treinta: 30,
+  cuarenta: 40,
+  cincuenta: 50,
 };
 
-const ADD_VERBS = [
+const COMPOUND_TENS: Record<string, number> = {
+  treinta: 30,
+  cuarenta: 40,
+};
+
+const ORDER_REQUEST_PREFIXES = [
+  "me puedes poner",
+  "puedes ponerme",
+  "puedes poner",
+  "me pones",
+  "ponme",
+  "pon",
+  "me puedes traer",
+  "puedes traerme",
+  "puedes traer",
+  "me traes",
+  "traeme",
+  "trae",
+  "me puedes sacar",
+  "puedes sacarme",
+  "puedes sacar",
+  "me sacas",
+  "sacame",
+  "saca",
+  "me puedes meter",
+  "puedes meterme",
+  "puedes meter",
+  "me metes",
+  "meteme",
+  "mete",
+  "toma nota de",
+  "toma nota",
+  "apuntame",
+  "apunta",
+  "anotame",
+  "anota",
+  "echame",
+  "echa",
+  "sirveme",
+  "sirve",
+  "llevame",
+  "lleva",
+  "anademe",
   "anade",
   "anadir",
+  "agregame",
   "agrega",
   "agregar",
-  "pon",
-  "ponme",
-  "mete",
-  "meter",
+  "sumame",
   "suma",
   "sumar",
-  "sirve",
-  "servir",
   "dame",
+  "necesito",
   "quiero",
+  "engademe",
   "engade",
   "engadir",
 ] as const;
@@ -92,10 +146,27 @@ const LEADING_SPEECH_FILLERS = new Set([
   "bueno",
   "vale",
   "pues",
+  "oye",
+  "mira",
   "perdon",
   "perdona",
 ]);
-const CORRECTION_PREFIXES = ["quiero decir", "mejor dicho"] as const;
+const CORRECTION_PREFIXES = [
+  "quiero decir",
+  "queria decir",
+  "mejor dicho",
+] as const;
+const EXPLICIT_INLINE_CORRECTIONS = [
+  " no mejor ",
+  " perdon mejor ",
+  " perdona mejor ",
+  " no queria decir ",
+  " no quiero decir ",
+  " rectifico ",
+  " corrijo ",
+  " perdon ",
+  " perdona ",
+] as const;
 const PACKAGING_WORDS = new Set([
   "botella",
   "botellas",
@@ -112,6 +183,7 @@ const PACKAGING_WORDS = new Set([
   "racion",
   "raciones",
 ]);
+const ITEM_SEPARATORS = new Set(["y", "e", "mas", "ademas", "tambien", "luego"]);
 
 export function normalizeTpvVoiceText(value: string): string {
   return String(value ?? "")
@@ -134,18 +206,62 @@ function parseQuantityToken(token: string | undefined): number | null {
   return NUMBER_WORDS[normalized] ?? null;
 }
 
+function parseSpokenNumberPhrase(value: string): number | null {
+  const normalized = normalizeTpvVoiceText(value);
+  if (!normalized) return null;
+
+  const direct = parseQuantityToken(normalized);
+  if (direct != null) return direct;
+
+  const tokens = normalized.split(" ").filter(Boolean);
+  if (tokens.length === 3 && tokens[1] === "y") {
+    const tens = COMPOUND_TENS[tokens[0]!];
+    const unit = parseQuantityToken(tokens[2]);
+    if (tens != null && unit != null && unit >= 1 && unit <= 9) {
+      const result = tens + unit;
+      return result <= 50 ? result : null;
+    }
+  }
+
+  return null;
+}
+
 function stripLeadingFillers(value: string): string {
   return value
+    .replace(/^(?:por favor\s+)+/, "")
     .replace(/^(?:de|del|de la|de los|de las)\s+/, "")
     .replace(/\s+(?:por favor)$/, "")
     .trim();
 }
 
-function stripLeadingAddVerb(value: string): string {
-  const verb = ADD_VERBS.find(
-    (candidate) => value === candidate || value.startsWith(`${candidate} `),
+function stripLeadingOrderRequest(value: string): string {
+  const normalized = value.trim();
+  const prefix = ORDER_REQUEST_PREFIXES.find(
+    (candidate) => normalized === candidate || normalized.startsWith(`${candidate} `),
   );
-  return verb ? value.slice(verb.length).trim() : value.trim();
+  return prefix ? normalized.slice(prefix.length).trim() : normalized;
+}
+
+function hasLeadingOrderRequest(value: string): boolean {
+  const normalized = value.trim();
+  return ORDER_REQUEST_PREFIXES.some(
+    (candidate) => normalized === candidate || normalized.startsWith(`${candidate} `),
+  );
+}
+
+function applyExplicitInlineCorrection(value: string): string {
+  let latestIndex = -1;
+  let latestMarker = "";
+  for (const marker of EXPLICIT_INLINE_CORRECTIONS) {
+    const index = value.lastIndexOf(marker);
+    if (index > latestIndex) {
+      latestIndex = index;
+      latestMarker = marker;
+    }
+  }
+  if (latestIndex < 0) return value.trim();
+  const corrected = value.slice(latestIndex + latestMarker.length).trim();
+  return corrected || value.trim();
 }
 
 function stripSpeechDisfluencies(value: string): string {
@@ -159,6 +275,8 @@ function stripSpeechDisfluencies(value: string): string {
   }
 
   let cleaned = tokens.join(" ").trim();
+  cleaned = applyExplicitInlineCorrection(cleaned);
+
   let changed = true;
   while (changed && cleaned) {
     changed = false;
@@ -181,7 +299,7 @@ function stripSpeechDisfluencies(value: string): string {
     cleaned = correctionTokens.slice(1).join(" ");
   }
 
-  return cleaned.trim();
+  return stripLeadingFillers(cleaned);
 }
 
 function stripRedundantTrailingPackagingPhrase(value: string): string {
@@ -201,45 +319,111 @@ function stripRedundantTrailingPackagingPhrase(value: string): string {
 }
 
 function normalizeTableQuery(value: string): string {
-  return stripLeadingFillers(stripSpeechDisfluencies(value))
-    .replace(/^(?:numero|num|nro)\s+/, "")
+  const cleaned = stripLeadingFillers(stripSpeechDisfluencies(value))
+    .replace(/^(?:la|el)\s+/, "")
+    .replace(/^(?:mesa\s+)+/, "")
+    .replace(/^(?:numero|num|nro|n)\s+/, "")
     .trim();
+  const spokenNumber = parseSpokenNumberPhrase(cleaned);
+  return spokenNumber != null ? String(spokenNumber) : cleaned;
+}
+
+type QuantityPrefix = {
+  quantity: number;
+  productQuery: string;
+};
+
+function parseQuantityPrefix(value: string): QuantityPrefix | null {
+  const cleaned = stripLeadingFillers(value);
+  if (!cleaned) return null;
+
+  const pair = cleaned.match(/^(?:un|una)?\s*par\s+de\s+(.+)$/);
+  if (pair?.[1]) return { quantity: 2, productQuery: pair[1].trim() };
+
+  const halfDozen = cleaned.match(/^(?:una\s+)?media\s+docena\s+de\s+(.+)$/);
+  if (halfDozen?.[1]) return { quantity: 6, productQuery: halfDozen[1].trim() };
+
+  const dozen = cleaned.match(/^(?:una\s+)?docena\s+de\s+(.+)$/);
+  if (dozen?.[1]) return { quantity: 12, productQuery: dozen[1].trim() };
+
+  const another = cleaned.match(/^(?:otro|otra)\s+(.+)$/);
+  if (another?.[1]) return { quantity: 1, productQuery: another[1].trim() };
+
+  const more = cleaned.match(/^(?:otros|otras)\s+(.+)$/);
+  if (more?.[1]) {
+    const nested = parseQuantityPrefix(more[1]);
+    if (nested) return nested;
+  }
+
+  const xPrefix = cleaned.match(/^x\s*(\d{1,2})\s+(.+)$/);
+  if (xPrefix?.[1] && xPrefix[2]) {
+    const quantity = parseQuantityToken(xPrefix[1]);
+    if (quantity != null) return { quantity, productQuery: xPrefix[2].trim() };
+  }
+
+  const numericXPrefix = cleaned.match(/^(\d{1,2})\s*x\s+(.+)$/);
+  if (numericXPrefix?.[1] && numericXPrefix[2]) {
+    const quantity = parseQuantityToken(numericXPrefix[1]);
+    if (quantity != null) return { quantity, productQuery: numericXPrefix[2].trim() };
+  }
+
+  const tokens = cleaned.split(" ").filter(Boolean);
+  for (const consumed of [3, 1]) {
+    if (tokens.length <= consumed) continue;
+    const quantityText = tokens.slice(0, consumed).join(" ");
+    const quantity = parseSpokenNumberPhrase(quantityText);
+    if (quantity == null) continue;
+    const productQuery = stripLeadingFillers(tokens.slice(consumed).join(" "));
+    if (productQuery) return { quantity, productQuery };
+  }
+
+  return null;
 }
 
 function parseAddProduct(normalized: string): TpvVoiceCommand | null {
   const cleaned = stripSpeechDisfluencies(normalized);
-  const hasAddVerb = ADD_VERBS.some(
-    (verb) => cleaned === verb || cleaned.startsWith(`${verb} `),
-  );
-
-  let value = cleaned;
-  if (hasAddVerb) value = stripLeadingAddVerb(value);
+  const hadRequest = hasLeadingOrderRequest(cleaned);
+  const value = stripLeadingOrderRequest(cleaned);
 
   const xSuffix = value.match(/^(.+?)\s+x\s*(\d{1,2})$/);
-  if (xSuffix) {
+  if (xSuffix?.[1] && xSuffix[2]) {
     const quantity = parseQuantityToken(xSuffix[2]);
-    const productQuery = stripLeadingFillers(xSuffix[1] ?? "");
+    const productQuery = stripLeadingFillers(xSuffix[1]);
     if (quantity && productQuery) {
       return { type: "add_product", productQuery, quantity };
     }
   }
 
-  const firstSpace = value.indexOf(" ");
-  const firstToken = firstSpace === -1 ? value : value.slice(0, firstSpace);
-  const quantity = parseQuantityToken(firstToken);
-  if (quantity != null) {
-    const productQuery = stripLeadingFillers(
-      firstSpace === -1 ? "" : value.slice(firstSpace + 1),
-    );
-    if (productQuery) return { type: "add_product", productQuery, quantity };
+  const quantityPrefix = parseQuantityPrefix(value);
+  if (quantityPrefix) {
+    return {
+      type: "add_product",
+      productQuery: quantityPrefix.productQuery,
+      quantity: quantityPrefix.quantity,
+    };
   }
 
-  if (hasAddVerb) {
+  if (hadRequest) {
     const productQuery = stripLeadingFillers(value);
     if (productQuery) return { type: "add_product", productQuery, quantity: 1 };
   }
 
   return null;
+}
+
+function quantityStartsAt(tokens: string[], index: number): boolean {
+  if (index < 0 || index >= tokens.length) return false;
+  if (parseQuantityToken(tokens[index]) != null) return true;
+  if (["otro", "otra", "otros", "otras"].includes(tokens[index]!)) return true;
+  if (tokens[index] === "media" && tokens[index + 1] === "docena") return true;
+  if (tokens[index] === "docena" || tokens[index] === "par") return true;
+  if (
+    index + 2 < tokens.length &&
+    parseSpokenNumberPhrase(tokens.slice(index, index + 3).join(" ")) != null
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function splitCompositeOrderItems(value: string): string[] {
@@ -249,13 +433,26 @@ function splitCompositeOrderItems(value: string): string[] {
 
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]!;
-    const next = tokens[index + 1];
-    const isSeparator = token === "y" || token === "e" || token === "mas";
-    if (isSeparator && current.length > 0 && parseQuantityToken(next) != null) {
+    const nextIndex = index + 1;
+    const isSeparator = ITEM_SEPARATORS.has(token);
+
+    if (isSeparator && current.length > 0 && quantityStartsAt(tokens, nextIndex)) {
       parts.push(current.join(" "));
       current = [];
       continue;
     }
+
+    const startsAnotherQuantifiedItem =
+      current.length >= 2 &&
+      parseQuantityPrefix(current.join(" ")) != null &&
+      quantityStartsAt(tokens, index);
+    if (startsAnotherQuantifiedItem) {
+      parts.push(current.join(" "));
+      current = [token];
+      continue;
+    }
+
+    if (isSeparator && current.length === 0) continue;
     current.push(token);
   }
 
@@ -265,51 +462,151 @@ function splitCompositeOrderItems(value: string): string[] {
 
 function recoverNoisyLeadingQuantity(value: string): TpvVoiceOrderItem | null {
   const tokens = value.split(" ").filter(Boolean);
-  const maxQuantityIndex = Math.min(2, tokens.length - 2);
+  const maxQuantityIndex = Math.min(3, tokens.length - 2);
 
   for (let index = 1; index <= maxQuantityIndex; index += 1) {
-    const quantity = parseQuantityToken(tokens[index]);
-    if (quantity == null) continue;
-
-    const productQuery = stripLeadingFillers(tokens.slice(index + 1).join(" "));
-    if (!productQuery) continue;
-
-    return { productQuery, quantity };
+    const candidate = tokens.slice(index).join(" ");
+    const parsed = parseQuantityPrefix(candidate);
+    if (parsed) return parsed;
   }
 
   return null;
 }
 
 function parseCompositeOrderItem(value: string): TpvVoiceOrderItem | null {
-  const parsed = parseAddProduct(value);
-  if (parsed?.type === "add_product") {
-    return {
-      productQuery: parsed.productQuery,
-      quantity: parsed.quantity,
-    };
+  const cleaned = stripLeadingOrderRequest(stripSpeechDisfluencies(value));
+  const quantityPrefix = parseQuantityPrefix(cleaned);
+  if (quantityPrefix) return quantityPrefix;
+
+  const xSuffix = cleaned.match(/^(.+?)\s+x\s*(\d{1,2})$/);
+  if (xSuffix?.[1] && xSuffix[2]) {
+    const quantity = parseQuantityToken(xSuffix[2]);
+    if (quantity != null) {
+      return { productQuery: stripLeadingFillers(xSuffix[1]), quantity };
+    }
   }
 
-  const noisyRecovery = recoverNoisyLeadingQuantity(value);
+  const noisyRecovery = recoverNoisyLeadingQuantity(cleaned);
   if (noisyRecovery) return noisyRecovery;
 
-  const productQuery = stripLeadingFillers(stripLeadingAddVerb(value));
+  const productQuery = stripLeadingFillers(cleaned);
   if (!productQuery) return null;
   return { productQuery, quantity: 1 };
 }
 
+type OrderTableParts = {
+  orderText: string;
+  tableQuery: string;
+};
+
+function splitNumberPrefix(value: string): { tableQuery: string; rest: string } | null {
+  const tokens = value.split(" ").filter(Boolean);
+  if (["numero", "num", "nro", "n"].includes(tokens[0]!)) tokens.shift();
+
+  for (const consumed of [3, 1]) {
+    if (tokens.length <= consumed) continue;
+    const numberText = tokens.slice(0, consumed).join(" ");
+    const number = parseSpokenNumberPhrase(numberText);
+    if (number == null) continue;
+    const rest = tokens.slice(consumed).join(" ").trim();
+    if (rest) return { tableQuery: String(number), rest };
+  }
+  return null;
+}
+
+function extractTrailingTableTarget(cleaned: string): OrderTableParts | null {
+  const explicit = cleaned.match(
+    /^(.+?)\s+(?:a|en|para|pa)\s+(?:la\s+|el\s+)?mesa\s+(.+)$/,
+  );
+  if (explicit?.[1] && explicit[2]) {
+    return {
+      orderText: explicit[1].trim(),
+      tableQuery: normalizeTableQuery(explicit[2]),
+    };
+  }
+
+  const directMesa = cleaned.match(/^(.+?)\s+mesa\s+(.+)$/);
+  if (directMesa?.[1] && directMesa[2]) {
+    const tableQuery = normalizeTableQuery(directMesa[2]);
+    if (parseSpokenNumberPhrase(tableQuery) != null || /^\d+$/.test(tableQuery)) {
+      return { orderText: directMesa[1].trim(), tableQuery };
+    }
+  }
+
+  const bareTargetPatterns = [
+    /^(.*?)\s+a\s+la\s+(.+)$/,
+    /^(.*?)\s+al\s+(.+)$/,
+    /^(.*?)\s+a\s+(.+)$/,
+    /^(.*?)\s+para\s+la\s+(.+)$/,
+    /^(.*?)\s+para\s+el\s+(.+)$/,
+    /^(.*?)\s+para\s+(.+)$/,
+    /^(.*?)\s+pa\s+la\s+(.+)$/,
+    /^(.*?)\s+pa\s+l\s+(.+)$/,
+    /^(.*?)\s+pal\s+(.+)$/,
+    /^(.*?)\s+pa\s+(.+)$/,
+    /^(.*?)\s+en\s+la\s+(.+)$/,
+    /^(.*?)\s+en\s+el\s+(.+)$/,
+    /^(.*?)\s+en\s+(.+)$/,
+  ];
+
+  for (const pattern of bareTargetPatterns) {
+    const match = cleaned.match(pattern);
+    const orderText = match?.[1]?.trim() ?? "";
+    const rawTable = match?.[2]?.trim() ?? "";
+    if (!orderText || !rawTable) continue;
+    const tableNumber = parseSpokenNumberPhrase(
+      rawTable.replace(/^(?:numero|num|nro|n)\s+/, ""),
+    );
+    if (tableNumber == null) continue;
+    return { orderText, tableQuery: String(tableNumber) };
+  }
+
+  return null;
+}
+
+function extractLeadingTableTarget(cleaned: string): OrderTableParts | null {
+  const explicitMesa = cleaned.match(
+    /^(?:(?:para|pa|a|en)\s+)?(?:la\s+|el\s+)?mesa\s+(.+)$/,
+  );
+  if (explicitMesa?.[1]) {
+    const rest = explicitMesa[1].trim();
+    const numeric = splitNumberPrefix(rest);
+    if (numeric) return { orderText: numeric.rest, tableQuery: numeric.tableQuery };
+
+    const requestPositions = ORDER_REQUEST_PREFIXES
+      .map((prefix) => ({ prefix, index: rest.indexOf(` ${prefix} `) }))
+      .filter(({ index }) => index > 0)
+      .sort((a, b) => a.index - b.index);
+    const firstRequest = requestPositions[0];
+    if (firstRequest) {
+      const tableQuery = normalizeTableQuery(rest.slice(0, firstRequest.index));
+      const orderText = rest.slice(firstRequest.index + 1).trim();
+      if (tableQuery && orderText) return { tableQuery, orderText };
+    }
+  }
+
+  const bare = cleaned.match(
+    /^(?:(?:para|pa|a|en)\s+(?:la\s+|el\s+)?|pa\s+l\s+|pal\s+|(?:la|el)\s+)(.+)$/,
+  );
+  if (bare?.[1]) {
+    const numeric = splitNumberPrefix(bare[1].trim());
+    if (numeric) return { orderText: numeric.rest, tableQuery: numeric.tableQuery };
+  }
+
+  return null;
+}
+
 function parseOrderForTable(normalized: string): TpvVoiceCommand | null {
   const cleaned = stripSpeechDisfluencies(normalized);
-  const match = cleaned.match(
-    /^(.+?)\s+(?:a|en|para)\s+(?:la\s+)?mesa\s+(.+)$/,
-  );
-  if (!match) return null;
+  const targetInput = stripLeadingOrderRequest(cleaned);
+  const parts =
+    extractTrailingTableTarget(targetInput) ?? extractLeadingTableTarget(targetInput);
+  if (!parts) return null;
 
-  const orderText = stripLeadingAddVerb(
-    stripRedundantTrailingPackagingPhrase(
-      stripSpeechDisfluencies(match[1]?.trim() ?? ""),
-    ),
+  const orderText = stripLeadingOrderRequest(
+    stripRedundantTrailingPackagingPhrase(stripSpeechDisfluencies(parts.orderText)),
   );
-  const tableQuery = normalizeTableQuery(match[2]?.trim() ?? "");
+  const tableQuery = normalizeTableQuery(parts.tableQuery);
   if (!orderText || !tableQuery) return null;
 
   const items = splitCompositeOrderItems(orderText)
@@ -379,7 +676,7 @@ export function parseTpvVoiceCommand(transcript: string): TpvVoiceCommand {
   if (tableOrder) return tableOrder;
 
   const tableMatch = normalized.match(
-    /^(?:(?:abre|abrir|entra|entrar|ve|ir)\s+(?:a\s+)?(?:la\s+)?mesa|mesa)\s+(.+)$/,
+    /^(?:(?:abre|abrir|entra|entrar|ve|vete|ir)\s+(?:a|en)?\s*(?:la\s+)?mesa|mesa)\s+(.+)$/,
   );
   if (tableMatch) {
     const tableQuery = normalizeTableQuery(tableMatch[1] ?? "");
