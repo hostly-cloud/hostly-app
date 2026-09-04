@@ -4,12 +4,6 @@ export type HostlyHealthSnapshot = {
   environment: string;
   release: {
     commit: string | null;
-    deploymentId: string | null;
-    region: string | null;
-  };
-  runtime: {
-    node: string;
-    uptimeSeconds: number;
   };
   timestamp: string;
 };
@@ -22,37 +16,27 @@ function clean(value: string | undefined): string | null {
 }
 
 function resolveEnvironment(env: HealthEnvironment): string {
-  return (
-    clean(env.VERCEL_ENV) ??
-    clean(env.NODE_ENV) ??
-    "unknown"
-  );
+  return clean(env.VERCEL_ENV) ?? clean(env.NODE_ENV) ?? "unknown";
+}
+
+function shortCommit(value: string | undefined): string | null {
+  const commit = clean(value);
+  return commit ? commit.slice(0, 12) : null;
 }
 
 export function buildHostlyHealthSnapshot(params?: {
   env?: HealthEnvironment;
   now?: Date;
-  uptimeSeconds?: number;
-  nodeVersion?: string;
 }): HostlyHealthSnapshot {
   const env = params?.env ?? process.env;
   const now = params?.now ?? new Date();
-  const uptimeSeconds =
-    params?.uptimeSeconds ?? Math.max(0, Math.floor(process.uptime()));
-  const nodeVersion = params?.nodeVersion ?? process.version;
 
   return {
     status: "ok",
     service: "hostly-app",
     environment: resolveEnvironment(env),
     release: {
-      commit: clean(env.VERCEL_GIT_COMMIT_SHA),
-      deploymentId: clean(env.VERCEL_DEPLOYMENT_ID),
-      region: clean(env.VERCEL_REGION),
-    },
-    runtime: {
-      node: nodeVersion,
-      uptimeSeconds,
+      commit: shortCommit(env.VERCEL_GIT_COMMIT_SHA),
     },
     timestamp: now.toISOString(),
   };
