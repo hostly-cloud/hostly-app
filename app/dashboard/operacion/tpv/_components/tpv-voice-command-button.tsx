@@ -10,6 +10,14 @@ import {
   type TpvVoiceFeedbackDetail,
   type TpvVoiceFeedbackTone,
 } from "@/lib/tpv/voice-command";
+import {
+  getTpvVoiceUi,
+  persistTpvVoiceLanguage,
+  resolveTpvVoiceLanguage,
+  speechLocaleForTpvVoiceLanguage,
+  TPV_VOICE_LANGUAGE_OPTIONS,
+  type TpvVoiceLanguage,
+} from "@/lib/tpv/voice-language";
 
 type SpeechRecognitionResultLike = {
   0?: { transcript?: string };
@@ -55,13 +63,16 @@ declare global {
   }
 }
 
-function getVoiceErrorMessage(error?: string): string {
+function getVoiceErrorMessage(
+  error: string | undefined,
+  copy: ReturnType<typeof getTpvVoiceUi>,
+): string {
   if (error === "not-allowed" || error === "service-not-allowed") {
-    return "Necesito permiso para usar el micrófono.";
+    return copy.permissionError;
   }
-  if (error === "no-speech") return "No he oído ningún comando.";
-  if (error === "audio-capture") return "No encuentro un micrófono disponible.";
-  return "No he podido escuchar el comando.";
+  if (error === "no-speech") return copy.noSpeechError;
+  if (error === "audio-capture") return copy.audioError;
+  return copy.genericListenError;
 }
 
 function feedbackToneClass(tone: TpvVoiceFeedbackTone): string {
@@ -77,10 +88,16 @@ function feedbackToneClass(tone: TpvVoiceFeedbackTone): string {
 export function TpvVoiceCommandButton() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const messageTimerRef = useRef<number | null>(null);
+  const [language, setLanguage] = useState<TpvVoiceLanguage>("es");
   const [listening, setListening] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<TpvVoiceFeedbackTone>("info");
   const [preview, setPreview] = useState<VoicePreviewDetail | null>(null);
+  const copy = getTpvVoiceUi(language);
+
+  useEffect(() => {
+    setLanguage(resolveTpvVoiceLanguage());
+  }, []);
 
   const showMessage = useCallback(
     (nextMessage: string, tone: TpvVoiceFeedbackTone = "info") => {
@@ -130,12 +147,12 @@ export function TpvVoiceCommandButton() {
     const recognition = new Recognition();
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.lang = "es-ES";
+    recognition.lang = speechLocaleForTpvVoiceLanguage(language);
 
     recognition.onstart = () => {
       setListening(true);
       setPreview(null);
-      setMessage("Escuchando…");
+      setMessage(copy.listening);
       setMessageTone("info");
       if (messageTimerRef.current != null) {
         window.clearTimeout(messageTimerRef.current);
@@ -149,9 +166,9 @@ export function TpvVoiceCommandButton() {
       const transcript = lastResult?.[0]?.transcript?.trim() ?? "";
       if (!transcript) return;
 
-      setMessage(`Interpretando: “${transcript}”`);
+      setMessage(copy.interpreting(transcript));
       setMessageTone("info");
-      const detail = { transcript, source: "tpv" as const };
+      const detail = { transcript, source: "tpv" as const, language };
       window.dispatchEvent(
         new CustomEvent(TPV_VOICE_PREVIEW_REQUEST_EVENT, { detail }),
       );
@@ -160,7 +177,7 @@ export function TpvVoiceCommandButton() {
     recognition.onerror = (event) => {
       setListening(false);
       setPreview(null);
-      showMessage(getVoiceErrorMessage(event.error), "error");
+      showMessage(getVoiceErrorMessage(event.error, copy), "error");
     };
 
     recognition.onend = () => {
@@ -178,11 +195,11 @@ export function TpvVoiceCommandButton() {
       recognition.abort();
       recognitionRef.current = null;
     };
-  }, [showMessage]);
+  }, [copy, language, showMessage]);
 
   const toggleVoiceCommand = () => {
     if (!recognitionRef.current) {
-      showMessage("Los comandos por voz no están disponibles en este navegador.", "error");
+      showMessage(copy.unavailable, "error");
       return;
     }
 
@@ -191,7 +208,7 @@ export function TpvVoiceCommandButton() {
       else recognitionRef.current.start();
     } catch {
       setListening(false);
-      showMessage("No he podido activar el micrófono.", "error");
+      showMessage(copy.activationError, "error");
     }
   };
 
@@ -200,9 +217,10 @@ export function TpvVoiceCommandButton() {
     const detail: TpvVoiceCommandDetail = {
       transcript: preview.transcript,
       source: "tpv",
+      language,
     };
     setPreview(null);
-    setMessage("Enviando comando…");
+    setMessage(copy.sending);
     setMessageTone("info");
     window.dispatchEvent(
       new CustomEvent<TpvVoiceCommandDetail>(TPV_VOICE_COMMAND_EVENT, { detail }),
@@ -214,21 +232,29 @@ export function TpvVoiceCommandButton() {
     setMessage(null);
   };
 
+  const changeLanguage = (nextLanguage: TpvVoiceLanguage) => {
+    if (listening) recognitionRef.current?.stop();
+    persistTpvVoiceLanguage(nextLanguage);
+    setPreview(null);
+    setMessage(null);
+    setLanguage(nextLanguage);
+  };
+
   return (
     <>
       {preview ? (
         <div
           role="dialog"
-          aria-label="Confirmar comando por voz"
+          aria-label={copy.dialogLabel}
           className={`fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-[72] w-[min(24rem,calc(100vw-2rem))] rounded-2xl border p-3 shadow-[var(--hostly-shadow-card)] sm:bottom-[5.5rem] sm:right-6 ${feedbackToneClass(preview.tone)}`}
         >
           <div className="text-[11px] font-bold uppercase tracking-[0.08em] opacity-65">
-            Has dicho
+            {copy.hasSaid}
           </div>
           <div className="mt-1 text-sm font-semibold">“{preview.transcript}”</div>
 
           <div className="mt-3 text-[11px] font-bold uppercase tracking-[0.08em] opacity-65">
-            He entendido
+            {copy.understood}
           </div>
           <div className="mt-1 text-sm font-bold leading-5">{preview.summary}</div>
 
@@ -239,7 +265,7 @@ export function TpvVoiceCommandButton() {
               onClick={cancelPreview}
               className="flex-1"
             >
-              Cancelar
+              {copy.cancel}
             </HostlyButton>
             {preview.canConfirm ? (
               <HostlyButton
@@ -248,7 +274,7 @@ export function TpvVoiceCommandButton() {
                 onClick={confirmPreview}
                 className="flex-1"
               >
-                OK, enviar
+                {copy.confirm}
               </HostlyButton>
             ) : (
               <HostlyButton
@@ -260,7 +286,7 @@ export function TpvVoiceCommandButton() {
                 }}
                 className="flex-1"
               >
-                Repetir
+                {copy.repeat}
               </HostlyButton>
             )}
           </div>
@@ -278,12 +304,32 @@ export function TpvVoiceCommandButton() {
         </div>
       ) : null}
 
+      <label
+        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-[4.5rem] z-[70] flex h-12 items-center rounded-full border border-[var(--hostly-line-strong)] bg-white px-2 shadow-[var(--hostly-shadow-card)] sm:bottom-6 sm:right-[5rem]"
+        title={copy.languageLabel}
+      >
+        <span className="sr-only">{copy.languageLabel}</span>
+        <select
+          aria-label={copy.languageLabel}
+          value={language}
+          disabled={listening}
+          onChange={(event) => changeLanguage(event.target.value as TpvVoiceLanguage)}
+          className="h-10 min-w-[3.5rem] cursor-pointer appearance-none bg-transparent px-2 text-center text-xs font-bold text-[var(--hostly-navy-deep)] outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {TPV_VOICE_LANGUAGE_OPTIONS.map((option) => (
+            <option key={option.code} value={option.code}>
+              {option.shortLabel}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <HostlyButton
         variant="icon"
         size="touch"
         active={listening}
-        iconOnlyLabel={listening ? "Detener comando por voz" : "Iniciar comando por voz"}
-        title={listening ? "Detener comando por voz" : "Comando por voz"}
+        iconOnlyLabel={listening ? copy.stop : copy.start}
+        title={listening ? copy.stop : copy.title}
         onClick={toggleVoiceCommand}
         data-hostly-tpv-voice-trigger
         className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[70] inline-flex size-12 min-h-12 min-w-12 items-center justify-center rounded-full border border-[var(--hostly-navy-deep)] bg-[var(--hostly-navy-deep)] p-0 text-white shadow-[var(--hostly-shadow-card)] transition hover:bg-[var(--hostly-navy-mid)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--hostly-accent)] data-[active=true]:border-[var(--hostly-accent)] data-[active=true]:bg-[var(--hostly-accent)] sm:bottom-6 sm:right-6"
