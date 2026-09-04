@@ -1,5 +1,5 @@
 import type { VentasSelectorsTable } from "@/components/analysis/hooks/useVentasSelectors";
-import { formatCurrency } from "@/components/analysis/utils";
+import { formatCurrencyEs } from "@/components/analysis/formatCurrencyEs";
 import { ReceiptText } from "lucide-react";
 
 export type VentasTableBlockProps = {
@@ -30,7 +30,7 @@ export function VentasTableBlock({ data }: VentasTableBlockProps) {
             <tr key={`${row.label}:${row.shortId ?? ""}:${i}`}>
               <td className="hostly-inv-td-muted">{row.label}</td>
               <td className="hostly-inv-td-primary">{row.shortId ?? "Sin número"}</td>
-              <td className="hostly-inv-td-amount">{formatCurrency(row.total)}</td>
+              <td className="hostly-inv-td-amount">{formatCurrencyEs(row.total)}</td>
             </tr>
           ))}
         </tbody>
