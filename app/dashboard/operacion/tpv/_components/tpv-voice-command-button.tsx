@@ -13,10 +13,8 @@ import {
 import {
   canonicalizeTpvVoiceTranscript,
   getTpvVoiceUi,
-  persistTpvVoiceLanguage,
   resolveTpvVoiceLanguage,
   speechLocaleForTpvVoiceLanguage,
-  TPV_VOICE_LANGUAGE_OPTIONS,
   type TpvVoiceLanguage,
 } from "@/lib/tpv/voice-language";
 
@@ -99,7 +97,26 @@ export function TpvVoiceCommandButton() {
   const copy = getTpvVoiceUi(language);
 
   useEffect(() => {
-    setLanguage(resolveTpvVoiceLanguage());
+    const syncWithHostlyLocale = () => setLanguage(resolveTpvVoiceLanguage());
+    syncWithHostlyLocale();
+
+    const observer = new MutationObserver(syncWithHostlyLocale);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["lang"],
+    });
+
+    const storageHandler = (event: StorageEvent) => {
+      if (event.key === "hostly.locale" || event.key === "hostly:tpv-language") {
+        syncWithHostlyLocale();
+      }
+    };
+    window.addEventListener("storage", storageHandler);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("storage", storageHandler);
+    };
   }, []);
 
   const showMessage = useCallback(
@@ -246,16 +263,6 @@ export function TpvVoiceCommandButton() {
     setMessage(null);
   };
 
-  const changeLanguage = (nextLanguage: TpvVoiceLanguage) => {
-    if (listening) recognitionRef.current?.stop();
-    persistTpvVoiceLanguage(nextLanguage);
-    rawTranscriptRef.current = "";
-    canonicalTranscriptRef.current = "";
-    setPreview(null);
-    setMessage(null);
-    setLanguage(nextLanguage);
-  };
-
   return (
     <>
       {preview ? (
@@ -319,26 +326,6 @@ export function TpvVoiceCommandButton() {
           {message}
         </div>
       ) : null}
-
-      <label
-        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-[4.5rem] z-[70] flex h-12 items-center rounded-full border border-[var(--hostly-line-strong)] bg-white px-2 shadow-[var(--hostly-shadow-card)] sm:bottom-6 sm:right-[5rem]"
-        title={copy.languageLabel}
-      >
-        <span className="sr-only">{copy.languageLabel}</span>
-        <select
-          aria-label={copy.languageLabel}
-          value={language}
-          disabled={listening}
-          onChange={(event) => changeLanguage(event.target.value as TpvVoiceLanguage)}
-          className="h-10 min-w-[3.5rem] cursor-pointer appearance-none bg-transparent px-2 text-center text-xs font-bold text-[var(--hostly-navy-deep)] outline-none disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {TPV_VOICE_LANGUAGE_OPTIONS.map((option) => (
-            <option key={option.code} value={option.code}>
-              {option.shortLabel}
-            </option>
-          ))}
-        </select>
-      </label>
 
       <HostlyButton
         variant="icon"
