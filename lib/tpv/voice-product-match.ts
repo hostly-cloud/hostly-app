@@ -230,16 +230,25 @@ export function chooseTpvVoiceProductCandidate(
   query: string,
   products: Product[],
 ): TpvVoiceProductMatch | null | "ambiguous" {
-  const comparableQuery = comparableProductName(query);
-  if (!comparableQuery) return null;
+  const literalQuery = canonicalTpvVoiceSearchText(query);
+  if (!literalQuery) return null;
 
-  const exactNameMatches = products.filter(
+  const literalExactMatches = products.filter(
+    (product) => canonicalTpvVoiceSearchText(product.nombre) === literalQuery,
+  );
+  if (literalExactMatches.length === 1) {
+    return { product: literalExactMatches[0]!, score: 1, matchedBy: "name" };
+  }
+  if (literalExactMatches.length > 1) return "ambiguous";
+
+  const comparableQuery = comparableProductName(query);
+  const comparableExactMatches = products.filter(
     (product) => comparableProductName(product.nombre) === comparableQuery,
   );
-  if (exactNameMatches.length === 1) {
-    return { product: exactNameMatches[0]!, score: 1, matchedBy: "name" };
+  if (comparableExactMatches.length === 1) {
+    return { product: comparableExactMatches[0]!, score: 0.995, matchedBy: "name" };
   }
-  if (exactNameMatches.length > 1) return "ambiguous";
+  if (comparableExactMatches.length > 1) return "ambiguous";
 
   const variants = queryVariants(query);
   if (variants.length === 0) return null;
