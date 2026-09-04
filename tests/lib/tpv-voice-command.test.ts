@@ -36,6 +36,39 @@ test("interpreta verbo de alta con cantidad", () => {
   });
 });
 
+test("interpreta un producto directo a una mesa", () => {
+  assert.deepEqual(parseTpvVoiceCommand("un carpaccio de ternera a mesa 3"), {
+    type: "add_products_to_table",
+    tableQuery: "3",
+    items: [{ productQuery: "carpaccio de ternera", quantity: 1 }],
+    sendOrder: true,
+  });
+});
+
+test("interpreta varios productos y cantidades directos a una mesa", () => {
+  assert.deepEqual(
+    parseTpvVoiceCommand("pon tres cañas y una ensalada en mesa 12"),
+    {
+      type: "add_products_to_table",
+      tableQuery: "12",
+      items: [
+        { productQuery: "canas", quantity: 3 },
+        { productQuery: "ensalada", quantity: 1 },
+      ],
+      sendOrder: true,
+    },
+  );
+});
+
+test("no parte nombres con y si no empieza otra cantidad", () => {
+  assert.deepEqual(parseTpvVoiceCommand("un sandwich jamon y queso a mesa 2"), {
+    type: "add_products_to_table",
+    tableQuery: "2",
+    items: [{ productQuery: "sandwich jamon y queso", quantity: 1 }],
+    sendOrder: true,
+  });
+});
+
 test("interpreta acciones operativas", () => {
   assert.deepEqual(parseTpvVoiceCommand("enviar comanda"), { type: "send_order" });
   assert.deepEqual(parseTpvVoiceCommand("marchar segundos"), {
