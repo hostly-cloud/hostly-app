@@ -1,6 +1,7 @@
 "use client";
 
 import { ConfigCartaEditToggleActions } from "@/components/carta/config-carta-row-actions";
+import { HostlyButton } from "@/components/ui/hostly";
 import { HostlyStatusBadge } from "@/components/ui/hostly/data-table";
 import { formatProductionStationListSummary } from "@/lib/produccion/production-station-types";
 import type { ProductionStationDocument } from "@/lib/produccion/production-station-types";
@@ -49,9 +50,9 @@ export function ProductionStationsDataView({
           </p>
           {onCreateNew ? (
             <div className="hostly-carta-config-empty__actions">
-              <button type="button" onClick={onCreateNew} className="hostly-button-primary hostly-button-compact">
+              <HostlyButton variant="primary" size="compact" onClick={onCreateNew}>
                 Nueva estación
-              </button>
+              </HostlyButton>
             </div>
           ) : null}
         </div>
