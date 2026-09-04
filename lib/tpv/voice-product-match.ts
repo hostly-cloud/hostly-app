@@ -9,6 +9,7 @@ export type TpvVoiceProductMatch = {
 
 const PRODUCT_MATCH_MIN_SCORE = 0.61;
 const PRODUCT_MATCH_AMBIGUITY_GAP = 0.1;
+const PRODUCT_NAME_CONNECTORS = new Set(["de", "del", "la", "el", "los", "las"]);
 
 const SERVICE_ALIASES: Record<string, string[]> = {
   cana: ["cerveza", "cervezas", "barril", "grifo"],
@@ -145,6 +146,13 @@ function contextualTokenScore(query: string, candidate: string): number {
   return Math.max(coverageScore, safeAnchorScore);
 }
 
+function comparableProductName(value: string): string {
+  return canonicalTpvVoiceSearchText(value)
+    .split(" ")
+    .filter((token) => token && !PRODUCT_NAME_CONNECTORS.has(token))
+    .join(" ");
+}
+
 function queryVariants(
   query: string,
 ): Array<{ value: string; matchedBy: TpvVoiceProductMatch["matchedBy"] }> {
@@ -222,6 +230,17 @@ export function chooseTpvVoiceProductCandidate(
   query: string,
   products: Product[],
 ): TpvVoiceProductMatch | null | "ambiguous" {
+  const comparableQuery = comparableProductName(query);
+  if (!comparableQuery) return null;
+
+  const exactNameMatches = products.filter(
+    (product) => comparableProductName(product.nombre) === comparableQuery,
+  );
+  if (exactNameMatches.length === 1) {
+    return { product: exactNameMatches[0]!, score: 1, matchedBy: "name" };
+  }
+  if (exactNameMatches.length > 1) return "ambiguous";
+
   const variants = queryVariants(query);
   if (variants.length === 0) return null;
 
