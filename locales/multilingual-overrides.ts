@@ -10,6 +10,10 @@ import purchases from "@/locales/multilingual/purchases.json";
 import salesCatalogCore from "@/locales/multilingual/sales-catalog-core.json";
 import salesCatalogRecipe from "@/locales/multilingual/sales-catalog-recipe.json";
 import modifiers from "@/locales/multilingual/modifiers.json";
+import menuImportReview from "@/locales/multilingual/menu-import-review.json";
+import menuImportAnalyzePublish from "@/locales/multilingual/menu-import-analyze-publish.json";
+import onboardingBusinessMenu from "@/locales/multilingual/onboarding-business-menu.json";
+import onboardingStockTeamLive from "@/locales/multilingual/onboarding-stock-team-live.json";
 
 type BaseMultilingualLocale = "fr" | "de" | "it" | "pt" | "nl";
 type TranslationTuple = [string, string, string, string, string];
@@ -28,6 +32,10 @@ const BUNDLES: TranslationBundle[] = [
   salesCatalogCore as TranslationBundle,
   salesCatalogRecipe as TranslationBundle,
   modifiers as TranslationBundle,
+  menuImportReview as TranslationBundle,
+  menuImportAnalyzePublish as TranslationBundle,
+  onboardingBusinessMenu as TranslationBundle,
+  onboardingStockTeamLive as TranslationBundle,
 ];
 
 function baseLocale(locale: Locale): BaseMultilingualLocale | null {
