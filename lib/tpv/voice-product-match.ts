@@ -10,9 +10,6 @@ export type TpvVoiceProductMatch = {
 const PRODUCT_MATCH_MIN_SCORE = 0.61;
 const PRODUCT_MATCH_AMBIGUITY_GAP = 0.1;
 
-// Service vocabulary remains a semantic aid (e.g. a waiter says "caña" while
-// the catalogue says "Mahou de barril"). Recognition errors themselves are
-// handled generically below; they are not hard-coded word by word.
 const SERVICE_ALIASES: Record<string, string[]> = {
   cana: ["cerveza", "cervezas", "barril", "grifo"],
   canas: ["cerveza", "cervezas", "barril", "grifo"],
@@ -28,7 +25,9 @@ function phoneticSpanishToken(value: string): string {
     .replace(/qu/g, "k")
     .replace(/gu(?=[ei])/g, "g")
     .replace(/[bv]/g, "b")
-    .replace(/[cz]/g, "s")
+    .replace(/c(?=[ei])/g, "s")
+    .replace(/c/g, "k")
+    .replace(/z/g, "s")
     .replace(/j/g, "g")
     .replace(/ll/g, "y")
     .replace(/ñ/g, "n")
@@ -92,6 +91,22 @@ function tokenSimilarity(queryToken: string, candidateToken: string): number {
   return Math.max(canonicalScore * 0.92, phoneticScore * 0.94, containmentScore);
 }
 
+function strongestCatalogAnchor(query: string, candidate: string): number {
+  const queryTokens = canonicalTpvVoiceSearchText(query).split(" ").filter(Boolean);
+  const candidateTokens = canonicalTpvVoiceSearchText(candidate).split(" ").filter(Boolean);
+  if (queryTokens.length === 0 || candidateTokens.length === 0) return 0;
+
+  const compactCandidate = candidateTokens.join("");
+  let best = 0;
+  for (const queryToken of queryTokens) {
+    best = Math.max(best, tokenSimilarity(queryToken, compactCandidate));
+    for (const candidateToken of candidateTokens) {
+      best = Math.max(best, tokenSimilarity(queryToken, candidateToken));
+    }
+  }
+  return best;
+}
+
 function contextualTokenScore(query: string, candidate: string): number {
   const queryTokens = canonicalTpvVoiceSearchText(query).split(" ").filter(Boolean);
   const candidateTokens = canonicalTpvVoiceSearchText(candidate).split(" ").filter(Boolean);
@@ -120,11 +135,14 @@ function contextualTokenScore(query: string, candidate: string): number {
   const candidateCoverage = matched / candidateTokens.length;
   const queryCoverage = matched / queryTokens.length;
   const extraQueryPenalty = Math.max(0, queryTokens.length - usedQueryIndexes.size) * 0.035;
-
-  return Math.max(
+  const coverageScore = Math.max(
     0,
     Math.min(1, candidateCoverage * 0.72 + queryCoverage * 0.28 - extraQueryPenalty),
   );
+
+  const anchor = strongestCatalogAnchor(query, candidate);
+  const safeAnchorScore = anchor >= 0.68 ? anchor * 0.94 : 0;
+  return Math.max(coverageScore, safeAnchorScore);
 }
 
 function queryVariants(
