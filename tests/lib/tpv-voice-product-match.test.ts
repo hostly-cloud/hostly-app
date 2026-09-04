@@ -64,6 +64,28 @@ test("tolera una palabra sobrante si el resto apunta claramente al producto", ()
   assert.equal(match.product.id, "coke");
 });
 
+test("prioriza el nombre exacto Fanta de naranja frente a variantes cercanas", () => {
+  const match = requireMatch(
+    chooseTpvVoiceProductCandidate("fanta de naranja", [
+      product("orange", "Fanta de naranja", "Refrescos"),
+      product("orange-zero", "Fanta naranja zero", "Refrescos"),
+      product("lemon", "Fanta de limón", "Refrescos"),
+    ]),
+  );
+
+  assert.equal(match.product.id, "orange");
+  assert.equal(match.score, 1);
+});
+
+test("mantiene ambigüedad si existen dos productos con el mismo nombre exacto", () => {
+  const match = chooseTpvVoiceProductCandidate("fanta de naranja", [
+    product("orange-a", "Fanta de naranja", "Refrescos"),
+    product("orange-b", "Fanta de naranja", "Refrescos"),
+  ]);
+
+  assert.equal(match, "ambiguous");
+});
+
 test("usa vocabulario de servicio para relacionar caña con cerveza", () => {
   const match = requireMatch(
     chooseTpvVoiceProductCandidate("cana", [
