@@ -50,15 +50,6 @@ function chooseCandidate<T>(
   return best;
 }
 
-function findButtonByText(pattern: RegExp): HTMLButtonElement | null {
-  for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>("button"))) {
-    if (button.disabled) continue;
-    const text = button.textContent?.replace(/\s+/g, " ").trim() ?? "";
-    if (pattern.test(text)) return button;
-  }
-  return null;
-}
-
 function isVisible(element: HTMLElement): boolean {
   const style = window.getComputedStyle(element);
   if (style.display === "none" || style.visibility === "hidden") return false;
@@ -78,11 +69,47 @@ function visibleProductButtons(): Array<{ value: HTMLButtonElement; label: strin
     .filter((candidate) => candidate.label.length > 0);
 }
 
-function clickProduct(button: HTMLButtonElement, quantity: number) {
+function clickProductWithQuantity(button: HTMLButtonElement, quantity: number): boolean {
   const safeQuantity = Math.max(1, Math.min(50, Math.trunc(quantity)));
-  for (let i = 0; i < safeQuantity; i += 1) {
-    window.setTimeout(() => button.click(), i * 110);
+  if (safeQuantity === 1) {
+    button.click();
+    return true;
   }
+
+  const trigger = document.querySelector<HTMLButtonElement>(
+    ".carta-tpv-preqty__trigger",
+  );
+  if (!trigger || trigger.disabled || !isVisible(trigger)) return false;
+
+  trigger.click();
+  window.setTimeout(() => {
+    const clearButton = document.querySelector<HTMLButtonElement>(
+      "#carta-tpv-quantity-pad [aria-label='Restablecer cantidad a una unidad']",
+    );
+    if (!clearButton) {
+      emitFeedback("No he podido preparar la cantidad indicada.", "error");
+      return;
+    }
+    clearButton.click();
+
+    const digits = String(safeQuantity).split("");
+    digits.forEach((digit, index) => {
+      window.setTimeout(() => {
+        const digitButton = document.querySelector<HTMLButtonElement>(
+          `#carta-tpv-quantity-pad [aria-label='Cantidad ${digit}']`,
+        );
+        if (!digitButton) {
+          emitFeedback("No he podido preparar la cantidad indicada.", "error");
+          return;
+        }
+        digitButton.click();
+      }, 45 * (index + 1));
+    });
+
+    window.setTimeout(() => button.click(), 45 * (digits.length + 2));
+  }, 45);
+
+  return true;
 }
 
 function executeOpenTable(query: string) {
@@ -115,11 +142,14 @@ function executeAddProduct(query: string, quantity: number) {
     emitFeedback(`No veo el producto “${query}” en la categoría actual.`, "error");
     return;
   }
-  clickProduct(match.value, quantity);
+  if (!clickProductWithQuantity(match.value, quantity)) {
+    emitFeedback("No he podido preparar la cantidad indicada.", "error");
+    return;
+  }
   emitFeedback(
     quantity === 1
-      ? `Añadido ${match.label}.`
-      : `Añadidas ${quantity} unidades de ${match.label}.`,
+      ? `Añadiendo ${match.label}.`
+      : `Añadiendo ${quantity} unidades de ${match.label}.`,
     "success",
   );
 }
