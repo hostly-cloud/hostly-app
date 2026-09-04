@@ -36,6 +36,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Dependency security audit
+        run: npm audit --audit-level=high
+
       - name: TypeScript
         run: npx tsc --noEmit
 
@@ -50,6 +53,9 @@ jobs:
 
       - name: Public API surface audit
         run: node --test tests/security/public-api-surface.test.mjs
+
+      - name: Employee clocking QR security tests
+        run: npx tsx --test tests/security/clocking-qr-route.test.ts
 
       - name: Marketing lead abuse protection tests
         run: npx tsx --test tests/lib/marketing-lead-abuse.test.ts
