@@ -67,6 +67,18 @@ test("interpreta varios productos y cantidades directos a una mesa", () => {
   );
 });
 
+test("recupera cantidad cuando el dictado mete una palabra basura delante", () => {
+  assert.deepEqual(
+    parseTpvVoiceCommand("rosca dos caños a la mesa cinco"),
+    {
+      type: "add_products_to_table",
+      tableQuery: "cinco",
+      items: [{ productQuery: "canos", quantity: 2 }],
+      sendOrder: true,
+    },
+  );
+});
+
 test("no parte nombres con y si no empieza otra cantidad", () => {
   assert.deepEqual(parseTpvVoiceCommand("un sandwich jamon y queso a mesa 2"), {
     type: "add_products_to_table",
