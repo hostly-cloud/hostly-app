@@ -57,6 +57,15 @@ function getCurrentPosition() {
   });
 }
 
+function isGeolocationError(value: unknown): value is GeolocationPositionError {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "code" in value &&
+    typeof (value as { code?: unknown }).code === "number"
+  );
+}
+
 export default function EmployeeClockingPage() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
@@ -105,7 +114,7 @@ export default function EmployeeClockingPage() {
       setState(nextState);
       setMessage(`${ACTION_LABELS[clockAction]} registrado correctamente.`);
     } catch (nextError) {
-      if (nextError instanceof GeolocationPositionError) {
+      if (isGeolocationError(nextError)) {
         setError("Necesitamos permiso de ubicación para verificar que estás en el restaurante.");
       } else {
         setError(errorLabel(nextError));
