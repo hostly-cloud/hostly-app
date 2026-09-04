@@ -4,47 +4,157 @@ import type { Product } from "@/types/product";
 export type TpvVoiceProductMatch = {
   product: Product;
   score: number;
-  matchedBy: "name" | "category" | "service_alias";
+  matchedBy: "name" | "category" | "service_alias" | "catalog_context";
 };
 
-const PRODUCT_MATCH_MIN_SCORE = 0.64;
+const PRODUCT_MATCH_MIN_SCORE = 0.61;
 const PRODUCT_MATCH_AMBIGUITY_GAP = 0.1;
 
 const SERVICE_ALIASES: Record<string, string[]> = {
   cana: ["cerveza", "cervezas", "barril", "grifo"],
   canas: ["cerveza", "cervezas", "barril", "grifo"],
-  cerveza: ["cana", "canas"],
-  cervezas: ["cana", "canas"],
+  cerveza: ["cana", "canas", "barril", "grifo"],
+  cervezas: ["cana", "canas", "barril", "grifo"],
   birra: ["cerveza", "cervezas", "cana"],
   birras: ["cerveza", "cervezas", "cana"],
 };
 
-const HEARING_NORMALIZATIONS: Record<string, string> = {
-  kana: "cana",
-  canna: "cana",
-  cania: "cana",
-  cagna: "cana",
-  cano: "cana",
-  canio: "cana",
-  kano: "cana",
-};
-
-function normalizeServiceQuery(value: string): string {
-  const canonical = canonicalTpvVoiceSearchText(value);
-  return canonical
-    .split(" ")
-    .filter(Boolean)
-    .map((token) => HEARING_NORMALIZATIONS[token] ?? token)
-    .join(" ");
+function phoneticSpanishToken(value: string): string {
+  return canonicalTpvVoiceSearchText(value)
+    .replace(/h/g, "")
+    .replace(/qu/g, "k")
+    .replace(/gu(?=[ei])/g, "g")
+    .replace(/[bv]/g, "b")
+    .replace(/c(?=[ei])/g, "s")
+    .replace(/c/g, "k")
+    .replace(/z/g, "s")
+    .replace(/j/g, "g")
+    .replace(/ll/g, "y")
+    .replace(/ñ/g, "n")
+    .replace(/rr/g, "r")
+    .replace(/([a-z])\1+/g, "$1")
+    .trim();
 }
 
-function queryVariants(query: string): Array<{ value: string; matchedBy: TpvVoiceProductMatch["matchedBy"] }> {
-  const normalized = normalizeServiceQuery(query);
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a) return b.length;
+  if (!b) return a.length;
+
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  const current = new Array<number>(b.length + 1);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    current[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        current[j - 1]! + 1,
+        previous[j]! + 1,
+        previous[j - 1]! + cost,
+      );
+    }
+    for (let j = 0; j <= b.length; j += 1) previous[j] = current[j]!;
+  }
+
+  return previous[b.length]!;
+}
+
+function tokenSimilarity(queryToken: string, candidateToken: string): number {
+  const query = canonicalTpvVoiceSearchText(queryToken);
+  const candidate = canonicalTpvVoiceSearchText(candidateToken);
+  if (!query || !candidate) return 0;
+  if (query === candidate) return 1;
+
+  const qPhonetic = phoneticSpanishToken(query);
+  const cPhonetic = phoneticSpanishToken(candidate);
+  if (qPhonetic && qPhonetic === cPhonetic) return 0.94;
+
+  const canonicalMax = Math.max(query.length, candidate.length);
+  const canonicalScore =
+    canonicalMax > 0 ? 1 - editDistance(query, candidate) / canonicalMax : 0;
+
+  const phoneticMax = Math.max(qPhonetic.length, cPhonetic.length);
+  const phoneticScore =
+    phoneticMax > 0
+      ? 1 - editDistance(qPhonetic, cPhonetic) / phoneticMax
+      : 0;
+
+  const containmentScore =
+    query.includes(candidate) || candidate.includes(query)
+      ? 0.78 +
+        (Math.min(query.length, candidate.length) /
+          Math.max(query.length, candidate.length)) *
+          0.12
+      : 0;
+
+  return Math.max(canonicalScore * 0.92, phoneticScore * 0.94, containmentScore);
+}
+
+function strongestCatalogAnchor(query: string, candidate: string): number {
+  const queryTokens = canonicalTpvVoiceSearchText(query).split(" ").filter(Boolean);
+  const candidateTokens = canonicalTpvVoiceSearchText(candidate).split(" ").filter(Boolean);
+  if (queryTokens.length === 0 || candidateTokens.length === 0) return 0;
+
+  const compactCandidate = candidateTokens.join("");
+  let best = 0;
+  for (const queryToken of queryTokens) {
+    best = Math.max(best, tokenSimilarity(queryToken, compactCandidate));
+    for (const candidateToken of candidateTokens) {
+      best = Math.max(best, tokenSimilarity(queryToken, candidateToken));
+    }
+  }
+  return best;
+}
+
+function contextualTokenScore(query: string, candidate: string): number {
+  const queryTokens = canonicalTpvVoiceSearchText(query).split(" ").filter(Boolean);
+  const candidateTokens = canonicalTpvVoiceSearchText(candidate).split(" ").filter(Boolean);
+  if (queryTokens.length === 0 || candidateTokens.length === 0) return 0;
+
+  const usedQueryIndexes = new Set<number>();
+  let matched = 0;
+
+  for (const candidateToken of candidateTokens) {
+    let bestScore = 0;
+    let bestIndex = -1;
+    for (let index = 0; index < queryTokens.length; index += 1) {
+      if (usedQueryIndexes.has(index)) continue;
+      const score = tokenSimilarity(queryTokens[index]!, candidateToken);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    }
+    if (bestIndex >= 0 && bestScore >= 0.58) {
+      usedQueryIndexes.add(bestIndex);
+      matched += bestScore;
+    }
+  }
+
+  const candidateCoverage = matched / candidateTokens.length;
+  const queryCoverage = matched / queryTokens.length;
+  const extraQueryPenalty = Math.max(0, queryTokens.length - usedQueryIndexes.size) * 0.035;
+  const coverageScore = Math.max(
+    0,
+    Math.min(1, candidateCoverage * 0.72 + queryCoverage * 0.28 - extraQueryPenalty),
+  );
+
+  const anchor = strongestCatalogAnchor(query, candidate);
+  const safeAnchorScore = anchor >= 0.68 ? anchor * 0.94 : 0;
+  return Math.max(coverageScore, safeAnchorScore);
+}
+
+function queryVariants(
+  query: string,
+): Array<{ value: string; matchedBy: TpvVoiceProductMatch["matchedBy"] }> {
+  const normalized = canonicalTpvVoiceSearchText(query);
   if (!normalized) return [];
 
-  const variants: Array<{ value: string; matchedBy: TpvVoiceProductMatch["matchedBy"] }> = [
-    { value: normalized, matchedBy: "name" },
-  ];
+  const variants: Array<{
+    value: string;
+    matchedBy: TpvVoiceProductMatch["matchedBy"];
+  }> = [{ value: normalized, matchedBy: "name" }];
 
   const tokens = normalized.split(" ").filter(Boolean);
   for (const token of tokens) {
@@ -63,21 +173,47 @@ function scoreProductVariant(
   variant: { value: string; matchedBy: TpvVoiceProductMatch["matchedBy"] },
   product: Product,
 ): TpvVoiceProductMatch {
-  const nameScore = scoreTpvVoiceCandidate(variant.value, product.nombre);
+  const directNameScore = scoreTpvVoiceCandidate(variant.value, product.nombre);
+  const contextualNameScore = contextualTokenScore(variant.value, product.nombre);
+  const nameScore = Math.max(directNameScore, contextualNameScore);
+
   const categoryScore = product.categoria
-    ? scoreTpvVoiceCandidate(variant.value, product.categoria)
-    : 0;
-  const combinedScore = product.categoria
-    ? scoreTpvVoiceCandidate(variant.value, `${product.nombre} ${product.categoria}`)
+    ? Math.max(
+        scoreTpvVoiceCandidate(variant.value, product.categoria),
+        contextualTokenScore(variant.value, product.categoria),
+      )
     : 0;
 
-  if (nameScore >= categoryScore && nameScore >= combinedScore) {
-    return { product, score: nameScore, matchedBy: variant.matchedBy };
+  const combinedLabel = product.categoria
+    ? `${product.nombre} ${product.categoria}`
+    : product.nombre;
+  const contextualCombinedScore = contextualTokenScore(variant.value, combinedLabel);
+
+  if (nameScore >= categoryScore && nameScore >= contextualCombinedScore) {
+    return {
+      product,
+      score: nameScore,
+      matchedBy:
+        variant.matchedBy === "service_alias"
+          ? "service_alias"
+          : directNameScore >= contextualNameScore
+            ? "name"
+            : "catalog_context",
+    };
+  }
+
+  if (contextualCombinedScore >= categoryScore) {
+    return {
+      product,
+      score: contextualCombinedScore * 0.97,
+      matchedBy:
+        variant.matchedBy === "service_alias" ? "service_alias" : "catalog_context",
+    };
   }
 
   return {
     product,
-    score: Math.max(categoryScore, combinedScore) * 0.94,
+    score: categoryScore * 0.94,
     matchedBy: variant.matchedBy === "service_alias" ? "service_alias" : "category",
   };
 }
@@ -104,7 +240,6 @@ export function chooseTpvVoiceProductCandidate(
   if (
     second &&
     best.product.id !== second.product.id &&
-    best.score < 0.985 &&
     best.score - second.score < PRODUCT_MATCH_AMBIGUITY_GAP
   ) {
     return "ambiguous";
