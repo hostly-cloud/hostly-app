@@ -1,0 +1,46 @@
+.hostly-analysis-route {
+  width: 100%;
+  min-width: 0;
+}
+
+.hostly-analysis-route .hostly-analytics-stack,
+.hostly-analysis-route .hostly-analytics-toolbar,
+.hostly-analysis-route .hostly-analytics-toolbar__filters,
+.hostly-analysis-route .hostly-analytics-toolbar__actions {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  .hostly-analysis-route {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  .hostly-analysis-route .hostly-analytics-toolbar,
+  .hostly-analysis-route .hostly-analytics-toolbar__filters,
+  .hostly-analysis-route .hostly-analytics-toolbar__actions {
+    flex-wrap: wrap;
+  }
+
+  .hostly-analysis-route .hostly-kpi-grid-unified--5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hostly-analysis-route .hostly-kpi-grid-unified--5 > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 430px) {
+  .hostly-analysis-route .hostly-analytics-date-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hostly-analysis-route .hostly-kpi-grid-unified--5 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hostly-analysis-route .hostly-kpi-grid-unified--5 > :last-child {
+    grid-column: auto;
+  }
+}
