@@ -1,6 +1,7 @@
 "use client";
 
 import type { ChangeEvent } from "react";
+import { HostlyButton, HostlyFormToggle } from "@/components/ui/hostly";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { SalaEspacioBasePatch } from "@/lib/sala-editor/base/espacio-base-editor";
 import {
@@ -127,14 +128,12 @@ export function SalaBaseConfigPanel({
 
       <section className="hostly-sala-base-config__section">
         <h3 className="hostly-sala-base-config__section-title">Cuadrícula</h3>
-        <label className="hostly-sala-base-config__toggle">
-          <input
-            type="checkbox"
-            checked={base.grid.visible}
-            onChange={handleGridVisibleChange}
-          />
-          <span>Mostrar cuadrícula</span>
-        </label>
+        <HostlyFormToggle
+          checked={base.grid.visible}
+          onChange={handleGridVisibleChange}
+          label="Mostrar cuadrícula"
+          className="hostly-sala-base-config__toggle"
+        />
         <label className="hostly-sala-base-config__field hostly-sala-base-config__field--grid">
           <span>Tamaño</span>
           <div className="hostly-sala-base-config__grid-size-row">
@@ -151,25 +150,30 @@ export function SalaBaseConfigPanel({
           </div>
         </label>
         <div className="hostly-sala-base-config__preset-row">
-          {GRID_SIZE_PRESETS.map((size) => (
-            <button
-              key={size}
-              type="button"
-              className={[
-                "hostly-sala-base-config__preset",
-                base.grid.size === size ? "is-active" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              onClick={() =>
-                onUpdateBase({
-                  grid: { ...base.grid, size },
-                })
-              }
-            >
-              {size}
-            </button>
-          ))}
+          {GRID_SIZE_PRESETS.map((size) => {
+            const active = base.grid.size === size;
+            return (
+              <HostlyButton
+                key={size}
+                variant="chip"
+                size="compact"
+                active={active}
+                className={[
+                  "hostly-sala-base-config__preset",
+                  active ? "is-active" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onClick={() =>
+                  onUpdateBase({
+                    grid: { ...base.grid, size },
+                  })
+                }
+              >
+                {size}
+              </HostlyButton>
+            );
+          })}
         </div>
       </section>
 
@@ -182,10 +186,11 @@ export function SalaBaseConfigPanel({
           {BASE_FLOOR_CATALOG.map((entry) => {
             const selected = base.floor.kind === entry.kind;
             return (
-              <button
+              <HostlyButton
                 key={entry.kind}
-                type="button"
-                aria-pressed={selected}
+                variant="ghost"
+                size="compact"
+                active={selected}
                 className={[
                   "hostly-sala-base-config__floor",
                   selected ? "is-selected" : "",
@@ -202,7 +207,7 @@ export function SalaBaseConfigPanel({
                 <span className="hostly-sala-base-config__floor-label">
                   {entry.label}
                 </span>
-              </button>
+              </HostlyButton>
             );
           })}
         </div>
