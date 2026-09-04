@@ -263,6 +263,23 @@ function splitCompositeOrderItems(value: string): string[] {
   return parts;
 }
 
+function recoverNoisyLeadingQuantity(value: string): TpvVoiceOrderItem | null {
+  const tokens = value.split(" ").filter(Boolean);
+  const maxQuantityIndex = Math.min(2, tokens.length - 2);
+
+  for (let index = 1; index <= maxQuantityIndex; index += 1) {
+    const quantity = parseQuantityToken(tokens[index]);
+    if (quantity == null) continue;
+
+    const productQuery = stripLeadingFillers(tokens.slice(index + 1).join(" "));
+    if (!productQuery) continue;
+
+    return { productQuery, quantity };
+  }
+
+  return null;
+}
+
 function parseCompositeOrderItem(value: string): TpvVoiceOrderItem | null {
   const parsed = parseAddProduct(value);
   if (parsed?.type === "add_product") {
@@ -271,6 +288,9 @@ function parseCompositeOrderItem(value: string): TpvVoiceOrderItem | null {
       quantity: parsed.quantity,
     };
   }
+
+  const noisyRecovery = recoverNoisyLeadingQuantity(value);
+  if (noisyRecovery) return noisyRecovery;
 
   const productQuery = stripLeadingFillers(stripLeadingAddVerb(value));
   if (!productQuery) return null;

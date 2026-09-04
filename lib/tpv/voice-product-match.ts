@@ -24,6 +24,9 @@ const HEARING_NORMALIZATIONS: Record<string, string> = {
   canna: "cana",
   cania: "cana",
   cagna: "cana",
+  cano: "cana",
+  canio: "cana",
+  kano: "cana",
 };
 
 function normalizeServiceQuery(value: string): string {
