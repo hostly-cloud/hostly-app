@@ -11,61 +11,32 @@ import { OperacionModuleShell } from "../_components/operacion-module-shell";
 import { TpvEditorV2ReadyGate } from "./_components/tpv-editor-v2-ready-gate";
 import { TpvVoiceCommandButton } from "./_components/tpv-voice-command-button";
 import { TpvVoiceCommandRuntime } from "./_components/tpv-voice-command-runtime";
+import { TpvCustomerControl } from "./_components/tpv-customer-control";
 import "./tpv-map-modern.css";
 import "./tpv-map-polish-v2.css";
 
 export default function OperacionTpvPage() {
   const { restaurantId } = useAuth();
   const restaurantIdTrimmed = restaurantId?.trim() ?? null;
-
-  const [tablesReadyToClose, setTablesReadyToClose] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [tablesReadyToClose, setTablesReadyToClose] = useState<Set<string>>(() => new Set());
   const [hideShellTopBar, setHideShellTopBar] = useState(false);
 
-  const handleEmbeddedOperacionChromeChange = useCallback(
-    (state: { hideShellTopBar: boolean }) => {
-      setHideShellTopBar(state.hideShellTopBar);
-    },
-    [],
-  );
-
-  const { groupedTablesMapHandlers } = useTableGroups({
-    restaurantId: restaurantIdTrimmed,
-  });
+  const handleEmbeddedOperacionChromeChange = useCallback((state: { hideShellTopBar: boolean }) => { setHideShellTopBar(state.hideShellTopBar); }, []);
+  const { groupedTablesMapHandlers } = useTableGroups({ restaurantId: restaurantIdTrimmed });
 
   useEffect(() => {
-    const rid = restaurantIdTrimmed?.trim() ?? "";
-    if (!rid) return;
-
+    const rid = restaurantIdTrimmed?.trim() ?? ""; if (!rid) return;
     void preloadTpvEditorV2OperationalMap(rid).catch((error) => {
-      console.warn("[TPV] preload del plano V2 no disponible", {
-        restaurantId: rid,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      console.warn("[TPV] preload del plano V2 no disponible", { restaurantId: rid, error: error instanceof Error ? error.message : String(error) });
     });
   }, [restaurantIdTrimmed]);
 
   useEffect(() => {
-    const handler = (e: CustomEvent<string[]>) => {
-      setTablesReadyToClose(new Set(e.detail ?? []));
-    };
-
-    const clearHandler = (e: CustomEvent<string>) => {
-      const tableId = e.detail;
-      setTablesReadyToClose((prev) => {
-        const next = new Set(prev);
-        next.delete(tableId);
-        return next;
-      });
-    };
-
+    const handler = (e: CustomEvent<string[]>) => { setTablesReadyToClose(new Set(e.detail ?? [])); };
+    const clearHandler = (e: CustomEvent<string>) => { const tableId = e.detail; setTablesReadyToClose((prev) => { const next = new Set(prev); next.delete(tableId); return next; }); };
     window.addEventListener("tablesReadyToClose:update", handler as EventListener);
     window.addEventListener("tablesReadyToClose:clear", clearHandler as EventListener);
-    return () => {
-      window.removeEventListener("tablesReadyToClose:update", handler as EventListener);
-      window.removeEventListener("tablesReadyToClose:clear", clearHandler as EventListener);
-    };
+    return () => { window.removeEventListener("tablesReadyToClose:update", handler as EventListener); window.removeEventListener("tablesReadyToClose:clear", clearHandler as EventListener); };
   }, []);
 
   return (
@@ -73,15 +44,11 @@ export default function OperacionTpvPage() {
       <OperacionModuleShell title="TPV" hideTopBar={hideShellTopBar}>
         <ActiveOperatorGate>
           <TpvEditorV2ReadyGate restaurantId={restaurantIdTrimmed}>
-            <CartaPageContent
-              embeddedInOperacion
-              tablesReadyToClose={tablesReadyToClose}
-              groupedTablesMapHandlers={groupedTablesMapHandlers}
-              onEmbeddedOperacionChromeChange={handleEmbeddedOperacionChromeChange}
-            />
+            <CartaPageContent embeddedInOperacion tablesReadyToClose={tablesReadyToClose} groupedTablesMapHandlers={groupedTablesMapHandlers} onEmbeddedOperacionChromeChange={handleEmbeddedOperacionChromeChange} />
           </TpvEditorV2ReadyGate>
         </ActiveOperatorGate>
       </OperacionModuleShell>
+      <TpvCustomerControl />
       <TpvVoiceCommandRuntime />
       <TpvVoiceCommandButton />
     </ActiveOperatorProvider>
