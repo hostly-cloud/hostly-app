@@ -4,14 +4,14 @@ import {
   requireAuthenticatedRestaurant,
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import {
-  addCashMovement,
-  CashRegisterError,
-  closeCashSession,
-  countCashBlind,
-  getCashWorkspace,
-  openCashSession,
-  reopenCashCount,
-} from "@/lib/server/cash/cash-register";
+  addCashMovementV2,
+  CashRegisterV2Error,
+  closeCashSessionV2,
+  countCashBlindV2,
+  getCashWorkspaceV2,
+  openCashSessionV2,
+  reopenCashCountV2,
+} from "@/lib/server/cash/cash-register-v2";
 
 function jsonError(status: number, error: string) {
   return NextResponse.json({ ok: false, error }, { status });
@@ -21,10 +21,9 @@ export async function GET(req: Request) {
   try {
     const auth = await requireAuthenticatedRestaurant(req);
     if (isAuthErrorResponse(auth)) return auth;
-    const snapshot = await getCashWorkspace({
+    const snapshot = await getCashWorkspaceV2({
       db: auth.db,
       restaurantId: auth.restaurantId,
-      actorUid: auth.uid,
       actorRole: auth.role,
     });
     return NextResponse.json(
@@ -32,7 +31,7 @@ export async function GET(req: Request) {
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
-    if (error instanceof CashRegisterError) {
+    if (error instanceof CashRegisterV2Error) {
       return jsonError(error.httpStatus, error.code);
     }
     console.error("[cash:get]", error);
@@ -49,20 +48,18 @@ export async function POST(req: Request) {
 
     switch (body.action) {
       case "session.open": {
-        const sessionId = await openCashSession({
+        const sessionId = await openCashSessionV2({
           db: auth.db,
           restaurantId: auth.restaurantId,
           actorUid: auth.uid,
           actorEmail: auth.email,
           actorRole: auth.role,
           openingFloat: body.openingFloat,
-          registerId: body.registerId,
-          registerName: body.registerName,
         });
         return NextResponse.json({ ok: true, sessionId });
       }
       case "movement.add":
-        await addCashMovement({
+        await addCashMovementV2({
           db: auth.db,
           restaurantId: auth.restaurantId,
           actorUid: auth.uid,
@@ -75,7 +72,7 @@ export async function POST(req: Request) {
         });
         return NextResponse.json({ ok: true });
       case "session.count":
-        await countCashBlind({
+        await countCashBlindV2({
           db: auth.db,
           restaurantId: auth.restaurantId,
           actorUid: auth.uid,
@@ -85,7 +82,7 @@ export async function POST(req: Request) {
         });
         return NextResponse.json({ ok: true });
       case "session.reopen":
-        await reopenCashCount({
+        await reopenCashCountV2({
           db: auth.db,
           restaurantId: auth.restaurantId,
           actorUid: auth.uid,
@@ -95,7 +92,7 @@ export async function POST(req: Request) {
         });
         return NextResponse.json({ ok: true });
       case "session.close": {
-        const result = await closeCashSession({
+        const result = await closeCashSessionV2({
           db: auth.db,
           restaurantId: auth.restaurantId,
           actorUid: auth.uid,
@@ -109,7 +106,7 @@ export async function POST(req: Request) {
         return jsonError(400, "UNKNOWN_CASH_OPERATION");
     }
   } catch (error) {
-    if (error instanceof CashRegisterError) {
+    if (error instanceof CashRegisterV2Error) {
       return jsonError(error.httpStatus, error.code);
     }
     console.error("[cash:post]", error);
