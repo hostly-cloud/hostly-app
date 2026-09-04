@@ -20,6 +20,13 @@ test("abre una mesa por nombre", () => {
   });
 });
 
+test("abre mesa cuando el usuario dice número", () => {
+  assert.deepEqual(parseTpvVoiceCommand("mesa número cuatro"), {
+    type: "open_table",
+    tableQuery: "cuatro",
+  });
+});
+
 test("interpreta cantidad y producto", () => {
   assert.deepEqual(parseTpvVoiceCommand("dos Coca-Colas"), {
     type: "add_product",
@@ -65,6 +72,50 @@ test("no parte nombres con y si no empieza otra cantidad", () => {
     type: "add_products_to_table",
     tableQuery: "2",
     items: [{ productQuery: "sandwich jamon y queso", quantity: 1 }],
+    sendOrder: true,
+  });
+});
+
+test("tolera muletillas antes de un pedido", () => {
+  assert.deepEqual(
+    parseTpvVoiceCommand("eh, bueno, una botella de Ruinart a la mesa número 4"),
+    {
+      type: "add_products_to_table",
+      tableQuery: "4",
+      items: [{ productQuery: "botella de ruinart", quantity: 1 }],
+      sendOrder: true,
+    },
+  );
+});
+
+test("tolera corrección espontánea era antes del pedido", () => {
+  assert.deepEqual(parseTpvVoiceCommand("era una botella de Ruinart a mesa 4"), {
+    type: "add_products_to_table",
+    tableQuery: "4",
+    items: [{ productQuery: "botella de ruinart", quantity: 1 }],
+    sendOrder: true,
+  });
+});
+
+test("elimina formato repetido al final sin tocar el producto", () => {
+  assert.deepEqual(
+    parseTpvVoiceCommand(
+      "era una botella de Ruinart a la botella a la mesa número 4",
+    ),
+    {
+      type: "add_products_to_table",
+      tableQuery: "4",
+      items: [{ productQuery: "botella de ruinart", quantity: 1 }],
+      sendOrder: true,
+    },
+  );
+});
+
+test("no elimina expresiones culinarias reales con a la", () => {
+  assert.deepEqual(parseTpvVoiceCommand("un pollo a la brasa a mesa 7"), {
+    type: "add_products_to_table",
+    tableQuery: "7",
+    items: [{ productQuery: "pollo a la brasa", quantity: 1 }],
     sendOrder: true,
   });
 });
