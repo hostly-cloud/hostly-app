@@ -15,6 +15,8 @@ export type TpvVoiceProductMatch = {
 
 const PRODUCT_MATCH_MIN_SCORE = 0.61;
 const PRODUCT_MATCH_AMBIGUITY_GAP = 0.1;
+const PRODUCT_UNIQUE_MATCH_AMBIGUITY_GAP = 0.025;
+const PRODUCT_STRONG_UNIQUE_SCORE = 0.93;
 const PRODUCT_NAME_CONNECTORS = new Set([
   "a",
   "al",
@@ -298,7 +300,7 @@ function uniqueCatalogIdentityScore(
     }
   }
   if (strongest < 0.74) return 0;
-  return Math.min(0.97, 0.72 + strongest * 0.25);
+  return Math.min(0.98, 0.73 + strongest * 0.25);
 }
 
 function productContextLabels(product: Product): Array<{
@@ -470,12 +472,12 @@ export function chooseTpvVoiceProductCandidate(
   if (!best) return null;
 
   const second = ranked[1];
-  if (
-    second &&
-    best.product.id !== second.product.id &&
-    best.score - second.score < PRODUCT_MATCH_AMBIGUITY_GAP
-  ) {
-    return "ambiguous";
+  if (second && best.product.id !== second.product.id) {
+    const ambiguityGap =
+      best.matchedBy === "catalog_unique" && best.score >= PRODUCT_STRONG_UNIQUE_SCORE
+        ? PRODUCT_UNIQUE_MATCH_AMBIGUITY_GAP
+        : PRODUCT_MATCH_AMBIGUITY_GAP;
+    if (best.score - second.score < ambiguityGap) return "ambiguous";
   }
 
   return best;
