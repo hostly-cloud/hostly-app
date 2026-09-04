@@ -23,6 +23,7 @@ export function publicationOnMenu(p: PlatoCarta): boolean {
 
 /** Regla de visibilidad para documentos del catálogo central. */
 export function centralProductVisibleOnMenu(doc: ProductDocument): boolean {
+  if (isStockIngredientProduct(doc)) return false;
   if (doc.active === false) return false;
   if (doc.visibleOnMenu === false) return false;
   return true;

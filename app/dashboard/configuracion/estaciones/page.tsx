@@ -198,7 +198,7 @@ export default function ConfigEstacionesPage() {
         <HostlyAlert tone="info" title="Puntos de producción">
           Las estaciones representan cocinas, barras y otros destinos operativos.
           <span className="mt-1 block">
-            Esta configuración aún no afecta al TPV ni a las pantallas de cocina.
+            Se usan para dirigir productos y comandas a su destino en TPV y KDS.
           </span>
         </HostlyAlert>
 

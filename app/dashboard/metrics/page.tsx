@@ -209,7 +209,7 @@ export default function MetricsPage() {
             title="Sin comandas enviadas en esta fecha"
             text="Las métricas aparecerán cuando haya líneas enviadas a preparación."
             hints={["Los borradores del TPV y los pedidos todavía no enviados no se contabilizan."]}
-            primaryAction={{ label: "Abrir TPV", href: "/dashboard/carta" }}
+            primaryAction={{ label: "Abrir TPV", href: "/dashboard/operacion/tpv" }}
           />
         ) : null}
 
@@ -273,7 +273,7 @@ export default function MetricsPage() {
                         onClick={() => {
                           const params = new URLSearchParams({ orderId: row.orderId });
                           if (row.tableId) params.set("tableId", row.tableId);
-                          router.push(`/dashboard/carta?${params.toString()}`);
+                          router.push(`/dashboard/operacion/tpv?${params.toString()}`);
                         }}
                       >
                         <span>{row.tableName}</span>

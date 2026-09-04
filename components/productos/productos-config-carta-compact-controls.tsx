@@ -120,11 +120,15 @@ export function ProductosCategoryNavigation({
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
+        setQuery("");
         triggerRef.current?.focus();
       }
     };
@@ -137,10 +141,7 @@ export function ProductosCategoryNavigation({
   }, [open]);
 
   useEffect(() => {
-    if (!open) {
-      setQuery("");
-      return;
-    }
+    if (!open) return;
     const timer = window.setTimeout(() => searchRef.current?.focus(), 0);
     return () => window.clearTimeout(timer);
   }, [open]);
@@ -148,6 +149,7 @@ export function ProductosCategoryNavigation({
   const selectOption = (option: ProductCategoryNavigationOption) => {
     onChange(option.id);
     setOpen(false);
+    setQuery("");
     triggerRef.current?.focus();
   };
 
@@ -222,7 +224,10 @@ export function ProductosCategoryNavigation({
         aria-expanded={open}
         aria-controls="hostly-productos-category-navigation-options"
         disabled={categoryOptions.length === 0}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          if (open) setQuery("");
+          setOpen((current) => !current);
+        }}
       >
         <span className="hostly-productos-category-navigation__trigger-copy">
           {categorySelected ? activeOption?.label : categoriesLabel}

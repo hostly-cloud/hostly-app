@@ -22,20 +22,23 @@ function formatElapsed(minutes: number): string {
 
 export function OperationalDelayAlertsPanel() {
   const { ready, restaurantId } = useAuth();
-  const [alerts, setAlerts] = useState<CenterAlert[]>([]);
+  const [snapshot, setSnapshot] = useState<{
+    restaurantId: string;
+    alerts: CenterAlert[];
+  } | null>(null);
 
   useEffect(() => {
-    if (!ready || !restaurantId) {
-      setAlerts([]);
-      return;
-    }
+    if (!ready || !restaurantId) return;
     let cancelled = false;
     const refresh = async () => {
       try {
         const response = await authenticatedApiFetch("/api/operations/alerts?summary=1", { cache: "no-store" });
         const payload = await response.json().catch(() => null) as { ok?: boolean; alerts?: CenterAlert[] } | null;
         if (!cancelled && response.ok && payload?.ok) {
-          setAlerts(Array.isArray(payload.alerts) ? payload.alerts : []);
+          setSnapshot({
+            restaurantId,
+            alerts: Array.isArray(payload.alerts) ? payload.alerts : [],
+          });
         }
       } catch (error) {
         console.error("[operational-alerts-panel] summary failed", error);
@@ -49,6 +52,8 @@ export function OperationalDelayAlertsPanel() {
     };
   }, [ready, restaurantId]);
 
+  const alerts =
+    snapshot?.restaurantId === restaurantId ? snapshot.alerts : [];
   if (!ready || !restaurantId || alerts.length === 0) return null;
   const criticalCount = alerts.filter((alert) => alert.level === "critical").length;
   const escalatedCount = alerts.filter((alert) => alert.escalated).length;

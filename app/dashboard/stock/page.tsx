@@ -1,9 +1,15 @@
-import InventarioStockSection from "@/app/dashboard/inventario/inventario-stock-section";
+import { redirect } from "next/navigation";
+import {
+  buildLegacyRouteDestination,
+  type LegacyRouteSearchParams,
+} from "@/lib/navigation/legacy-route-redirect";
 
-/**
- * Compatibilidad de URL: `/dashboard/stock` reutiliza la única superficie
- * canónica de inventario. No mantiene estado ni persistencia propios.
- */
-export default function StockPage() {
-  return <InventarioStockSection />;
+export default async function LegacyStockPage({
+  searchParams,
+}: {
+  searchParams: Promise<LegacyRouteSearchParams>;
+}) {
+  redirect(
+    buildLegacyRouteDestination("/dashboard/inventario", await searchParams),
+  );
 }

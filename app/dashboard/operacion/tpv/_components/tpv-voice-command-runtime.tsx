@@ -12,7 +12,6 @@ import { waitForTpvVoiceSendConfirmation } from "@/lib/tpv/voice-send-confirmati
 import {
   normalizeTpvVoiceText,
   parseTpvVoiceCommand,
-  scoreTpvVoiceCandidate,
   TPV_VOICE_COMMAND_EVENT,
   TPV_VOICE_FEEDBACK_EVENT,
   type TpvVoiceCommandDetail,
@@ -21,12 +20,6 @@ import {
   type TpvVoiceOrderItem,
 } from "@/lib/tpv/voice-command";
 import type { Product } from "@/types/product";
-
-type Candidate<T> = {
-  value: T;
-  label: string;
-  score: number;
-};
 
 type VoicePreviewRequestDetail = {
   transcript: string;
@@ -53,8 +46,6 @@ type MarchCourse = "primeros" | "segundos" | "postres";
 
 const TPV_VOICE_PREVIEW_REQUEST_EVENT = "hostly:tpv-voice-preview-request";
 const TPV_VOICE_PREVIEW_EVENT = "hostly:tpv-voice-preview";
-const MATCH_MIN_SCORE = 0.72;
-const MATCH_AMBIGUITY_GAP = 0.08;
 const UI_WAIT_STEP_MS = 55;
 const UI_WAIT_TIMEOUT_MS = 2400;
 const MARCH_ACK_TIMEOUT_MS = 12_000;
@@ -70,28 +61,6 @@ function emitPreview(detail: VoicePreviewDetail) {
   window.dispatchEvent(
     new CustomEvent<VoicePreviewDetail>(TPV_VOICE_PREVIEW_EVENT, { detail }),
   );
-}
-
-function chooseCandidate<T>(
-  query: string,
-  values: Array<{ value: T; label: string }>,
-): Candidate<T> | null | "ambiguous" {
-  const ranked = values
-    .map(({ value, label }) => ({
-      value,
-      label,
-      score: scoreTpvVoiceCandidate(query, label),
-    }))
-    .filter((candidate) => candidate.score >= MATCH_MIN_SCORE)
-    .sort((a, b) => b.score - a.score);
-
-  const best = ranked[0];
-  if (!best) return null;
-  const second = ranked[1];
-  if (second && best.score < 0.98 && best.score - second.score < MATCH_AMBIGUITY_GAP) {
-    return "ambiguous";
-  }
-  return best;
 }
 
 function isVisible(element: HTMLElement): boolean {

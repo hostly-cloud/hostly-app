@@ -8,7 +8,6 @@ const MAP_EDITOR_PATH = "/dashboard/configuracion/espacios/editor-v2";
 const INTERNAL_SCROLL_PATHS = [
   "/dashboard/configuracion/carta/productos",
   "/dashboard/configuracion/carta/escandallos",
-  "/dashboard/configuracion/carta/import-workspace",
   "/dashboard/configuracion/empleados",
   "/dashboard/configuracion/empresa",
   "/dashboard/configuracion/espacios/zonas",
@@ -44,10 +43,6 @@ export const CONFIG_NAV_GROUPS: ConfigNavGroup[] = [
       {
         href: "/dashboard/configuracion/carta/importacion",
         label: "IA / Importación",
-      },
-      {
-        href: "/dashboard/configuracion/carta/import-workspace",
-        label: "Espacio de importación",
       },
     ],
   },

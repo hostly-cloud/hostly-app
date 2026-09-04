@@ -129,9 +129,9 @@ export function ProductFormCommercialInfoModal({
 
   useEffect(() => {
     if (open) return;
-    if (consumeProductCommercialEdit(productId)) {
-      setIntentOpen(true);
-    }
+    if (!consumeProductCommercialEdit(productId)) return;
+    const timer = window.setTimeout(() => setIntentOpen(true), 0);
+    return () => window.clearTimeout(timer);
   }, [open, productId]);
 
   const handleClose = useCallback(() => {

@@ -1,5 +1,18 @@
-﻿import { ImportWorkspacePageContent } from "./_components/import-workspace-page-content";
+import { redirect } from "next/navigation";
+import {
+  buildLegacyRouteDestination,
+  type LegacyRouteSearchParams,
+} from "@/lib/navigation/legacy-route-redirect";
 
-export default function ConfigCartaImportWorkspacePage() {
-  return <ImportWorkspacePageContent />;
+export default async function LegacyImportWorkspacePage({
+  searchParams,
+}: {
+  searchParams: Promise<LegacyRouteSearchParams>;
+}) {
+  redirect(
+    buildLegacyRouteDestination(
+      "/dashboard/configuracion/carta/importacion",
+      await searchParams,
+    ),
+  );
 }
