@@ -16,9 +16,9 @@ export default function OperacionReservasPage() {
         <HostlyButton
           variant="secondary"
           size="compact"
-          onClick={() => router.push("/dashboard/operacion/reservas/clientes")}
+          onClick={() => router.push("/dashboard/clientes")}
         >
-          Clientes
+          Clientes / CRM
         </HostlyButton>
       }
     >
