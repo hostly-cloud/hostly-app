@@ -104,7 +104,10 @@ function attributableSpend(reservation: ReservationRow, payments: readonly Custo
   return Math.round(payments.reduce((sum, payment) => {
     if (payment.tableId !== tableId || payment.createdAtMs < from || payment.createdAtMs > to) return sum;
     if (payment.status === "paid") return sum + payment.amount;
-    if (payment.status === "refunded" || payment.status === "cancelled") return sum - (payment.refundAmount || payment.amount);
+    if (payment.status === "refunded" || payment.status === "cancelled") {
+      const reversed = payment.refundAmount || payment.amount;
+      return sum + Math.max(0, payment.amount - reversed);
+    }
     return sum;
   }, 0) * 100) / 100;
 }
