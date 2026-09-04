@@ -4,15 +4,20 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useAuth } from "@/components/auth/auth-context";
+import { useI18n } from "@/components/i18n-provider";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
 import {
   buildOperationalDelayAlerts,
   type OperationalOrderRecord,
 } from "@/lib/operations/operational-delay-alerts";
+import {
+  fillCopy,
+  OPERATIONAL_ALERTS_COPY,
+} from "@/locales/operational-alerts-copy";
 
-function formatElapsed(minutes: number): string {
-  if (!Number.isFinite(minutes) || minutes < 1) return "ahora";
+function formatElapsed(minutes: number, nowLabel: string): string {
+  if (!Number.isFinite(minutes) || minutes < 1) return nowLabel;
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
@@ -21,6 +26,8 @@ function formatElapsed(minutes: number): string {
 
 export function OperationalDelayAlertsPanel() {
   const { user, restaurantId, ready } = useAuth();
+  const { locale } = useI18n();
+  const copy = OPERATIONAL_ALERTS_COPY[locale];
   const [orders, setOrders] = useState<OperationalOrderRecord[]>([]);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -76,22 +83,30 @@ export function OperationalDelayAlertsPanel() {
   if (!ready || !restaurantId || alerts.length === 0) return null;
   const criticalCount = alerts.filter((alert) => alert.level === "critical").length;
 
+  const stationLabel = (station: "kitchen" | "bar" | "cocktail") => {
+    if (station === "kitchen") return copy.stationKitchen;
+    if (station === "bar") return copy.stationBar;
+    return copy.stationCocktail;
+  };
+
   return (
-    <section aria-label="Alertas operativas" className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm">
+    <section aria-label={copy.aria} className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-amber-800">Alertas operativas</p>
+          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-amber-800">{copy.title}</p>
           <h2 className="mt-1 text-lg font-extrabold text-slate-950">
             {criticalCount > 0
-              ? `${criticalCount} retraso${criticalCount === 1 ? " crítico" : "s críticos"}`
-              : "Servicio con atención pendiente"}
+              ? criticalCount === 1
+                ? copy.criticalOne
+                : fillCopy(copy.criticalMany, { count: criticalCount })
+              : copy.attentionPending}
           </h2>
           <p className="mt-1 text-sm font-medium text-slate-600">
-            Prioridad calculada con los mismos tiempos SLA que Cocina, Barra y Coctelería.
+            {copy.slaHint}
           </p>
         </div>
         <span className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-bold text-amber-900">
-          {alerts.length} {alerts.length === 1 ? "alerta" : "alertas"}
+          {alerts.length} {alerts.length === 1 ? copy.alertOne : copy.alertMany}
         </span>
       </div>
       <div className="mt-4 grid gap-2">
@@ -108,23 +123,25 @@ export function OperationalDelayAlertsPanel() {
                   ? "rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-red-800"
                   : "rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-amber-800"}
                 >
-                  {alert.level === "critical" ? "Crítico" : "Atención"}
+                  {alert.level === "critical" ? copy.critical : copy.attention}
                 </span>
               </span>
               <span className="mt-0.5 block text-xs font-semibold text-slate-600">
-                {alert.stationLabel} · {alert.delayedLineCount} {alert.delayedLineCount === 1 ? "línea retrasada" : "líneas retrasadas"}
+                {stationLabel(alert.station)} · {alert.delayedLineCount} {alert.delayedLineCount === 1 ? copy.delayedLineOne : copy.delayedLineMany}
               </span>
             </span>
             <span className="shrink-0 text-right">
-              <span className="block text-sm font-extrabold text-slate-950">{formatElapsed(alert.elapsedMinutes)}</span>
-              <span className="block text-[11px] font-semibold text-slate-500">desde {alert.thresholdMinutes} min</span>
+              <span className="block text-sm font-extrabold text-slate-950">{formatElapsed(alert.elapsedMinutes, copy.now)}</span>
+              <span className="block text-[11px] font-semibold text-slate-500">
+                {fillCopy(copy.since, { minutes: alert.thresholdMinutes })}
+              </span>
             </span>
           </Link>
         ))}
       </div>
       {alerts.length > 6 && (
         <p className="mt-3 text-xs font-semibold text-slate-600">
-          Hay {alerts.length - 6} alertas adicionales en las pantallas operativas.
+          {copy.extraPrefix} {alerts.length - 6} {copy.extraSuffix}
         </p>
       )}
     </section>
