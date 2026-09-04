@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   computeTablesReadyToClose,
   isOrderReadyToClose,
+  readTableReadyToCloseQuantity,
 } from "@/lib/kds/table-ready-to-close";
 
 test("una comanda vacía no marca una mesa libre como lista para cerrar", () => {
@@ -22,6 +23,13 @@ test("líneas residuales con cantidad cero no marcan una mesa como lista", () =>
   };
   assert.equal(isOrderReadyToClose(order), false);
   assert.deepEqual([...computeTablesReadyToClose([order])], []);
+});
+
+test("normaliza cantidades legacy de Firestore sin convertir cero en uno", () => {
+  assert.equal(readTableReadyToCloseQuantity("0"), 0);
+  assert.equal(readTableReadyToCloseQuantity("2"), 2);
+  assert.equal(readTableReadyToCloseQuantity(undefined), 1);
+  assert.equal(readTableReadyToCloseQuantity("no-numérico"), 1);
 });
 
 test("las líneas con cantidad cero no ocultan una línea real ya servida", () => {

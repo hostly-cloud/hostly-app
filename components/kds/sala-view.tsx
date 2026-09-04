@@ -23,6 +23,7 @@ import {
 } from "@/lib/carta/menu-course";
 import {
   computeTablesReadyToClose,
+  readTableReadyToCloseQuantity,
   resolveTableReadyToCloseKey,
 } from "@/lib/kds/table-ready-to-close";
 
@@ -122,7 +123,7 @@ function readItemsArray(raw: unknown): SalaItem[] {
       (typeof rec.nombre === "string" && (rec.nombre as string)) ||
       "";
     const qtyRaw = rec.qty ?? rec.quantity;
-    const qty = typeof qtyRaw === "number" && Number.isFinite(qtyRaw) ? qtyRaw : 1;
+    const qty = readTableReadyToCloseQuantity(qtyRaw);
     const status = typeof rec.status === "string" ? rec.status : undefined;
     const extras = readItemExtrasFromRecord(rec);
     const note = readItemNoteFromRecord(rec);

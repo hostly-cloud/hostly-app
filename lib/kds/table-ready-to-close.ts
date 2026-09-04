@@ -62,6 +62,16 @@ function isMeaningfulOrderItem(item: TableReadyToCloseLine): boolean {
   return Number.isFinite(item.qty) && item.qty > 0;
 }
 
+/**
+ * Firestore conserva algunas cantidades legacy como texto. Sala debe tratarlas
+ * igual que el TPV para que `"0"` no se convierta en una línea fantasma.
+ */
+export function readTableReadyToCloseQuantity(raw: unknown): number {
+  if (raw === undefined || raw === null || raw === "") return 1;
+  const numeric = Number(raw);
+  return Number.isFinite(numeric) ? numeric : 1;
+}
+
 /** Pedido activo sin líneas bloqueantes → servicio de comanda terminado. */
 export function isOrderReadyToClose(order: TableReadyToCloseOrder): boolean {
   if (!isActiveOrderForReadyToClose(order.status)) return false;
