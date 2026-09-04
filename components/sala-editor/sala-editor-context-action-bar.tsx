@@ -1,5 +1,7 @@
 "use client";
 
+import { HostlyButton } from "@/components/ui/hostly";
+
 export type SalaEditorContextActionTargetKind =
   | "surface"
   | "zone"
@@ -53,25 +55,27 @@ export function SalaEditorContextActionBar({
           </div>
 
           <div className="hostly-sala-context-action-bar__actions">
-            <button
-              type="button"
+            <HostlyButton
+              variant="destructive"
+              size="compact"
               className="hostly-sala-context-action-bar__action hostly-sala-context-action-bar__action--danger"
               onClick={target.onDelete}
             >
               <span aria-hidden>🗑</span>
               Eliminar
-            </button>
+            </HostlyButton>
             {UPCOMING_ACTIONS.map((action) => (
-              <button
+              <HostlyButton
                 key={action}
-                type="button"
+                variant="ghost"
+                size="compact"
                 className="hostly-sala-context-action-bar__action"
                 disabled
                 aria-disabled="true"
                 title="Próximamente"
               >
                 {action}
-              </button>
+              </HostlyButton>
             ))}
           </div>
         </>
