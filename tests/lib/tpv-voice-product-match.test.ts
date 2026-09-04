@@ -7,8 +7,13 @@ import {
 } from "../../lib/tpv/voice-product-match";
 import type { Product } from "../../types/product";
 
-function product(id: string, nombre: string, categoria: string): Product {
-  return { id, nombre, categoria, precio: 0 };
+function product(
+  id: string,
+  nombre: string,
+  categoria: string,
+  extra: Partial<Product> = {},
+): Product {
+  return { id, nombre, categoria, precio: 0, ...extra };
 }
 
 function requireMatch(
@@ -64,6 +69,53 @@ test("tolera una palabra sobrante si el resto apunta claramente al producto", ()
   assert.equal(match.product.id, "coke");
 });
 
+test("entiende presentación de servicio sin exigir que forme parte del nombre", () => {
+  const match = requireMatch(
+    chooseTpvVoiceProductCandidate("una botella de ruinart", [
+      product("ruinart", "Ruinart", "Champagne", {
+        productFamilyName: "Vinos y espumosos",
+        tipoVenta: "bebida",
+      }),
+      product("moet", "Moët Impérial", "Champagne", {
+        productFamilyName: "Vinos y espumosos",
+        tipoVenta: "bebida",
+      }),
+    ]),
+  );
+
+  assert.equal(match.product.id, "ruinart");
+});
+
+test("usa categoría y familia reales de la carta para reforzar el producto", () => {
+  const match = requireMatch(
+    chooseTpvVoiceProductCandidate("el verdejo de vinos blancos", [
+      product("verdejo", "José Pariente Verdejo", "Vinos blancos", {
+        productFamilyName: "Vinos",
+        tipoVenta: "bebida",
+      }),
+      product("rioja", "Ramón Bilbao Crianza", "Vinos tintos", {
+        productFamilyName: "Vinos",
+        tipoVenta: "bebida",
+      }),
+    ]),
+  );
+
+  assert.equal(match.product.id, "verdejo");
+});
+
+test("aprovecha un nombre distintivo único dentro de la carta del restaurante", () => {
+  const match = requireMatch(
+    chooseTpvVoiceProductCandidate("pariente", [
+      product("verdejo", "José Pariente Verdejo", "Vinos blancos"),
+      product("albariño", "Martín Códax Albariño", "Vinos blancos"),
+      product("rioja", "Ramón Bilbao Crianza", "Vinos tintos"),
+    ]),
+  );
+
+  assert.equal(match.product.id, "verdejo");
+  assert.ok(match.score >= 0.61);
+});
+
 test("prioriza el nombre exacto Fanta de naranja frente a variantes cercanas", () => {
   const match = requireMatch(
     chooseTpvVoiceProductCandidate("fanta de naranja", [
@@ -75,6 +127,22 @@ test("prioriza el nombre exacto Fanta de naranja frente a variantes cercanas", (
 
   assert.equal(match.product.id, "orange");
   assert.equal(match.score, 1);
+});
+
+test("respeta explícitamente normal frente a zero", () => {
+  const catalog = [
+    product("regular", "Coca-Cola", "Refrescos"),
+    product("zero", "Coca-Cola Zero", "Refrescos"),
+  ];
+
+  assert.equal(
+    requireMatch(chooseTpvVoiceProductCandidate("coca cola zero", catalog)).product.id,
+    "zero",
+  );
+  assert.equal(
+    requireMatch(chooseTpvVoiceProductCandidate("coca cola normal", catalog)).product.id,
+    "regular",
+  );
 });
 
 test("mantiene ambigüedad si existen dos productos con el mismo nombre exacto", () => {
@@ -103,6 +171,15 @@ test("no elige a ciegas si el contexto puede corresponder a varios productos", (
   ]);
 
   assert.equal(match, "ambiguous");
+});
+
+test("no inventa una marca que no existe en la carta activa", () => {
+  const match = chooseTpvVoiceProductCandidate("heineken", [
+    product("mahou", "Mahou 5 Estrellas", "Cervezas"),
+    product("estrella", "Estrella Galicia", "Cervezas"),
+  ]);
+
+  assert.equal(match, null);
 });
 
 test("no convierte una frase muy lejana en un producto solo por forzar coincidencia", () => {
