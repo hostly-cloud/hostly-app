@@ -14,6 +14,7 @@ import {
 } from "react";
 import type { DraggableAttributes } from "@dnd-kit/core";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import { salaEspacioTypeIcon } from "@/lib/sala-editor/catalog/espacio-types";
 
@@ -343,25 +344,60 @@ export function SalaEspacioCard({
           </summary>
           <div className="hostly-sala-editor-layer__menu-panel" role="menu">
             {selected ? (
-              <button type="button" role="menuitem" className="hostly-sala-editor-layer__menu-item" onClick={startRenaming}>
+              <HostlyButton
+                type="button"
+                variant="ghost"
+                size="compact"
+                role="menuitem"
+                className="hostly-sala-editor-layer__menu-item"
+                onClick={startRenaming}
+              >
                 Renombrar espacio
-              </button>
+              </HostlyButton>
             ) : null}
-            <button type="button" role="menuitem" className="hostly-sala-editor-layer__menu-item" onClick={handleToggleVisible}>
+            <HostlyButton
+              type="button"
+              variant="ghost"
+              size="compact"
+              role="menuitem"
+              className="hostly-sala-editor-layer__menu-item"
+              onClick={handleToggleVisible}
+            >
               {espacio.visible ? "Ocultar" : "Mostrar"}
-            </button>
-            <button type="button" role="menuitem" className="hostly-sala-editor-layer__menu-item" onClick={handleToggleActive}>
+            </HostlyButton>
+            <HostlyButton
+              type="button"
+              variant="ghost"
+              size="compact"
+              role="menuitem"
+              className="hostly-sala-editor-layer__menu-item"
+              onClick={handleToggleActive}
+            >
               {espacio.active ? "Desactivar" : "Activar"}
-            </button>
+            </HostlyButton>
             {onDuplicateEspacio ? (
-              <button type="button" role="menuitem" className="hostly-sala-editor-layer__menu-item" onClick={handleDuplicate}>
+              <HostlyButton
+                type="button"
+                variant="ghost"
+                size="compact"
+                role="menuitem"
+                className="hostly-sala-editor-layer__menu-item"
+                onClick={handleDuplicate}
+              >
                 Duplicar espacio
-              </button>
+              </HostlyButton>
             ) : null}
             {selected ? (
-              <button type="button" role="menuitem" className="hostly-sala-editor-layer__menu-item" onClick={handleDelete}>
+              <HostlyButton
+                type="button"
+                variant="destructive"
+                size="compact"
+                role="menuitem"
+                className="hostly-sala-editor-layer__menu-item"
+                onClick={handleDelete}
+              >
                 Eliminar espacio
-              </button>
+              </HostlyButton>
             ) : null}
           </div>
         </details>
