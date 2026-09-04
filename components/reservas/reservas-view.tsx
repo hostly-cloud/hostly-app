@@ -26,6 +26,7 @@ import {
   type ReservationFloorMapPickerConfirm,
 } from "@/components/reservas/reservation-floor-map-picker";
 import { ReservationDayToolbar } from "@/components/reservas/reservation-day-toolbar";
+import { HostlyButton } from "@/components/ui/hostly";
 import {
   HostlyStatusBadge,
   type HostlyStatusBadgeTone,
@@ -623,14 +624,15 @@ export default function ReservasView() {
                               ) : null}
                             </div>
                             {r.status === "booked" ? (
-                              <button
-                                type="button"
-                                className="hostly-button-primary hostly-button-compact shrink-0"
+                              <HostlyButton
+                                variant="primary"
+                                size="compact"
+                                className="shrink-0"
                                 onClick={() => void handleSeatReservation(r)}
                                 disabled={busy}
                               >
                                 Ha llegado
-                              </button>
+                              </HostlyButton>
                             ) : null}
                           </div>
                         );
@@ -675,14 +677,15 @@ export default function ReservasView() {
                               </span>
                             </div>
                             {r.status === "booked" ? (
-                              <button
-                                type="button"
-                                className="hostly-button-primary hostly-button-compact shrink-0"
+                              <HostlyButton
+                                variant="primary"
+                                size="compact"
+                                className="shrink-0"
                                 onClick={() => void handleSeatReservation(r)}
                                 disabled={busy}
                               >
                                 Ha llegado
-                              </button>
+                              </HostlyButton>
                             ) : null}
                           </div>
                         );
@@ -800,14 +803,15 @@ export default function ReservasView() {
                               </option>
                             ))}
                           </select>
-                          <button
-                            type="button"
-                            className="hostly-button-secondary hostly-button-compact shrink-0 whitespace-nowrap sm:self-stretch"
+                          <HostlyButton
+                            variant="secondary"
+                            size="compact"
+                            className="shrink-0 whitespace-nowrap sm:self-stretch"
                             disabled={savingReservation || !restaurantId || !draft.date}
                             onClick={() => setFloorMapPicker({ mode: "create" })}
                           >
                             Elegir en mapa
-                          </button>
+                          </HostlyButton>
                         </div>
                       </div>
                       <div className="md:col-span-2">
@@ -823,9 +827,10 @@ export default function ReservasView() {
                   </div>
 
                   <div className="mt-0 flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-[var(--hostly-line)] bg-[var(--hostly-surface-card-solid)] pt-4">
-                    <button
-                      type="button"
-                      className="hostly-button-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                    <HostlyButton
+                      variant="secondary"
+                      size="touch"
+                      className="disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={() => {
                         setCreating(false);
                         setSaveError(null);
@@ -833,14 +838,16 @@ export default function ReservasView() {
                       disabled={savingReservation}
                     >
                       Cancelar
-                    </button>
-                    <button
+                    </HostlyButton>
+                    <HostlyButton
                       type="submit"
-                      className="hostly-button-primary disabled:cursor-wait disabled:opacity-90"
+                      variant="primary"
+                      size="touch"
+                      className="disabled:cursor-wait disabled:opacity-90"
                       disabled={savingReservation}
                     >
                       {savingReservation ? "Guardando…" : "Guardar reserva"}
-                    </button>
+                    </HostlyButton>
                   </div>
                 </form>
               </div>
@@ -929,62 +936,66 @@ export default function ReservasView() {
                               </option>
                             ))}
                           </select>
-                          <button
-                            type="button"
-                            className="hostly-button-secondary hostly-button-compact shrink-0 whitespace-nowrap sm:self-stretch"
+                          <HostlyButton
+                            variant="secondary"
+                            size="compact"
+                            className="shrink-0 whitespace-nowrap sm:self-stretch"
                             disabled={busy || !restaurantId}
                             onClick={() =>
                               setFloorMapPicker({ mode: "edit", reservationId: r.id })
                             }
                           >
                             Elegir en mapa
-                          </button>
+                          </HostlyButton>
                         </div>
                       </div>
 
                       {r.status === "booked" ? (
                         <div className="mt-1 flex flex-wrap justify-end gap-2">
-                          <button
-                            type="button"
-                            className="hostly-button-primary hostly-button-compact"
+                          <HostlyButton
+                            variant="primary"
+                            size="compact"
                             onClick={() => void handleSeatReservation(r)}
                             disabled={busy}
                           >
                             Ha llegado
-                          </button>
-                          <button
-                            type="button"
-                            className="hostly-button-secondary hostly-button-compact font-semibold text-red-800"
+                          </HostlyButton>
+                          <HostlyButton
+                            variant="destructive"
+                            size="compact"
+                            className="font-semibold text-red-800"
                             style={{ background: "var(--hostly-danger-soft)", borderColor: "rgba(180, 70, 70, 0.22)" }}
                             onClick={() => void handleUpdateReservationStatus(r.id, "no_show")}
                             disabled={busy}
                           >
                             No presentado
-                          </button>
-                          <button
-                            type="button"
-                            className="hostly-button-secondary hostly-button-compact font-semibold"
+                          </HostlyButton>
+                          <HostlyButton
+                            variant="destructive"
+                            size="compact"
+                            className="font-semibold"
                             onClick={() => void handleUpdateReservationStatus(r.id, "cancelled")}
                             disabled={busy}
                           >
                             Cancelar
-                          </button>
+                          </HostlyButton>
                         </div>
                       ) : r.status === "seated" ? (
                         <div className="mt-1 flex flex-wrap justify-end gap-2">
                           {r.tableId ? (
-                            <button
-                              type="button"
-                              className="hostly-button-secondary hostly-button-compact"
+                            <HostlyButton
+                              variant="secondary"
+                              size="compact"
                               onClick={() => handleOpenTable(r)}
                               disabled={busy}
                             >
                               Abrir mesa
-                            </button>
+                            </HostlyButton>
                           ) : null}
-                          <button
-                            type="button"
-                            className="hostly-button-secondary hostly-button-compact font-semibold"
+                          <HostlyButton
+                            variant="secondary"
+                            size="compact"
+                            className="font-semibold"
                             style={{
                               background: "var(--hostly-success-soft)",
                               borderColor: "rgba(46, 125, 80, 0.22)",
@@ -994,7 +1005,7 @@ export default function ReservasView() {
                             disabled={busy}
                           >
                             Completar
-                          </button>
+                          </HostlyButton>
                         </div>
                       ) : null}
                       {r.notes && r.notes.length <= 80 ? (
