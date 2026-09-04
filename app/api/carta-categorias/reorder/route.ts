@@ -9,7 +9,7 @@ function badRequest(message: string, status = 400) {
 export async function POST(req: Request) {
   const authContext = await requireLegacyRestaurantApi(
     req,
-    "settings.manage",
+    "catalog.manage",
   );
   if (isAuthErrorResponse(authContext)) return authContext;
 

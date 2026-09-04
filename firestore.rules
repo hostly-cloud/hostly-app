@@ -1123,31 +1123,45 @@ service cloud.firestore {
             'groupId',
             'mainTableId',
           ])
-          && affected.hasOnly([
-            'name',
-            'label',
-            'zoneId',
-            'zoneName',
-            'guestCount',
-            'dinersCount',
-            'assignedOperatorId',
-            'assignedOperatorName',
-            'assignedAt',
-            'updatedAt',
-            'x',
-            'y',
-            'width',
-            'height',
-            'rotation',
-            'shape',
-            'capacity',
-            'notes',
-            'metadata',
-          ]);
+          && (
+            (canSellTpv() && affected.hasOnly([
+              'guestCount',
+              'dinersCount',
+              'assignedOperatorId',
+              'assignedOperatorName',
+              'assignedAt',
+              'updatedAt',
+              'notes',
+              'metadata',
+            ]))
+            ||
+            (canManageSettings() && affected.hasOnly([
+              'name',
+              'label',
+              'zoneId',
+              'zoneName',
+              'guestCount',
+              'dinersCount',
+              'assignedOperatorId',
+              'assignedOperatorName',
+              'assignedAt',
+              'updatedAt',
+              'x',
+              'y',
+              'width',
+              'height',
+              'rotation',
+              'shape',
+              'capacity',
+              'notes',
+              'metadata',
+            ]))
+          );
       }
 
       allow read: if sameRestaurant(resource.data.restaurantId);
-      allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId)
+        && canManageSettings();
       allow update: if isAllowedTableClientUpdate();
       allow delete: if false;
     }
