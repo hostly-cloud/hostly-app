@@ -121,6 +121,9 @@ export function isLocale(value: string | null | undefined): value is Locale {
 }
 
 export function getMessage(tree: MessageTree, key: string): string | undefined {
+  const direct = tree[key];
+  if (typeof direct === "string") return direct;
+
   const parts = key.split(".");
   let cur: unknown = tree;
   for (const p of parts) {
