@@ -3,12 +3,15 @@ import test from "node:test";
 
 import {
   canonicalizeTpvVoiceTranscript,
+  normalizeTpvVoiceLanguage,
+  speechLocaleForHostlyLocale,
   speechLocaleForTpvVoiceLanguage,
+  type TpvVoiceLanguage,
 } from "../../lib/tpv/voice-language";
 import { parseTpvVoiceCommand } from "../../lib/tpv/voice-command";
 
 function expectOrder(
-  language: "es" | "en" | "fr" | "de" | "it",
+  language: TpvVoiceLanguage,
   spoken: string,
   tableQuery: string,
   items: Array<{ productQuery: string; quantity: number }>,
@@ -28,6 +31,17 @@ test("usa el locale de reconocimiento correspondiente a cada idioma del TPV", ()
   assert.equal(speechLocaleForTpvVoiceLanguage("fr"), "fr-FR");
   assert.equal(speechLocaleForTpvVoiceLanguage("de"), "de-DE");
   assert.equal(speechLocaleForTpvVoiceLanguage("it"), "it-IT");
+  assert.equal(speechLocaleForTpvVoiceLanguage("pt"), "pt-PT");
+  assert.equal(speechLocaleForTpvVoiceLanguage("nl"), "nl-NL");
+});
+
+test("las variantes suizas reutilizan la gramática base y conservan su locale regional", () => {
+  assert.equal(normalizeTpvVoiceLanguage("de-CH"), "de");
+  assert.equal(normalizeTpvVoiceLanguage("fr-CH"), "fr");
+  assert.equal(normalizeTpvVoiceLanguage("it-CH"), "it");
+  assert.equal(speechLocaleForHostlyLocale("de-CH"), "de-CH");
+  assert.equal(speechLocaleForHostlyLocale("fr-CH"), "fr-CH");
+  assert.equal(speechLocaleForHostlyLocale("it-CH"), "it-CH");
 });
 
 test("inglés conserva nombres de carta y traduce solo la gramática operativa", () => {
@@ -61,6 +75,26 @@ test("italiano interpreta cantidades, productos y mesa", () => {
   ]);
 });
 
+test("portugués interpreta cantidades, productos y mesa", () => {
+  expectOrder("pt", "duas Coca-Cola e uma Fanta laranja para a mesa nove", "9", [
+    { productQuery: "coca cola", quantity: 2 },
+    { productQuery: "fanta laranja", quantity: 1 },
+  ]);
+  expectOrder("pt", "mesa cinco traz me uma Ruinart", "5", [
+    { productQuery: "ruinart", quantity: 1 },
+  ]);
+});
+
+test("neerlandés interpreta cantidades, productos y mesa", () => {
+  expectOrder("nl", "twee Coca-Cola en een Fanta Orange voor de tafel negen", "9", [
+    { productQuery: "coca cola", quantity: 2 },
+    { productQuery: "fanta orange", quantity: 1 },
+  ]);
+  expectOrder("nl", "tafel vijf breng me een Ruinart", "5", [
+    { productQuery: "ruinart", quantity: 1 },
+  ]);
+});
+
 test("acciones operativas se convierten al contrato canónico existente", () => {
   assert.deepEqual(
     parseTpvVoiceCommand(canonicalizeTpvVoiceTranscript("send order", "en")),
@@ -78,15 +112,25 @@ test("acciones operativas se convierten al contrato canónico existente", () => 
     parseTpvVoiceCommand(canonicalizeTpvVoiceTranscript("invia la comanda", "it")),
     { type: "send_order" },
   );
+  assert.deepEqual(
+    parseTpvVoiceCommand(canonicalizeTpvVoiceTranscript("envia a comanda", "pt")),
+    { type: "send_order" },
+  );
+  assert.deepEqual(
+    parseTpvVoiceCommand(canonicalizeTpvVoiceTranscript("bestelling versturen", "nl")),
+    { type: "send_order" },
+  );
 });
 
-test("abrir mesa funciona en los cinco idiomas", () => {
+test("abrir mesa funciona en todos los idiomas de voz", () => {
   const cases = [
     ["es", "abre mesa nueve"],
     ["en", "open table nine"],
     ["fr", "ouvre la table neuf"],
     ["de", "öffne Tisch neun"],
     ["it", "apri tavolo nove"],
+    ["pt", "abre a mesa nove"],
+    ["nl", "open tafel negen"],
   ] as const;
 
   for (const [language, spoken] of cases) {

@@ -1,4 +1,4 @@
-export type TpvVoiceLanguage = "es" | "en" | "fr" | "de" | "it";
+export type TpvVoiceLanguage = "es" | "en" | "fr" | "de" | "it" | "pt" | "nl";
 
 export const TPV_VOICE_LANGUAGE_STORAGE_KEY = "hostly.locale";
 
@@ -13,7 +13,22 @@ export const TPV_VOICE_LANGUAGE_OPTIONS: ReadonlyArray<{
   { code: "fr", shortLabel: "FR", label: "Français", speechLocale: "fr-FR" },
   { code: "de", shortLabel: "DE", label: "Deutsch", speechLocale: "de-DE" },
   { code: "it", shortLabel: "IT", label: "Italiano", speechLocale: "it-IT" },
+  { code: "pt", shortLabel: "PT", label: "Português", speechLocale: "pt-PT" },
+  { code: "nl", shortLabel: "NL", label: "Nederlands", speechLocale: "nl-NL" },
 ] as const;
+
+const HOSTLY_SPEECH_LOCALES: Readonly<Record<string, string>> = {
+  es: "es-ES",
+  en: "en-GB",
+  fr: "fr-FR",
+  de: "de-DE",
+  it: "it-IT",
+  pt: "pt-PT",
+  nl: "nl-NL",
+  "de-ch": "de-CH",
+  "fr-ch": "fr-CH",
+  "it-ch": "it-CH",
+};
 
 export type TpvVoiceUiCopy = {
   languageLabel: string;
@@ -143,21 +158,81 @@ const UI_COPY: Record<TpvVoiceLanguage, TpvVoiceUiCopy> = {
     title: "Comando vocale",
     dialogLabel: "Conferma comando vocale",
   },
+  pt: {
+    languageLabel: "Idioma de voz do TPV",
+    listening: "A ouvir…",
+    interpreting: (transcript) => `A interpretar: “${transcript}”`,
+    permissionError: "Preciso de permissão para usar o microfone.",
+    noSpeechError: "Não ouvi nenhum comando.",
+    audioError: "Não encontro um microfone disponível.",
+    genericListenError: "Não consegui ouvir o comando.",
+    unavailable: "Os comandos de voz não estão disponíveis neste navegador.",
+    activationError: "Não consegui ativar o microfone.",
+    hasSaid: "Disse",
+    understood: "Entendi",
+    cancel: "Cancelar",
+    confirm: "OK, enviar",
+    repeat: "Repetir",
+    sending: "A enviar comando…",
+    start: "Iniciar comando de voz",
+    stop: "Parar comando de voz",
+    title: "Comando de voz",
+    dialogLabel: "Confirmar comando de voz",
+  },
+  nl: {
+    languageLabel: "Spraaktaal van de kassa",
+    listening: "Luisteren…",
+    interpreting: (transcript) => `Interpreteren: “${transcript}”`,
+    permissionError: "Ik heb toestemming nodig voor de microfoon.",
+    noSpeechError: "Ik heb geen opdracht gehoord.",
+    audioError: "Ik kan geen beschikbare microfoon vinden.",
+    genericListenError: "Ik kon de opdracht niet horen.",
+    unavailable: "Spraakopdrachten zijn niet beschikbaar in deze browser.",
+    activationError: "Ik kon de microfoon niet activeren.",
+    hasSaid: "Je zei",
+    understood: "Ik begreep",
+    cancel: "Annuleren",
+    confirm: "OK, verzenden",
+    repeat: "Opnieuw",
+    sending: "Opdracht verzenden…",
+    start: "Spraakopdracht starten",
+    stop: "Spraakopdracht stoppen",
+    title: "Spraakopdracht",
+    dialogLabel: "Spraakopdracht bevestigen",
+  },
 };
 
 export function getTpvVoiceUi(language: TpvVoiceLanguage): TpvVoiceUiCopy {
   return UI_COPY[language];
 }
 
-function normalizeLanguage(value: unknown): TpvVoiceLanguage | null {
-  const normalized = String(value ?? "")
+function normalizedHostlyLocale(value: unknown): string {
+  return String(value ?? "")
     .trim()
     .toLowerCase()
     .replace(/_/g, "-");
-  const base = normalized.split("-")[0];
-  return base === "es" || base === "en" || base === "fr" || base === "de" || base === "it"
+}
+
+export function normalizeTpvVoiceLanguage(value: unknown): TpvVoiceLanguage | null {
+  const base = normalizedHostlyLocale(value).split("-")[0];
+  return base === "es" ||
+    base === "en" ||
+    base === "fr" ||
+    base === "de" ||
+    base === "it" ||
+    base === "pt" ||
+    base === "nl"
     ? base
     : null;
+}
+
+export function speechLocaleForHostlyLocale(value: unknown): string | null {
+  const normalized = normalizedHostlyLocale(value);
+  if (!normalized) return null;
+  const exact = HOSTLY_SPEECH_LOCALES[normalized];
+  if (exact) return exact;
+  const language = normalizeTpvVoiceLanguage(normalized);
+  return language ? speechLocaleForTpvVoiceLanguage(language) : null;
 }
 
 export function speechLocaleForTpvVoiceLanguage(language: TpvVoiceLanguage): string {
@@ -167,22 +242,31 @@ export function speechLocaleForTpvVoiceLanguage(language: TpvVoiceLanguage): str
   );
 }
 
+function browserLocaleCandidates(): unknown[] {
+  if (typeof window === "undefined") return [];
+  let stored: string | null = null;
+  try {
+    stored = window.localStorage.getItem(TPV_VOICE_LANGUAGE_STORAGE_KEY);
+  } catch {
+    // Storage can be unavailable in hardened/private browser contexts.
+  }
+  return [stored, document.documentElement.lang, window.navigator.language];
+}
+
 export function resolveTpvVoiceLanguage(): TpvVoiceLanguage {
-  if (typeof window !== "undefined") {
-    try {
-      const stored = normalizeLanguage(window.localStorage.getItem(TPV_VOICE_LANGUAGE_STORAGE_KEY));
-      if (stored) return stored;
-    } catch {
-      // Storage can be unavailable in hardened/private browser contexts.
-    }
-
-    const documentLanguage = normalizeLanguage(document.documentElement.lang);
-    if (documentLanguage) return documentLanguage;
-
-    const browserLanguage = normalizeLanguage(window.navigator.language);
-    if (browserLanguage) return browserLanguage;
+  for (const candidate of browserLocaleCandidates()) {
+    const language = normalizeTpvVoiceLanguage(candidate);
+    if (language) return language;
   }
   return "es";
+}
+
+export function resolveTpvVoiceSpeechLocale(): string {
+  for (const candidate of browserLocaleCandidates()) {
+    const locale = speechLocaleForHostlyLocale(candidate);
+    if (locale) return locale;
+  }
+  return "es-ES";
 }
 
 export function persistTpvVoiceLanguage(language: TpvVoiceLanguage): void {
@@ -295,6 +379,43 @@ function buildItalianNumbers(): Map<string, number> {
   return map;
 }
 
+function buildPortugueseNumbers(): Map<string, number> {
+  const map = new Map<string, number>([
+    ["um", 1], ["uma", 1], ["dois", 2], ["duas", 2], ["tres", 3], ["quatro", 4],
+    ["cinco", 5], ["seis", 6], ["sete", 7], ["oito", 8], ["nove", 9], ["dez", 10],
+    ["onze", 11], ["doze", 12], ["treze", 13], ["catorze", 14], ["quatorze", 14],
+    ["quinze", 15], ["dezasseis", 16], ["dezesseis", 16], ["dezassete", 17], ["dezessete", 17],
+    ["dezoito", 18], ["dezanove", 19], ["dezenove", 19], ["vinte", 20],
+    ["trinta", 30], ["quarenta", 40], ["cinquenta", 50],
+  ]);
+  const tens: Array<[string, number]> = [["vinte", 20], ["trinta", 30], ["quarenta", 40]];
+  const units = ["", "um", "dois", "tres", "quatro", "cinco", "seis", "sete", "oito", "nove"];
+  for (const [word, value] of tens) {
+    for (let unit = 1; unit <= 9; unit += 1) {
+      map.set(`${word} e ${units[unit]}`, value + unit);
+    }
+  }
+  return map;
+}
+
+function buildDutchNumbers(): Map<string, number> {
+  const map = new Map<string, number>([
+    ["een", 1], ["twee", 2], ["drie", 3], ["vier", 4], ["vijf", 5], ["zes", 6],
+    ["zeven", 7], ["acht", 8], ["negen", 9], ["tien", 10], ["elf", 11], ["twaalf", 12],
+    ["dertien", 13], ["veertien", 14], ["vijftien", 15], ["zestien", 16], ["zeventien", 17],
+    ["achttien", 18], ["negentien", 19], ["twintig", 20], ["dertig", 30], ["veertig", 40],
+    ["vijftig", 50],
+  ]);
+  const stems = ["", "een", "twee", "drie", "vier", "vijf", "zes", "zeven", "acht", "negen"];
+  const tens: Array<[string, number]> = [["twintig", 20], ["dertig", 30], ["veertig", 40]];
+  for (const [word, value] of tens) {
+    for (let unit = 1; unit <= 9; unit += 1) {
+      map.set(`${stems[unit]}en${word}`, value + unit);
+    }
+  }
+  return map;
+}
+
 const PROFILES: Record<Exclude<TpvVoiceLanguage, "es">, LanguageProfile> = {
   en: {
     requestPrefixes: [
@@ -374,6 +495,48 @@ const PROFILES: Record<Exclude<TpvVoiceLanguage, "es">, LanguageProfile> = {
     pairPhrases: ["un paio di", "paio di"],
     halfDozenPhrases: ["mezza dozzina di", "una mezza dozzina di"],
     dozenPhrases: ["una dozzina di", "dozzina di"],
+  },
+  pt: {
+    requestPrefixes: [
+      "pode me trazer", "podes me trazer", "pode trazer me", "podes trazer me",
+      "traga me", "traz me", "traz", "pode me por", "podes me por", "poe me",
+      "coloca me", "adiciona me", "adiciona", "acrescenta me", "acrescenta",
+      "da me", "preciso de", "quero",
+    ],
+    fillers: new Set(["bem", "entao", "ok", "okay", "olha", "desculpa", "desculpe", "por favor"]),
+    politeSuffixes: ["por favor", "se faz favor"],
+    conjunctions: new Set(["e", "mais", "depois", "tambem"]),
+    articles: new Set(["um", "uma"]),
+    tableTargets: [
+      "para a mesa", "para o mesa", "na mesa", "no mesa", "a mesa",
+      "para mesa", "em mesa",
+    ],
+    leadingTableTargets: ["para a mesa", "na mesa", "a mesa", "mesa"],
+    tableNumberPrefixes: ["numero", "n"],
+    numberWords: buildPortugueseNumbers(),
+    pairPhrases: ["um par de", "par de"],
+    halfDozenPhrases: ["meia duzia de", "uma meia duzia de"],
+    dozenPhrases: ["uma duzia de", "duzia de"],
+  },
+  nl: {
+    requestPrefixes: [
+      "kun je me brengen", "kunt u me brengen", "kan je me brengen", "breng me",
+      "geef me", "zet me", "zet", "voeg toe", "doe erbij", "ik heb nodig",
+      "ik wil", "we hebben nodig", "we willen",
+    ],
+    fillers: new Set(["nou", "oke", "ok", "goed", "sorry", "alsjeblieft", "alstublieft"]),
+    politeSuffixes: ["alsjeblieft", "alstublieft"],
+    conjunctions: new Set(["en", "plus", "dan", "ook"]),
+    articles: new Set(["een"]),
+    tableTargets: [
+      "voor de tafel", "aan de tafel", "op de tafel", "voor tafel", "aan tafel", "op tafel",
+    ],
+    leadingTableTargets: ["voor de tafel", "aan de tafel", "op de tafel", "voor tafel", "tafel"],
+    tableNumberPrefixes: ["nummer", "nr"],
+    numberWords: buildDutchNumbers(),
+    pairPhrases: ["een paar", "paar"],
+    halfDozenPhrases: ["een half dozijn", "half dozijn"],
+    dozenPhrases: ["een dozijn", "dozijn"],
   },
 };
 
@@ -624,6 +787,50 @@ function canonicalAction(value: string, language: Exclude<TpvVoiceLanguage, "es"
       "manda dolci": "marchar postres",
       "manda i dolci": "marchar postres",
     },
+    pt: {
+      "enviar comanda": "enviar comanda",
+      "envia a comanda": "enviar comanda",
+      "enviar pedido": "enviar comanda",
+      "envia o pedido": "enviar comanda",
+      "enviar para a cozinha": "enviar comanda",
+      "manda para a cozinha": "enviar comanda",
+      "voltar ao mapa": "volver al mapa",
+      "volta ao mapa": "volver al mapa",
+      "voltar ao mapa das mesas": "volver al mapa",
+      "pre conta": "pre ticket",
+      "imprimir pre conta": "pre ticket",
+      cobrar: "cobrar mesa",
+      "cobrar mesa": "cobrar mesa",
+      "cobrar a mesa": "cobrar mesa",
+      "confirmar saida": "confirmar marcha",
+      "mandar entradas": "marchar primeros",
+      "manda entradas": "marchar primeros",
+      "mandar pratos principais": "marchar segundos",
+      "manda pratos principais": "marchar segundos",
+      "mandar sobremesas": "marchar postres",
+      "manda sobremesas": "marchar postres",
+    },
+    nl: {
+      "bestelling versturen": "enviar comanda",
+      "verstuur bestelling": "enviar comanda",
+      "bestelling verzenden": "enviar comanda",
+      "stuur naar de keuken": "enviar comanda",
+      "naar de keuken sturen": "enviar comanda",
+      "terug naar de plattegrond": "volver al mapa",
+      "ga terug naar de plattegrond": "volver al mapa",
+      "terug naar tafeloverzicht": "volver al mapa",
+      voorrekening: "pre ticket",
+      "voorrekening afdrukken": "pre ticket",
+      afrekenen: "cobrar mesa",
+      "tafel afrekenen": "cobrar mesa",
+      "gang bevestigen": "confirmar marcha",
+      "voorgerechten sturen": "marchar primeros",
+      "stuur voorgerechten": "marchar primeros",
+      "hoofdgerechten sturen": "marchar segundos",
+      "stuur hoofdgerechten": "marchar segundos",
+      "desserts sturen": "marchar postres",
+      "stuur desserts": "marchar postres",
+    },
   };
   return exact[language][value] ?? null;
 }
@@ -634,6 +841,8 @@ function canonicalOpenTable(value: string, language: Exclude<TpvVoiceLanguage, "
     fr: ["ouvre la table", "ouvrir la table", "va a la table", "aller a la table"],
     de: ["offne tisch", "offne den tisch", "gehe zu tisch", "gehe zum tisch"],
     it: ["apri tavolo", "apri il tavolo", "vai al tavolo", "entra nel tavolo"],
+    pt: ["abre mesa", "abrir mesa", "abre a mesa", "abrir a mesa", "vai para a mesa", "ir para a mesa"],
+    nl: ["open tafel", "open de tafel", "ga naar tafel", "ga naar de tafel"],
   };
 
   for (const prefix of prefixes[language]) {
@@ -644,6 +853,13 @@ function canonicalOpenTable(value: string, language: Exclude<TpvVoiceLanguage, "
 
   if (language === "de") {
     const match = value.match(/^tisch\s+(.+?)\s+offnen$/);
+    if (match?.[1]) {
+      const table = canonicalTableQuery(match[1], profile);
+      return table ? `mesa ${table}` : null;
+    }
+  }
+  if (language === "nl") {
+    const match = value.match(/^tafel\s+(.+?)\s+openen$/);
     if (match?.[1]) {
       const table = canonicalTableQuery(match[1], profile);
       return table ? `mesa ${table}` : null;
