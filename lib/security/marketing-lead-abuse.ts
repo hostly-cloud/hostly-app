@@ -139,7 +139,7 @@ export function extractMarketingLeadClientIp(headers: Headers) {
 }
 
 export function resolveMarketingLeadAbuseSecret(
-  env: NodeJS.ProcessEnv = process.env,
+  env: Record<string, string | undefined> = process.env,
 ) {
   const explicit = env.HOSTLY_MARKETING_RATE_LIMIT_SECRET?.trim();
   if (explicit) return explicit;
