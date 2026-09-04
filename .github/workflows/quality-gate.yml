@@ -31,6 +31,16 @@ jobs:
           path: i18n-hardcoded-audit.json
           retention-days: 14
 
+      - name: Locale catalog coverage audit
+        run: node scripts/audit-i18n-catalog-coverage.mjs
+
+      - name: Publish locale catalog coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-catalog-coverage
+          path: i18n-catalog-coverage.json
+          retention-days: 14
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
