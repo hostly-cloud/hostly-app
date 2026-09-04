@@ -73,11 +73,16 @@ test("acepta las formas normales de indicar la mesa al final", () => {
     "dos cañas a la mesa cinco",
     "dos cañas para mesa número cinco",
     "dos cañas en la mesa 5",
+    "dos cañas mesa 5",
     "dos cañas para la 5",
     "dos cañas a la cinco",
     "dos cañas al 5",
+    "dos cañas a 5",
     "dos cañas pa la 5",
+    "dos cañas pa l 5",
     "dos cañas pal 5",
+    "dos cañas pa 5",
+    "dos cañas en 5",
   ];
 
   for (const spoken of cases) {
@@ -92,6 +97,8 @@ test("acepta la mesa antes del pedido", () => {
     "para la 9 ponme una coca cola",
     "a la nueve una coca cola",
     "en la 9 quiero una coca cola",
+    "la 9 una coca cola",
+    "pal 9 una coca cola",
   ];
 
   for (const spoken of cases) {
@@ -105,6 +112,9 @@ test("acepta petición verbal antes de indicar mesa y pedido", () => {
   ]);
   expectTableOrder("ponme en la 7 una coca cola", "7", [
     { productQuery: "coca cola", quantity: 1 },
+  ]);
+  expectTableOrder("me pones para la 7 tres cañas", "7", [
+    { productQuery: "canas", quantity: 3 },
   ]);
 });
 
@@ -141,6 +151,9 @@ test("entiende expresiones habituales de cantidad", () => {
   expectTableOrder("coca cola x3 para la mesa 4", "4", [
     { productQuery: "coca cola", quantity: 3 },
   ]);
+  expectTableOrder("dos de agua para la mesa 4", "4", [
+    { productQuery: "agua", quantity: 2 },
+  ]);
 });
 
 test("entiende números compuestos para mesas", () => {
@@ -164,15 +177,21 @@ test("no parte nombres culinarios con y", () => {
   ]);
 });
 
-test("tolera muletillas, cortesía y correcciones iniciales", () => {
+test("tolera muletillas, cortesía y correcciones", () => {
   expectTableOrder("eh, bueno, una botella de Ruinart a la mesa número 4", "4", [
     { productQuery: "botella de ruinart", quantity: 1 },
   ]);
   expectTableOrder("oye ponme dos aguas por favor para la mesa 4", "4", [
-    { productQuery: "aguas por favor", quantity: 2 },
+    { productQuery: "aguas", quantity: 2 },
   ]);
   expectTableOrder("era una botella de Ruinart a mesa 4", "4", [
     { productQuery: "botella de ruinart", quantity: 1 },
+  ]);
+  expectTableOrder("dos aguas perdón tres aguas para la mesa 4", "4", [
+    { productQuery: "aguas", quantity: 3 },
+  ]);
+  expectTableOrder("dos aguas rectifico cuatro aguas para la mesa 4", "4", [
+    { productQuery: "aguas", quantity: 4 },
   ]);
 });
 
