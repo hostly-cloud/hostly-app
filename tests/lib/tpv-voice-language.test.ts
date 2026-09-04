@@ -76,7 +76,7 @@ test("italiano interpreta cantidades, productos y mesa", () => {
 });
 
 test("portugués interpreta cantidades, productos y mesa", () => {
-  expectOrder("pt", "duas Coca-Cola e uma Fanta laranja para a mesa nove", "9", [
+  expectOrder("pt", "duas Coca-Cola e uma Fanta laranja na mesa nove", "9", [
     { productQuery: "coca cola", quantity: 2 },
     { productQuery: "fanta laranja", quantity: 1 },
   ]);
