@@ -31,6 +31,8 @@ export type Reservation = {
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
   partySize: number;
+  /** Duración prevista de ocupación de mesa. Legacy sin valor = 120 min. */
+  durationMinutes?: number;
   status: ReservationStatus;
   tableId?: string;
   tableLabel?: string;
@@ -75,8 +77,15 @@ function parseStatus(v: unknown): ReservationStatus {
   return "booked";
 }
 
+function parseDurationMinutes(v: unknown): number | undefined {
+  const parsed = Math.round(Number(v));
+  if (!Number.isFinite(parsed) || parsed < 15) return undefined;
+  return Math.min(parsed, 24 * 60);
+}
+
 function mapDocToReservation(d: QueryDocumentSnapshot): Reservation {
   const data = d.data() as Record<string, unknown>;
+  const durationMinutes = parseDurationMinutes(data.durationMinutes);
   return {
     id: d.id,
     restaurantId: typeof data.restaurantId === "string" ? data.restaurantId.trim() : "",
@@ -85,6 +94,7 @@ function mapDocToReservation(d: QueryDocumentSnapshot): Reservation {
     date: typeof data.date === "string" ? data.date.trim() : "",
     time: typeof data.time === "string" ? data.time.trim() : "",
     partySize: typeof data.partySize === "number" && Number.isFinite(data.partySize) ? data.partySize : Number(data.partySize) || 0,
+    ...(durationMinutes !== undefined ? { durationMinutes } : {}),
     status: parseStatus(data.status),
     ...(typeof data.tableId === "string" && data.tableId.trim() ? { tableId: data.tableId.trim() } : {}),
     ...(typeof data.tableLabel === "string" && data.tableLabel.trim() ? { tableLabel: data.tableLabel.trim() } : {}),
@@ -188,6 +198,7 @@ export async function createReservation(
   if (!date) throw new Error("createReservation: fecha vacía");
   if (!time) throw new Error("createReservation: hora vacía");
   const status: ReservationStatus = parseStatus(payload.status);
+  const durationMinutes = parseDurationMinutes(payload.durationMinutes);
 
   const docPayload: DocumentData = {
     restaurantId: rid,
@@ -197,6 +208,7 @@ export async function createReservation(
     time,
     partySize,
     status,
+    ...(durationMinutes !== undefined ? { durationMinutes } : {}),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
@@ -221,11 +233,8 @@ export async function createReservation(
     docPayload.notes = String(payload.notes).trim();
   }
 
-  console.log("saving reservation", docPayload);
-
   try {
     const ref = await addDoc(collection(db, COLLECTION), docPayload);
-    console.log("reservation saved", ref.id);
     return ref.id;
   } catch (e) {
     console.error("createReservation failed", e);
@@ -249,6 +258,7 @@ export async function updateReservation(
       | "customerName"
       | "customerPhone"
       | "partySize"
+      | "durationMinutes"
       | "date"
       | "time"
     >
@@ -263,6 +273,9 @@ export async function updateReservation(
   if (updates.date !== undefined) payload.date = String(updates.date ?? "").trim();
   if (updates.time !== undefined) payload.time = String(updates.time ?? "").trim();
   if (updates.partySize !== undefined) payload.partySize = Math.max(1, Math.round(Number(updates.partySize) || 0));
+  if (updates.durationMinutes !== undefined) {
+    payload.durationMinutes = parseDurationMinutes(updates.durationMinutes) ?? null;
+  }
 
   if (updates.tableId !== undefined) payload.tableId = updates.tableId ? String(updates.tableId).trim() : null;
   if (updates.tableLabel !== undefined) payload.tableLabel = updates.tableLabel ? String(updates.tableLabel).trim() : null;
