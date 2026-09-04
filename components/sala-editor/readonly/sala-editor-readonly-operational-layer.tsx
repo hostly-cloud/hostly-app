@@ -193,7 +193,9 @@ export function SalaEditorReadonlyOperationalLayer({
               <button
                 type="button"
                 aria-label={
-                  isLinkedOperationalElement ? `Abrir ${instance.name}` : undefined
+                  isLinkedOperationalElement
+                    ? controller?.ariaLabel || `Abrir ${instance.name}`
+                    : undefined
                 }
                 tabIndex={isLinkedOperationalElement ? 0 : -1}
                 disabled={!isLinkedOperationalElement}

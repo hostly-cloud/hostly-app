@@ -149,7 +149,7 @@ export default function EmployeeClockingTerminalPage() {
     }
   }
 
-  async function useCurrentRestaurantLocation() {
+  async function fillCurrentRestaurantLocation() {
     setBusy(true);
     setError("");
     try {
@@ -293,7 +293,7 @@ export default function EmployeeClockingTerminalPage() {
             <label className="space-y-1 text-sm font-medium text-slate-700">Precisión máxima GPS (m)<HostlyInput type="number" min={30} max={500} value={accuracy} onChange={(event) => setAccuracy(event.target.value)} /></label>
           </div>
           <div className="flex flex-wrap gap-2">
-            <HostlyButton variant="secondary" disabled={busy} onClick={() => void useCurrentRestaurantLocation()}>
+            <HostlyButton variant="secondary" disabled={busy} onClick={() => void fillCurrentRestaurantLocation()}>
               Usar ubicación actual
             </HostlyButton>
             <HostlyButton

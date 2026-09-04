@@ -494,7 +494,7 @@ export default function MenuPhotoImportFlow() {
   useEffect(() => {
     if (step !== "done") return;
     const id = window.setTimeout(() => {
-      router.push("/dashboard/carta");
+      router.push("/dashboard/operacion/tpv");
     }, 3200);
     return () => window.clearTimeout(id);
   }, [step, router]);
@@ -2075,7 +2075,7 @@ export default function MenuPhotoImportFlow() {
           </div>
           <button
             type="button"
-            onClick={() => router.push("/dashboard/carta")}
+            onClick={() => router.push("/dashboard/operacion/tpv")}
             style={{
               marginTop: 4,
               border: "1px solid rgba(34, 197, 94, 0.55)",

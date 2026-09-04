@@ -169,7 +169,11 @@ export default function CajaPage() {
           <label className="space-y-1 text-sm font-medium text-slate-700">
             Fondo inicial (€)
             <HostlyInput
+              type="number"
               inputMode="decimal"
+              min="0"
+              step="0.01"
+              aria-label="Fondo inicial en euros"
               value={openingFloat}
               onChange={(event) => setOpeningFloat(event.target.value)}
             />

@@ -80,7 +80,7 @@ export function calculateSuggestedPurchaseQuantity(params: {
   if (!Number.isFinite(daily) || daily <= 0) return 0;
   const stock =
     params.currentStock != null && Number.isFinite(params.currentStock)
-      ? Math.max(0, params.currentStock)
+      ? params.currentStock
       : 0;
   const needed = daily * days - stock;
   return roundInventoryQuantity(Math.max(0, needed));

@@ -114,6 +114,12 @@ export default function ConfigCartaEscandallosPage() {
     () => computeEscandalloListStats(items, EMPTY_DRAFTS, economicsOptions),
     [economicsOptions, items],
   );
+  const recipeCoverage =
+    escandalloStateStats.activos > 0
+      ? escandalloStateStats.operativos / escandalloStateStats.activos
+      : 0;
+  const hasRepresentativeMargin =
+    escandalloStateStats.operativos >= 5 && recipeCoverage >= 0.5;
 
   const filteredItems = useMemo(() => {
     let rows = listStats.sortedItems;
@@ -194,14 +200,16 @@ export default function ConfigCartaEscandallosPage() {
             <span className="hostly-carta-config-kpi-pill__value">{escandalloStateStats.activos}</span>
           </div>
           <div className="hostly-carta-config-kpi-pill hostly-carta-config-kpi-pill--success">
-            <span className="hostly-carta-config-kpi-pill__label">Operativos</span>
-            <span className="hostly-carta-config-kpi-pill__value">{escandalloStateStats.operativos}</span>
+            <span className="hostly-carta-config-kpi-pill__label">Cobertura recetas</span>
+            <span className="hostly-carta-config-kpi-pill__value">
+              {escandalloStateStats.operativos} / {escandalloStateStats.activos}
+            </span>
           </div>
           <div className="hostly-carta-config-kpi-pill hostly-carta-config-kpi-pill--warning">
             <span className="hostly-carta-config-kpi-pill__label">Incompletos</span>
             <span className="hostly-carta-config-kpi-pill__value">{escandalloStateStats.incompletos}</span>
           </div>
-          {listStats.avgMargin != null ? (
+          {listStats.avgMargin != null && hasRepresentativeMargin ? (
             <div className="hostly-carta-config-kpi-pill hostly-carta-config-kpi-pill--success">
               <span className="hostly-carta-config-kpi-pill__label">Margen medio</span>
               <span className="hostly-carta-config-kpi-pill__value">
@@ -216,6 +224,12 @@ export default function ConfigCartaEscandallosPage() {
         <p className="hostly-escandallos-context-note">
           Coste y margen se calculan desde la receta. Ingredientes, mermas y PVP se editan en
           <Link href="/dashboard/configuracion/carta/productos"> Productos</Link>.
+          {!hasRepresentativeMargin && listStats.avgMargin != null ? (
+            <>
+              {" "}El margen medio no se muestra como indicador global porque solo hay {" "}
+              {escandalloStateStats.operativos} de {escandalloStateStats.activos} recetas operativas.
+            </>
+          ) : null}
         </p>
       ) : null}
 

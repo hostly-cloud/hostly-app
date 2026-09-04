@@ -59,7 +59,7 @@ export function isOrderItemBlockingReadyToClose(
 /** Pedido activo sin líneas bloqueantes → servicio de comanda terminado. */
 export function isOrderReadyToClose(order: TableReadyToCloseOrder): boolean {
   if (!isActiveOrderForReadyToClose(order.status)) return false;
-  if (!Array.isArray(order.items) || order.items.length === 0) return true;
+  if (!Array.isArray(order.items) || order.items.length === 0) return false;
   return !order.items.some((item) =>
     isOrderItemBlockingReadyToClose(item.status),
   );
@@ -84,12 +84,10 @@ export function computeTablesReadyToClose(
     if (!matchesOrder(order)) continue;
 
     const tableKey = resolveTableReadyToCloseKey(order);
-    const hasBlocking =
-      !Array.isArray(order.items) || order.items.length === 0
-        ? false
-        : order.items.some((item) =>
-            isOrderItemBlockingReadyToClose(item.status),
-          );
+    if (!Array.isArray(order.items) || order.items.length === 0) continue;
+    const hasBlocking = order.items.some((item) =>
+      isOrderItemBlockingReadyToClose(item.status),
+    );
 
     if (hasBlocking) {
       blockingByTable.set(tableKey, true);

@@ -30,6 +30,7 @@ type Point = { x: number; y: number };
 export type TpvV2TableOperationControllerProps = {
   tableId: string;
   tableLabel: string;
+  ariaLabel?: string;
   onOpenTable: (tableId: string) => void;
   joinEnabled?: boolean;
   onJoinDrop?: (draggedTableId: string, targetTableId: string) => void;
@@ -43,6 +44,7 @@ export type TpvV2TableOperationControllerProps = {
 export function TpvV2TableOperationController({
   tableId,
   tableLabel,
+  ariaLabel,
   onOpenTable,
   joinEnabled = false,
   onJoinDrop,
@@ -311,6 +313,7 @@ export function TpvV2TableOperationController({
   useEffect(() => {
     return registerTpvV2TableController(tableId, {
       tableLabel,
+      ariaLabel,
       joinEnabled: joinEnabled && onJoinDrop != null,
       onPointerDown,
       onPointerMove,
@@ -327,6 +330,7 @@ export function TpvV2TableOperationController({
     onPointerMove,
     tableId,
     tableLabel,
+    ariaLabel,
   ]);
 
   const preview =

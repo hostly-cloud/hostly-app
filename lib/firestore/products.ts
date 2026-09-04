@@ -60,6 +60,7 @@ import {
   normalizePurchaseUnit,
   readStoredUnitCostUnit,
 } from "@/lib/inventory/inventory-cost";
+import { normalizePreviousStockForUnitChange } from "@/lib/inventory/inventory-unit-change";
 import type { Product } from "@/types/product";
 
 export const ONLY_OWNER_CAN_DELETE = "ONLY_OWNER_CAN_DELETE";
@@ -1072,6 +1073,17 @@ function readInventoryCurrentStockFromDoc(
   return readFiniteNumberWithDefault(inv.currentStock, 0);
 }
 
+function readInventoryUnitFromDoc(
+  data: Record<string, unknown> | undefined,
+): ProductInventoryDocument["unit"] {
+  if (!data) return "ud";
+  const inv =
+    data.inventory && typeof data.inventory === "object"
+      ? (data.inventory as Record<string, unknown>)
+      : {};
+  return normalizeInventoryUnit(inv.unit);
+}
+
 function mapStockMovementSnapshot(
   snap: QueryDocumentSnapshot<DocumentData>,
 ): StockMovementListItem {
@@ -1314,19 +1326,26 @@ export async function upsertProductInventory(
   if (!rid) throw new Error("upsertProductInventory: restaurantId no disponible");
 
   const newStock = readFiniteNumberWithDefault(payload.currentStock, 0);
-  const unitStr = String(normalizeInventoryUnit(payload.unit));
+  const unitStr = normalizeInventoryUnit(payload.unit);
 
   try {
     if (productId?.trim()) {
       const id = productId.trim();
       const productRef = doc(db, "restaurants", rid, "products", id);
       let previousStock = 0;
+      let previousUnit: ProductInventoryDocument["unit"] = unitStr;
       const snap = await getDoc(productRef);
       if (snap.exists()) {
-        previousStock = readInventoryCurrentStockFromDoc(
-          snap.data() as Record<string, unknown>,
-        );
+        const previousData = snap.data() as Record<string, unknown>;
+        previousStock = readInventoryCurrentStockFromDoc(previousData);
+        previousUnit = readInventoryUnitFromDoc(previousData);
       }
+      previousStock = normalizePreviousStockForUnitChange({
+        previousStock,
+        previousUnit,
+        nextStock: newStock,
+        nextUnit: unitStr,
+      });
 
       const batch = writeBatch(db);
       batch.set(productRef, centralInventoryPayload(rid, payload), { merge: true });

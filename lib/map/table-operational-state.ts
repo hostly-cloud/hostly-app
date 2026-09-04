@@ -41,3 +41,22 @@ export function resolveTableOperationalVisualState(
   if (params.reserved) return "reservada";
   return "libre";
 }
+
+export function tableOperationalVisualStateLabel(
+  state: TableOperationalVisualState,
+): string {
+  switch (state) {
+    case "ocupada":
+      return "Ocupada";
+    case "reservada":
+      return "Reservada";
+    case "atencion":
+      return "Requiere atención";
+    case "critica":
+      return "Crítica";
+    case "retrasada":
+      return "Reserva retrasada";
+    default:
+      return "Libre";
+  }
+}

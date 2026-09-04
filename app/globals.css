@@ -20100,6 +20100,7 @@ main:has(.hostly-productos-v3--operations) .hostly-productos-carta-header-inline
 }
 /* Historial de comandas */
 .hostly-order-history { display: grid; gap: 16px; }
+.hostly-order-history__toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 240px); gap: 10px; }
 .hostly-order-history__list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .hostly-order-history__card { display: grid; gap: 14px; padding: 16px; }
 .hostly-order-history__card-header,
@@ -20116,7 +20117,9 @@ main:has(.hostly-productos-v3--operations) .hostly-productos-carta-header-inline
 .hostly-order-history__item { min-height: 32px; color: var(--hostly-text-secondary, #475569); font-size: 13px; }
 .hostly-order-history__item > strong { color: var(--hostly-text); font-size: 12px; }
 .hostly-order-history__empty { display: grid; gap: 4px; justify-items: center; padding: 40px 20px; text-align: center; }
+.hostly-order-history__pagination { display: flex; align-items: center; justify-content: center; gap: 14px; color: var(--hostly-muted); font-size: 13px; }
 @media (max-width: 760px) {
+  .hostly-order-history__toolbar { grid-template-columns: minmax(0, 1fr); }
   .hostly-order-history__list { grid-template-columns: minmax(0, 1fr); }
   .hostly-order-history__card-header { align-items: flex-start; }
   .hostly-order-history__summary { flex-direction: column-reverse; align-items: flex-end; gap: 6px; }

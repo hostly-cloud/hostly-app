@@ -36,6 +36,7 @@ export const ElementCard = memo(function ElementCard(
     <TpvV2TableOperationController
       tableId={props.tableId}
       tableLabel={props.table.name || props.tableId}
+      ariaLabel={props.ariaLabel}
       onOpenTable={props.onTableClick}
       joinEnabled={props.mapJoinDragEnabled}
       onJoinDrop={props.onMapTableJoinDrop}

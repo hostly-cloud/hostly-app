@@ -436,6 +436,7 @@ function traceReplaceDocumentBefore(params: {
   restaurantId: string;
   document: SalaEditorDocument;
 }): void {
+  if (!SALA_EDITOR_DEV_DIAGNOSTICS) return;
   const { branch, restaurantId, document } = params;
   console.warn("[SalaEditorV2] TRACE replaceDocument BEFORE", {
     branch,
@@ -880,6 +881,7 @@ export function SalaEditorWorkspace({
   }, []);
 
   const traceReplaceDocumentAfter = useCallback((branch: string) => {
+    if (!SALA_EDITOR_DEV_DIAGNOSTICS) return;
     window.setTimeout(() => {
       const snapshot = documentSnapshotRef.current;
       console.warn("[SalaEditorV2] TRACE replaceDocument AFTER", {

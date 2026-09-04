@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   resolveTableOperationalVisualState,
+  tableOperationalVisualStateLabel,
   type ResolveTableOperationalVisualStateInput,
 } from "@/lib/map/table-operational-state";
 
@@ -125,4 +126,13 @@ describe("resolveTableOperationalVisualState", () => {
       "atencion",
     );
   });
+});
+
+test("expone etiquetas de estado comprensibles para lectores de pantalla", () => {
+  assert.equal(tableOperationalVisualStateLabel("libre"), "Libre");
+  assert.equal(tableOperationalVisualStateLabel("critica"), "Crítica");
+  assert.equal(
+    tableOperationalVisualStateLabel("atencion"),
+    "Requiere atención",
+  );
 });

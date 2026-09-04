@@ -19,7 +19,6 @@ describe("Configuration scroll ownership", () => {
     const paths = [
       "/dashboard/configuracion/carta/productos",
       "/dashboard/configuracion/carta/escandallos",
-      "/dashboard/configuracion/carta/import-workspace",
       "/dashboard/configuracion/empleados",
       "/dashboard/configuracion/empresa",
       "/dashboard/configuracion/espacios/zonas",

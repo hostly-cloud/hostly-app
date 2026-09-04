@@ -185,6 +185,7 @@ import {
 } from "@/lib/map/build-table-operational-visual-input";
 import {
   resolveTableOperationalVisualState,
+  tableOperationalVisualStateLabel,
   type TableOperationalVisualState,
 } from "@/lib/map/table-operational-state";
 import { projectOperationalElement } from "@/lib/sala-editor/geometry/v2-geometry-projection";
@@ -15251,11 +15252,18 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                       });
                       const isCriticalTable = mapOperationalInput.isCriticalTable;
                       const priorityLevel = mapOperationalInput.priorityLevel;
-                      const ariaTileBusy = busy
-                        ? cartaHeaderMobile
-                          ? `${String(stableTable.name ?? "").trim()}, ${t("cartaTpv.mapOcupada")}`
-                          : `${String(stableTable.name ?? "").trim()}${durationLabel ? `, ${durationLabel}` : ""}${showProductCount ? ` (${activeLineCount})` : ""}, ${t("cartaTpv.mapOcupada")}`
-                        : "";
+                      const tableOperationalState =
+                        resolveTableOperationalVisualState(mapOperationalInput);
+                      const ariaTileLabel = [
+                        `Abrir ${String(stableTable.name ?? "Mesa").trim() || "Mesa"}`,
+                        `Estado: ${tableOperationalVisualStateLabel(tableOperationalState)}`,
+                        !cartaHeaderMobile && durationLabel ? durationLabel : "",
+                        !cartaHeaderMobile && showProductCount
+                          ? `${activeLineCount} productos activos`
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(". ");
                       const lastActivityAt = lastActivityAtByTable[serviceTableId];
                       const inactiveMinutes =
                         isBusy &&
@@ -15295,7 +15303,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           activeLineCount={activeLineCount}
                           badgeTier={badgeTier}
                           isCriticalTable={isCriticalTable}
-                          ariaLabel={busy ? ariaTileBusy : undefined}
+                          ariaLabel={ariaTileLabel}
                           mapLibreLabel={paxLabel || tableMapLibreLabel}
                           onTableClick={handleTableMapTileClick}
                           occupancyStart={
@@ -15865,6 +15873,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     type="button"
                     onClick={handlePrintPreTicket}
                     className="carta-tpv-dock-pre-ticket"
+                    disabled={order.length === 0}
                   >
                     <ReceiptText size={18} strokeWidth={2.1} aria-hidden="true" />
                     <span>Pre-ticket</span>
@@ -15900,8 +15909,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                 >
                   <div className="carta-tpv-payment-dock-total-label">Total</div>
                   <div className="carta-tpv-payment-dock-total-value total-amount">
-                    {Number.isFinite(total) ? total.toFixed(2) : "0.00"}{" "}
-                    <span className="carta-tpv-payment-dock-total-eur">€</span>
+                    {formatTpveurEs(Number.isFinite(total) ? total : 0)}
                   </div>
                 </div>
 
@@ -18744,7 +18752,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                       </div>
                                     </div>
                                     <div className="h-5 shrink-0 text-sm font-extrabold text-center w-full text-slate-900 tabular-nums">
-                                      {showPrecio ? `${product.precio.toFixed(2)} €` : ""}
+                                      {showPrecio ? formatTpveurEs(product.precio) : ""}
                                     </div>
                                   </button>
                                 );

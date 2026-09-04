@@ -9,6 +9,8 @@ import {
 } from "@/lib/firestore/reservations";
 import { buildReservationCustomerHistory } from "@/lib/reservas/reservation-customer-history";
 
+const EMPTY_RESERVATIONS: Reservation[] = [];
+
 function ymd(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -31,35 +33,43 @@ function formatMoment(reservation: Reservation | null): string {
 
 export default function ReservationCustomerHistoryView() {
   const { restaurantId, ready, user } = useAuth();
-  const range = useMemo(historyRange, []);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const range = useMemo(() => historyRange(), []);
+  const sourceKey =
+    ready && user?.uid && restaurantId && isFirebaseConfigured
+      ? `${user.uid}:${restaurantId}`
+      : "";
+  const [reservationSnapshot, setReservationSnapshot] = useState<{
+    sourceKey: string;
+    reservations: Reservation[];
+    error: string | null;
+  } | null>(null);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!ready) return;
-    if (!user?.uid || !restaurantId || !isFirebaseConfigured) {
-      setReservations([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
+    if (!sourceKey || !restaurantId) return;
     return listenReservationsForRange(
       restaurantId,
       range.from,
       range.to,
       (items) => {
-        setReservations(items);
-        setLoading(false);
+        setReservationSnapshot({ sourceKey, reservations: items, error: null });
       },
       () => {
-        setError("No se pudo cargar el historial de clientes.");
-        setLoading(false);
+        setReservationSnapshot({
+          sourceKey,
+          reservations: [],
+          error: "No se pudo cargar el historial de clientes.",
+        });
       },
     );
-  }, [range.from, range.to, ready, restaurantId, user?.uid]);
+  }, [range.from, range.to, restaurantId, sourceKey]);
+
+  const sourceMatches = reservationSnapshot?.sourceKey === sourceKey;
+  const reservations = sourceMatches
+    ? reservationSnapshot.reservations
+    : EMPTY_RESERVATIONS;
+  const error = sourceMatches ? reservationSnapshot.error : null;
+  const loading = !ready || Boolean(sourceKey && !sourceMatches);
 
   const history = useMemo(
     () => buildReservationCustomerHistory(reservations, range.today),

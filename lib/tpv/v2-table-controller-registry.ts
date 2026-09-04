@@ -2,6 +2,7 @@
 
 export type TpvV2TableController = {
   tableLabel?: string;
+  ariaLabel?: string;
   joinEnabled: boolean;
   onPointerDown: (event: PointerEvent) => void;
   onPointerMove: (event: PointerEvent) => void;

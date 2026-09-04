@@ -72,6 +72,7 @@ import {
   PURCHASE_UNIT_OPTIONS,
   type PurchaseUnit,
 } from "@/lib/inventory/inventory-cost";
+import { planInventoryUnitChange } from "@/lib/inventory/inventory-unit-change";
 
 type Unidad = "kg" | "g" | "l" | "ml" | "ud";
 
@@ -682,6 +683,31 @@ export default function InventarioStockSection() {
     }));
   }
 
+  function changeDraftUnit(
+    id: string | number,
+    draft: InventoryDraftFields,
+    nextUnit: string,
+  ) {
+    const plan = planInventoryUnitChange({
+      fromUnit: draft.unidad,
+      toUnit: nextUnit,
+      currentStock: parseNumber(draft.stock_actual, 0),
+      minStock: parseNumber(draft.stock_minimo, 0),
+      costPerUnit: parseNumber(draft.coste_unitario, 0),
+    });
+    if (!plan.ok) {
+      setError(plan.error);
+      return;
+    }
+    setError(null);
+    updateDraft(id, {
+      unidad: nextUnit,
+      stock_actual: String(plan.currentStock),
+      stock_minimo: String(plan.minStock),
+      coste_unitario: String(plan.costPerUnit),
+    });
+  }
+
   async function addProducto() {
     const rid = restaurantId?.trim() ?? "";
     setError(null);
@@ -1093,7 +1119,9 @@ export default function InventarioStockSection() {
                   <span className="hostly-inventory-field-label">Unidad stock</span>
                   <select
                     value={selectedDraft.unidad}
-                    onChange={(e) => updateDraft(selectedRow.id, { unidad: e.target.value })}
+                    onChange={(e) =>
+                      changeDraftUnit(selectedRow.id, selectedDraft, e.target.value)
+                    }
                     className="hostly-inventory-field-input"
                   >
                     {UNIDADES.map((u) => (
