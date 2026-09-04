@@ -4,6 +4,30 @@ import type { CustomerCrmRecord, CustomerCrmSnapshot, CustomerPaymentInput, Cust
 
 const HISTORY_YEARS = 3;
 
+type IdentitySource = {
+  customerName?: unknown;
+  customerPhone?: unknown;
+  customerEmail?: unknown;
+  displayName?: unknown;
+  phone?: unknown;
+  email?: unknown;
+};
+
+type ReservationRow = Record<string, unknown> & IdentitySource & {
+  id: string;
+  date?: unknown;
+  time?: unknown;
+  status?: unknown;
+  partySize?: unknown;
+  durationMinutes?: unknown;
+  tableId?: unknown;
+  tableLabel?: unknown;
+  occasion?: unknown;
+  notes?: unknown;
+  allergies?: unknown;
+  preferences?: unknown;
+};
+
 function clean(value: unknown, max = 500): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
@@ -28,7 +52,7 @@ function nameKey(value: unknown): string {
   const valueClean = clean(value, 160).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es-ES").replace(/\s+/g, " ");
   return valueClean ? `name:${valueClean}` : "";
 }
-function identityKeys(data: { customerName?: unknown; customerPhone?: unknown; customerEmail?: unknown; displayName?: unknown; phone?: unknown; email?: unknown }): string[] {
+function identityKeys(data: IdentitySource): string[] {
   return [...new Set([
     phoneKey(data.customerPhone ?? data.phone),
     emailKey(data.customerEmail ?? data.email),
@@ -69,7 +93,7 @@ export function customerCrmPermissions(role: unknown) {
   };
 }
 
-function attributableSpend(reservation: Record<string, unknown>, payments: readonly CustomerPaymentInput[]): number {
+function attributableSpend(reservation: ReservationRow, payments: readonly CustomerPaymentInput[]): number {
   const tableId = clean(reservation.tableId, 160);
   if (!tableId || (reservation.status !== "completed" && reservation.status !== "seated")) return 0;
   const start = reservationStartMs(clean(reservation.date, 10), clean(reservation.time, 5));
@@ -95,13 +119,15 @@ export async function getCustomerCrmSnapshot(input: { db: Firestore; restaurantI
     input.db.collection("restaurants").doc(input.restaurantId).collection("customerProfiles").get(),
     input.db.collection("payments").where("restaurantId", "==", input.restaurantId).get(),
   ]);
-  const reservations = reservationSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) })).filter((row) => clean(row.date, 10) >= ymd(from));
+  const reservations: ReservationRow[] = reservationSnap.docs
+    .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }) as ReservationRow)
+    .filter((row) => clean(row.date, 10) >= ymd(from));
   const profiles = profileSnap.docs.map(mapProfile);
   const payments: CustomerPaymentInput[] = paymentSnap.docs.map((doc) => {
     const data = doc.data() as Record<string, unknown>;
     return { id: doc.id, tableId: clean(data.tableId, 160), amount: money(data.amount ?? data.total), refundAmount: money(data.refundAmount), status: clean(data.status, 32).toLowerCase(), createdAtMs: toMs(data.createdAt) };
   });
-  const groups = new Map<string, Record<string, unknown>[]>();
+  const groups = new Map<string, ReservationRow[]>();
   for (const reservation of reservations) {
     const keys = identityKeys(reservation);
     if (!keys.length) continue;
@@ -113,7 +139,7 @@ export async function getCustomerCrmSnapshot(input: { db: Firestore; restaurantI
   const usedProfileIds = new Set<string>();
   const records: CustomerCrmRecord[] = [];
   for (const [sourceKey, rows] of groups) {
-    rows.sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
+    rows.sort((a, b) => `${clean(a.date, 10)}T${clean(a.time, 5)}`.localeCompare(`${clean(b.date, 10)}T${clean(b.time, 5)}`));
     const sourceKeys = [...new Set(rows.flatMap(identityKeys))];
     const profile = profiles.find((item) => item.identityKeys.some((key) => sourceKeys.includes(key))) ?? null;
     if (profile) usedProfileIds.add(profile.id);
@@ -122,7 +148,7 @@ export async function getCustomerCrmSnapshot(input: { db: Firestore; restaurantI
     const today = ymd(new Date());
     const futureRows = rows.filter((row) => clean(row.date, 10) > today && row.status !== "cancelled" && row.status !== "no_show");
     const visits: CustomerVisit[] = rows.map((row) => ({
-      reservationId: String(row.id), date: clean(row.date, 10), time: clean(row.time, 5), status: clean(row.status, 32), partySize: Math.max(1, Number(row.partySize) || 1), tableLabel: clean(row.tableLabel, 160), occasion: clean(row.occasion, 160), notes: clean(row.notes, 1000), spend: attributableSpend(row, payments),
+      reservationId: row.id, date: clean(row.date, 10), time: clean(row.time, 5), status: clean(row.status, 32), partySize: Math.max(1, Number(row.partySize) || 1), tableLabel: clean(row.tableLabel, 160), occasion: clean(row.occasion, 160), notes: clean(row.notes, 1000), spend: attributableSpend(row, payments),
     }));
     const totalSpend = Math.round(visits.reduce((sum, visit) => sum + visit.spend, 0) * 100) / 100;
     const latestField = (field: string, max = 500) => [...rows].reverse().map((r) => clean(r[field], max)).find(Boolean) ?? "";
