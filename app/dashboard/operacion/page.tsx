@@ -22,13 +22,19 @@ function IconTpv() {
   return (
     <LauncherIcon>
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M6 4h12a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-        />
+        <path d="M6 4h12a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
         <path d="M8 8h8M8 12h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    </LauncherIcon>
+  );
+}
+
+function IconCaja() {
+  return (
+    <LauncherIcon>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path d="M5 8h14v11H5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M7 5h10l1 3H6l1-3zM8 12h3M16 13.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </LauncherIcon>
   );
@@ -38,12 +44,7 @@ function IconCocina() {
   return (
     <LauncherIcon>
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M8 3v8a4 4 0 1 0 8 0V3"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
+        <path d="M8 3v8a4 4 0 1 0 8 0V3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         <path d="M6 21h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     </LauncherIcon>
@@ -54,12 +55,7 @@ function IconBarra() {
   return (
     <LauncherIcon>
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M8 4h8l-1 14H9L8 4z"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-        />
+        <path d="M8 4h8l-1 14H9L8 4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
         <path d="M7 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     </LauncherIcon>
@@ -70,13 +66,7 @@ function IconCocteleria() {
   return (
     <LauncherIcon>
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M8 4h8l-4 8v8"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
+        <path d="M8 4h8l-4 8v8" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
         <path d="M6 20h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     </LauncherIcon>
@@ -87,12 +77,7 @@ function IconSala() {
   return (
     <LauncherIcon>
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M4 10h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8z"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-        />
+        <path d="M4 10h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
         <path d="M8 10V7a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
       </svg>
     </LauncherIcon>
@@ -103,18 +88,8 @@ function IconReservas() {
   return (
     <LauncherIcon>
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M7 4v2M17 4v2M5 8h14"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-        <path
-          d="M6 6h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-        />
+        <path d="M7 4v2M17 4v2M5 8h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M6 6h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
       </svg>
     </LauncherIcon>
   );
@@ -124,12 +99,7 @@ function IconActivity() {
   return (
     <LauncherIcon>
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M6 6h12v12H6V6z"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-        />
+        <path d="M6 6h12v12H6V6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
         <path d="M9 10h6M9 14h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     </LauncherIcon>
@@ -149,6 +119,7 @@ function IconSesiones() {
 
 const MODULE_ICONS: Record<OperacionModuleSlug, () => ReactNode> = {
   tpv: IconTpv,
+  caja: IconCaja,
   cocina: IconCocina,
   barra: IconBarra,
   cocteleria: IconCocteleria,
@@ -185,9 +156,7 @@ export default function OperacionMenuPage() {
     console.log("[operation-launcher] diagnostic", getOperacionLauncherDiagnostic());
   }, []);
 
-  if (shouldRedirect) {
-    return null;
-  }
+  if (shouldRedirect) return null;
 
   return (
     <ModulePageShell
@@ -207,11 +176,7 @@ export default function OperacionMenuPage() {
         {OPERACION_LAUNCHER_MODULES.map((module) => {
           const Icon = MODULE_ICONS[module.slug];
           return (
-            <Link
-              key={module.slug}
-              href={operacionModuleHref(module.slug)}
-              className="hostly-op-launcher-card"
-            >
+            <Link key={module.slug} href={operacionModuleHref(module.slug)} className="hostly-op-launcher-card">
               <Icon />
               <span className="hostly-op-launcher-text">
                 <span className="hostly-op-launcher-title">{module.label}</span>

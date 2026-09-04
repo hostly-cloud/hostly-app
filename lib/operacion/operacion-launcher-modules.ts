@@ -4,6 +4,7 @@
  */
 export type OperacionModuleSlug =
   | "tpv"
+  | "caja"
   | "cocina"
   | "barra"
   | "cocteleria"
@@ -18,9 +19,10 @@ export type OperacionLauncherModule = {
   subtitle: string;
 };
 
-/** Orden fijo del grid operacional (8 módulos). */
+/** Orden fijo del grid operacional. */
 export const OPERACION_LAUNCHER_MODULES: readonly OperacionLauncherModule[] = [
   { slug: "tpv", label: "TPV", subtitle: "Pedidos y cobro" },
+  { slug: "caja", label: "Caja", subtitle: "Turnos, efectivo y arqueos" },
   { slug: "cocina", label: "Cocina", subtitle: "Preparación en tiempo real" },
   { slug: "barra", label: "Barra", subtitle: "Bebidas y tickets" },
   { slug: "cocteleria", label: "Coctelería", subtitle: "Cócteles y preparación" },
@@ -38,11 +40,11 @@ export function isOperacionModuleSlug(value: string | null): value is OperacionM
 }
 
 export function operacionModuleHref(slug: OperacionModuleSlug): string {
-  return `/dashboard/operacion/${slug}`;
+  return slug === "caja" ? "/dashboard/caja" : `/dashboard/operacion/${slug}`;
 }
 
 /** Marcador de build — comprobar en consola/DOM tras deploy. */
-export const OPERACION_LAUNCHER_BUILD_ID = "launcher-8-unfiltered-v1";
+export const OPERACION_LAUNCHER_BUILD_ID = "launcher-9-unfiltered-v2";
 
 export function getOperacionLauncherDiagnostic() {
   return {
