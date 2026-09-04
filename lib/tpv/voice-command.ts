@@ -13,10 +13,21 @@ export type TpvVoiceFeedbackDetail = {
   tone?: TpvVoiceFeedbackTone;
 };
 
+export type TpvVoiceOrderItem = {
+  productQuery: string;
+  quantity: number;
+};
+
 export type TpvVoiceCommand =
   | { type: "open_table"; tableQuery: string }
   | { type: "back_to_map" }
   | { type: "add_product"; productQuery: string; quantity: number }
+  | {
+      type: "add_products_to_table";
+      tableQuery: string;
+      items: TpvVoiceOrderItem[];
+      sendOrder: true;
+    }
   | { type: "send_order" }
   | { type: "march_course"; course: "primeros" | "segundos" | "postres" }
   | { type: "confirm_march" }
@@ -104,18 +115,20 @@ function stripLeadingFillers(value: string): string {
     .trim();
 }
 
+function stripLeadingAddVerb(value: string): string {
+  const verb = ADD_VERBS.find(
+    (candidate) => value === candidate || value.startsWith(`${candidate} `),
+  );
+  return verb ? value.slice(verb.length).trim() : value.trim();
+}
+
 function parseAddProduct(normalized: string): TpvVoiceCommand | null {
   const hasAddVerb = ADD_VERBS.some(
     (verb) => normalized === verb || normalized.startsWith(`${verb} `),
   );
 
   let value = normalized;
-  if (hasAddVerb) {
-    const verb = ADD_VERBS.find(
-      (candidate) => value === candidate || value.startsWith(`${candidate} `),
-    );
-    if (verb) value = value.slice(verb.length).trim();
-  }
+  if (hasAddVerb) value = stripLeadingAddVerb(value);
 
   const xSuffix = value.match(/^(.+?)\s+x\s*(\d{1,2})$/);
   if (xSuffix) {
@@ -142,6 +155,64 @@ function parseAddProduct(normalized: string): TpvVoiceCommand | null {
   }
 
   return null;
+}
+
+function splitCompositeOrderItems(value: string): string[] {
+  const tokens = value.split(" ").filter(Boolean);
+  const parts: string[] = [];
+  let current: string[] = [];
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]!;
+    const next = tokens[index + 1];
+    const isSeparator = token === "y" || token === "e" || token === "mas";
+    if (isSeparator && current.length > 0 && parseQuantityToken(next) != null) {
+      parts.push(current.join(" "));
+      current = [];
+      continue;
+    }
+    current.push(token);
+  }
+
+  if (current.length > 0) parts.push(current.join(" "));
+  return parts;
+}
+
+function parseCompositeOrderItem(value: string): TpvVoiceOrderItem | null {
+  const parsed = parseAddProduct(value);
+  if (parsed?.type === "add_product") {
+    return {
+      productQuery: parsed.productQuery,
+      quantity: parsed.quantity,
+    };
+  }
+
+  const productQuery = stripLeadingFillers(stripLeadingAddVerb(value));
+  if (!productQuery) return null;
+  return { productQuery, quantity: 1 };
+}
+
+function parseOrderForTable(normalized: string): TpvVoiceCommand | null {
+  const match = normalized.match(
+    /^(.+?)\s+(?:a|en|para)\s+(?:la\s+)?mesa\s+(.+)$/,
+  );
+  if (!match) return null;
+
+  const orderText = stripLeadingAddVerb(match[1]?.trim() ?? "");
+  const tableQuery = stripLeadingFillers(match[2]?.trim() ?? "");
+  if (!orderText || !tableQuery) return null;
+
+  const items = splitCompositeOrderItems(orderText)
+    .map(parseCompositeOrderItem)
+    .filter((item): item is TpvVoiceOrderItem => item != null);
+
+  if (items.length === 0) return null;
+  return {
+    type: "add_products_to_table",
+    tableQuery,
+    items,
+    sendOrder: true,
+  };
 }
 
 export function parseTpvVoiceCommand(transcript: string): TpvVoiceCommand {
@@ -193,6 +264,9 @@ export function parseTpvVoiceCommand(transcript: string): TpvVoiceCommand {
   ) {
     return { type: "charge" };
   }
+
+  const tableOrder = parseOrderForTable(normalized);
+  if (tableOrder) return tableOrder;
 
   const tableMatch = normalized.match(
     /^(?:(?:abre|abrir|entra|entrar|ve|ir)\s+(?:a\s+)?(?:la\s+)?mesa|mesa)\s+(.+)$/,
