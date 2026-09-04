@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
 import {
   SALA_ESPACIO_TYPE_OPTIONS,
@@ -146,21 +147,23 @@ export function SalaAddEspacioDialog({
         </div>
 
         <div className="mt-6 flex items-center justify-end gap-2">
-          <button
-            type="button"
+          <HostlyButton
+            variant="secondary"
+            size="compact"
             onClick={onClose}
-            className="inline-flex min-h-[40px] items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+            className="min-h-[40px] rounded-xl px-4"
           >
             Cancelar
-          </button>
-          <button
-            type="button"
+          </HostlyButton>
+          <HostlyButton
+            variant="primary"
+            size="compact"
             disabled={!name.trim()}
             onClick={handleSubmit}
-            className="inline-flex min-h-[40px] items-center rounded-xl bg-[var(--hostly-accent)] px-4 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(49,95,125,0.24)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
+            className="min-h-[40px] rounded-xl px-4"
           >
             Crear
-          </button>
+          </HostlyButton>
         </div>
       </div>
     </div>
