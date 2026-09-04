@@ -1,7 +1,8 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import vm from "node:vm";
 
 const LOCALES = ["es", "en", "fr", "de", "it", "pt", "nl"];
+const OVERLAY_LOCALES = ["fr", "de", "it", "pt", "nl"];
 
 function flatten(value, prefix = "", out = {}) {
   for (const [key, child] of Object.entries(value ?? {})) {
@@ -22,12 +23,38 @@ async function loadCatalog(locale) {
   return flatten(sandbox.catalog);
 }
 
+async function loadOverlays() {
+  const result = Object.fromEntries(OVERLAY_LOCALES.map((locale) => [locale, {}]));
+  let names = [];
+  try {
+    names = await readdir("locales/multilingual");
+  } catch {
+    return result;
+  }
+  const jsonNames = names.filter((name) => name.endsWith(".json"));
+  for (const name of jsonNames) {
+    const bundle = JSON.parse(await readFile(`locales/multilingual/${name}`, "utf8"));
+    for (const [key, tuple] of Object.entries(bundle)) {
+      if (!Array.isArray(tuple) || tuple.length !== OVERLAY_LOCALES.length) continue;
+      OVERLAY_LOCALES.forEach((locale, index) => {
+        const value = tuple[index];
+        if (typeof value === "string" && value.trim()) result[locale][key] = value;
+      });
+    }
+  }
+  return result;
+}
+
 const catalogs = Object.fromEntries(
   await Promise.all(LOCALES.map(async (locale) => [locale, await loadCatalog(locale)])),
 );
+const overlays = await loadOverlays();
+for (const locale of OVERLAY_LOCALES) {
+  catalogs[locale] = { ...catalogs[locale], ...overlays[locale] };
+}
+
 const canonicalKeys = Object.keys(catalogs.es).sort();
 const englishKeys = new Set(Object.keys(catalogs.en));
-
 const locales = {};
 for (const locale of LOCALES) {
   const keys = new Set(Object.keys(catalogs[locale]));
@@ -55,7 +82,7 @@ const report = {
 };
 
 await writeFile("i18n-catalog-coverage.json", `${JSON.stringify(report, null, 2)}\n`);
-console.log(`i18n catalogs: ${canonicalKeys.length} canonical key(s)`);
+console.log(`i18n effective catalogs: ${canonicalKeys.length} canonical key(s)`);
 for (const locale of LOCALES) {
   const item = locales[locale];
   console.log(`${locale}: ${item.keyCount} keys, ${item.missingCount} missing, ${item.extraCount} extra, ${item.blankCount} blank`);
