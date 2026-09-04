@@ -24,6 +24,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { CartaFamilia } from "@/lib/carta-categorias/types";
 
 export function useFamiliasCartaMobileLayout(): boolean {
@@ -81,20 +82,20 @@ export function FamiliasCartaDragHandle({
   listeners?: SyntheticListenerMap;
 }) {
   return (
-    <button
-      type="button"
+    <HostlyButton
       ref={setActivatorNodeRef}
+      variant="icon"
+      size="compact"
+      icon={<GripVertical size={16} strokeWidth={2.25} />}
+      iconOnlyLabel={label}
       className="hostly-carta-category-drag-handle"
       disabled={disabled}
-      aria-label={label}
       title={label}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
       {...(attributes ?? {})}
       {...(listeners ?? {})}
-    >
-      <GripVertical size={16} strokeWidth={2.25} aria-hidden />
-    </button>
+    />
   );
 }
 
