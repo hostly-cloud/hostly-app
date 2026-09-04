@@ -6,6 +6,7 @@ import { MesaHeader } from "@/components/mesas/MesaHeader";
 import { MesaOrderPanel } from "@/components/mesas/MesaOrderPanel";
 import { MesaOrderHistory } from "@/components/mesas/MesaOrderHistory";
 import { MesaProductGrid } from "@/components/mesas/MesaProductGrid";
+import { HostlyButton } from "@/components/ui/hostly";
 import { useMesaComanda } from "@/hooks/useMesaComanda";
 
 export default function MesaDetailPage() {
@@ -48,17 +49,16 @@ export default function MesaDetailPage() {
 
   return (
     <div style={{ padding: 16 }}>
-      <button
-        type="button"
+      <HostlyButton
+        variant="ghost"
+        size="compact"
         onClick={() => router.back()}
         style={{
           marginBottom: 16,
-          fontSize: 14,
-          opacity: 0.7,
         }}
       >
         ← Volver
-      </button>
+      </HostlyButton>
 
       <MesaHeader
         mesa={mesaComanda.mesa}
@@ -134,23 +134,23 @@ export default function MesaDetailPage() {
       </div>
 
       {!mesaComanda.isNarrowScreen && (
-        <button
-          type="button"
+        <HostlyButton
+          variant="primary"
+          size="compact"
+          aria-label="Volver arriba"
           onClick={mesaComanda.handleScrollTop}
           style={{
             position: "fixed",
             bottom: 20,
             right: 20,
+            minHeight: 44,
+            minWidth: 44,
             padding: "10px 14px",
             borderRadius: 999,
-            background: "#2563eb",
-            color: "#fff",
-            fontWeight: 700,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
           }}
         >
           ↑
-        </button>
+        </HostlyButton>
       )}
     </div>
   );
