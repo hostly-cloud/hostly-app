@@ -1,3 +1,4 @@
+import { HostlyButton } from "@/components/ui/hostly";
 import type { ComandaItem } from "@/types/comanda";
 
 type MesaOrderPanelProps = {
@@ -89,10 +90,12 @@ export function MesaOrderPanel({
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button
-                  type="button"
+                <HostlyButton
+                  variant="secondary"
+                  size="compact"
                   onClick={() => onRemove(item.id)}
                   disabled={isOrderLocked}
+                  aria-label={`Quitar una unidad de ${item.name}`}
                   style={{
                     width: 32,
                     height: 32,
@@ -104,16 +107,18 @@ export function MesaOrderPanel({
                   }}
                 >
                   -
-                </button>
+                </HostlyButton>
 
                 <div style={{ minWidth: 24, textAlign: "center" }}>
                   {item.qty}
                 </div>
 
-                <button
-                  type="button"
+                <HostlyButton
+                  variant="secondary"
+                  size="compact"
                   onClick={() => onAdd(item.id)}
                   disabled={isOrderLocked}
+                  aria-label={`Añadir una unidad de ${item.name}`}
                   style={{
                     width: 32,
                     height: 32,
@@ -125,7 +130,7 @@ export function MesaOrderPanel({
                   }}
                 >
                   +
-                </button>
+                </HostlyButton>
               </div>
             </div>
           ))
@@ -157,8 +162,9 @@ export function MesaOrderPanel({
       </div>
 
       {items.length > 0 && (
-        <button
-          type="button"
+        <HostlyButton
+          variant="secondary"
+          size="touch"
           onClick={onClear}
           disabled={isOrderLocked}
           style={{
@@ -173,11 +179,12 @@ export function MesaOrderPanel({
           }}
         >
           Limpiar comanda
-        </button>
+        </HostlyButton>
       )}
 
-      <button
-        type="button"
+      <HostlyButton
+        variant="primary"
+        size="touch"
         onClick={onSave}
         disabled={!canSaveOrder}
         style={{
@@ -192,11 +199,12 @@ export function MesaOrderPanel({
         }}
       >
         {isSaving ? "Guardando..." : "Guardar comanda"}
-      </button>
+      </HostlyButton>
 
       {hasOrderId ? (
-        <button
-          type="button"
+        <HostlyButton
+          variant="primary"
+          size="touch"
           onClick={onSend}
           disabled={!canSendToKitchen}
           style={{
@@ -211,12 +219,13 @@ export function MesaOrderPanel({
           }}
         >
           {isSending ? "Enviando..." : "Enviar a cocina"}
-        </button>
+        </HostlyButton>
       ) : null}
 
       {isSentToKitchen ? (
-        <button
-          type="button"
+        <HostlyButton
+          variant="secondary"
+          size="touch"
           onClick={onReopen}
           disabled={!canReopenOrder}
           style={{
@@ -231,12 +240,13 @@ export function MesaOrderPanel({
           }}
         >
           {isReopening ? "Reabriendo..." : "Reabrir edición"}
-        </button>
+        </HostlyButton>
       ) : null}
 
       {hasOrderId ? (
-        <button
-          type="button"
+        <HostlyButton
+          variant="destructive"
+          size="touch"
           onClick={onClose}
           disabled={!canCloseOrder}
           style={{
@@ -251,9 +261,8 @@ export function MesaOrderPanel({
           }}
         >
           {isClosing ? "Cerrando..." : "Cerrar mesa"}
-        </button>
+        </HostlyButton>
       ) : null}
     </div>
   );
 }
-
