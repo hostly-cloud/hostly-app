@@ -9,6 +9,8 @@ import { useTableGroups } from "@/hooks/useTableGroups";
 import { preloadTpvEditorV2OperationalMap } from "@/lib/tpv/load-editor-v2-operational-map";
 import { OperacionModuleShell } from "../_components/operacion-module-shell";
 import { TpvEditorV2ReadyGate } from "./_components/tpv-editor-v2-ready-gate";
+import { TpvVoiceCommandButton } from "./_components/tpv-voice-command-button";
+import { TpvVoiceCommandRuntime } from "./_components/tpv-voice-command-runtime";
 import "./tpv-map-modern.css";
 import "./tpv-map-polish-v2.css";
 
@@ -80,6 +82,8 @@ export default function OperacionTpvPage() {
           </TpvEditorV2ReadyGate>
         </ActiveOperatorGate>
       </OperacionModuleShell>
+      <TpvVoiceCommandRuntime />
+      <TpvVoiceCommandButton />
     </ActiveOperatorProvider>
   );
 }

@@ -310,6 +310,7 @@ export function TpvV2TableOperationController({
 
   useEffect(() => {
     return registerTpvV2TableController(tableId, {
+      tableLabel,
       joinEnabled: joinEnabled && onJoinDrop != null,
       onPointerDown,
       onPointerMove,
@@ -325,6 +326,7 @@ export function TpvV2TableOperationController({
     onPointerDown,
     onPointerMove,
     tableId,
+    tableLabel,
   ]);
 
   const preview =

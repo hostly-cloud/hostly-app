@@ -1,0 +1,274 @@
+export const TPV_VOICE_COMMAND_EVENT = "hostly:tpv-voice-command";
+export const TPV_VOICE_FEEDBACK_EVENT = "hostly:tpv-voice-feedback";
+
+export type TpvVoiceCommandDetail = {
+  transcript: string;
+  source: "tpv";
+};
+
+export type TpvVoiceFeedbackTone = "info" | "success" | "error";
+
+export type TpvVoiceFeedbackDetail = {
+  message: string;
+  tone?: TpvVoiceFeedbackTone;
+};
+
+export type TpvVoiceCommand =
+  | { type: "open_table"; tableQuery: string }
+  | { type: "back_to_map" }
+  | { type: "add_product"; productQuery: string; quantity: number }
+  | { type: "send_order" }
+  | { type: "march_course"; course: "primeros" | "segundos" | "postres" }
+  | { type: "confirm_march" }
+  | { type: "preticket" }
+  | { type: "charge" }
+  | { type: "unknown"; transcript: string };
+
+const NUMBER_WORDS: Record<string, number> = {
+  un: 1,
+  uno: 1,
+  una: 1,
+  unha: 1,
+  dos: 2,
+  dous: 2,
+  duas: 2,
+  tres: 3,
+  cuatro: 4,
+  catro: 4,
+  cinco: 5,
+  seis: 6,
+  siete: 7,
+  sete: 7,
+  ocho: 8,
+  oito: 8,
+  nueve: 9,
+  nove: 9,
+  diez: 10,
+  dez: 10,
+  once: 11,
+  doce: 12,
+  trece: 13,
+  catorce: 14,
+  quince: 15,
+  dieciseis: 16,
+  diecisiete: 17,
+  dieciocho: 18,
+  diecinueve: 19,
+  veinte: 20,
+};
+
+const ADD_VERBS = [
+  "anade",
+  "anadir",
+  "agrega",
+  "agregar",
+  "pon",
+  "ponme",
+  "mete",
+  "meter",
+  "suma",
+  "sumar",
+  "sirve",
+  "servir",
+  "dame",
+  "quiero",
+  "engade",
+  "engadir",
+] as const;
+
+export function normalizeTpvVoiceText(value: string): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " y ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseQuantityToken(token: string | undefined): number | null {
+  const normalized = normalizeTpvVoiceText(token ?? "");
+  if (!normalized) return null;
+  if (/^\d{1,2}$/.test(normalized)) {
+    const value = Number(normalized);
+    return value >= 1 && value <= 50 ? value : null;
+  }
+  return NUMBER_WORDS[normalized] ?? null;
+}
+
+function stripLeadingFillers(value: string): string {
+  return value
+    .replace(/^(?:de|del|de la|de los|de las)\s+/, "")
+    .replace(/\s+(?:por favor)$/, "")
+    .trim();
+}
+
+function parseAddProduct(normalized: string): TpvVoiceCommand | null {
+  const hasAddVerb = ADD_VERBS.some(
+    (verb) => normalized === verb || normalized.startsWith(`${verb} `),
+  );
+
+  let value = normalized;
+  if (hasAddVerb) {
+    const verb = ADD_VERBS.find(
+      (candidate) => value === candidate || value.startsWith(`${candidate} `),
+    );
+    if (verb) value = value.slice(verb.length).trim();
+  }
+
+  const xSuffix = value.match(/^(.+?)\s+x\s*(\d{1,2})$/);
+  if (xSuffix) {
+    const quantity = parseQuantityToken(xSuffix[2]);
+    const productQuery = stripLeadingFillers(xSuffix[1] ?? "");
+    if (quantity && productQuery) {
+      return { type: "add_product", productQuery, quantity };
+    }
+  }
+
+  const firstSpace = value.indexOf(" ");
+  const firstToken = firstSpace === -1 ? value : value.slice(0, firstSpace);
+  const quantity = parseQuantityToken(firstToken);
+  if (quantity != null) {
+    const productQuery = stripLeadingFillers(
+      firstSpace === -1 ? "" : value.slice(firstSpace + 1),
+    );
+    if (productQuery) return { type: "add_product", productQuery, quantity };
+  }
+
+  if (hasAddVerb) {
+    const productQuery = stripLeadingFillers(value);
+    if (productQuery) return { type: "add_product", productQuery, quantity: 1 };
+  }
+
+  return null;
+}
+
+export function parseTpvVoiceCommand(transcript: string): TpvVoiceCommand {
+  const normalized = normalizeTpvVoiceText(transcript);
+  if (!normalized) return { type: "unknown", transcript };
+
+  if (
+    /^(?:volver|vuelve|volve|ir|ve)\s+(?:al|ao)\s+mapa$/.test(normalized) ||
+    normalized === "mapa"
+  ) {
+    return { type: "back_to_map" };
+  }
+
+  if (
+    /^(?:enviar|envia|mandar|manda)\s+(?:la\s+)?comanda$/.test(normalized) ||
+    /^(?:enviar|envia|mandar|manda)\s+(?:el\s+)?pedido$/.test(normalized) ||
+    /^(?:enviar|envia|mandar|manda)\s+(?:a\s+)?(?:cocina|barra)$/.test(normalized)
+  ) {
+    return { type: "send_order" };
+  }
+
+  const marchMatch = normalized.match(
+    /^(?:marchar|marcha)\s+(primeros?|segundos?|postres?)$/,
+  );
+  if (marchMatch) {
+    const raw = marchMatch[1] ?? "";
+    const course = raw.startsWith("primer")
+      ? "primeros"
+      : raw.startsWith("segund")
+        ? "segundos"
+        : "postres";
+    return { type: "march_course", course };
+  }
+
+  if (/^(?:confirmar|confirma)(?:\s+marcha)?$/.test(normalized)) {
+    return { type: "confirm_march" };
+  }
+
+  if (
+    /^(?:imprimir\s+)?pre\s*ticket$/.test(normalized) ||
+    normalized === "preticket"
+  ) {
+    return { type: "preticket" };
+  }
+
+  if (
+    /^(?:abrir\s+)?cobro$/.test(normalized) ||
+    /^(?:cobrar|cobra)(?:\s+(?:la\s+)?mesa)?$/.test(normalized)
+  ) {
+    return { type: "charge" };
+  }
+
+  const tableMatch = normalized.match(
+    /^(?:(?:abre|abrir|entra|entrar|ve|ir)\s+(?:a\s+)?(?:la\s+)?mesa|mesa)\s+(.+)$/,
+  );
+  if (tableMatch) {
+    const tableQuery = tableMatch[1]?.trim() ?? "";
+    if (tableQuery) return { type: "open_table", tableQuery };
+  }
+
+  const addProduct = parseAddProduct(normalized);
+  if (addProduct) return addProduct;
+
+  return { type: "unknown", transcript };
+}
+
+function canonicalToken(token: string): string {
+  if (/^\d+$/.test(token)) return token;
+  if (token.length > 4 && token.endsWith("s")) return token.slice(0, -1);
+  return token;
+}
+
+export function canonicalTpvVoiceSearchText(value: string): string {
+  return normalizeTpvVoiceText(value)
+    .split(" ")
+    .filter(Boolean)
+    .map(canonicalToken)
+    .join(" ");
+}
+
+function levenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a) return b.length;
+  if (!b) return a.length;
+
+  const previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  const current = new Array<number>(b.length + 1);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    current[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        current[j - 1]! + 1,
+        previous[j]! + 1,
+        previous[j - 1]! + cost,
+      );
+    }
+    for (let j = 0; j <= b.length; j += 1) previous[j] = current[j]!;
+  }
+
+  return previous[b.length]!;
+}
+
+export function scoreTpvVoiceCandidate(query: string, candidate: string): number {
+  const q = canonicalTpvVoiceSearchText(query);
+  const c = canonicalTpvVoiceSearchText(candidate);
+  if (!q || !c) return 0;
+  if (q === c) return 1;
+
+  if (c.includes(q) || q.includes(c)) {
+    const ratio = Math.min(q.length, c.length) / Math.max(q.length, c.length);
+    return 0.84 + ratio * 0.12;
+  }
+
+  const queryTokens = new Set(q.split(" ").filter(Boolean));
+  const candidateTokens = new Set(c.split(" ").filter(Boolean));
+  let intersection = 0;
+  for (const token of queryTokens) {
+    if (candidateTokens.has(token)) intersection += 1;
+  }
+  const union = new Set([...queryTokens, ...candidateTokens]).size;
+  const tokenScore = union > 0 ? intersection / union : 0;
+
+  const maxLength = Math.max(q.length, c.length);
+  const editScore =
+    maxLength > 0 ? 1 - levenshteinDistance(q, c) / maxLength : 0;
+
+  return Math.max(tokenScore * 0.9, editScore * 0.88);
+}
