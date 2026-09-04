@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 
 export type PaymentModalAdjustmentsSectionProps = {
   discountAmount: string;
@@ -24,8 +25,9 @@ export function PaymentModalAdjustmentsSection({
 
   return (
     <div className="border-t border-slate-200/80">
-      <button
-        type="button"
+      <HostlyButton
+        variant="ghost"
+        size="touch"
         aria-expanded={open}
         className="hostly-payment-dock-row flex w-full items-center justify-between gap-2 py-1.5 text-left touch-manipulation"
         onClick={() => setOpen((v) => !v)}
@@ -36,7 +38,7 @@ export function PaymentModalAdjustmentsSection({
         <span className="hostly-payment-dock-row-action text-xs font-semibold">
           Más opciones {open ? "▾" : "▸"}
         </span>
-      </button>
+      </HostlyButton>
 
       {open ? (
         <div className="space-y-2 pb-1">
@@ -57,20 +59,22 @@ export function PaymentModalAdjustmentsSection({
             />
           </div>
           <div className="grid grid-cols-2 gap-1.5">
-            <button
-              type="button"
+            <HostlyButton
+              variant="secondary"
+              size="touch"
               className="hostly-payment-chip-btn min-h-[36px] rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 shadow-sm touch-manipulation"
               onClick={onPrintPreTicket}
             >
               Pre-ticket
-            </button>
-            <button
-              type="button"
+            </HostlyButton>
+            <HostlyButton
+              variant="secondary"
+              size="touch"
               className="hostly-payment-chip-btn min-h-[36px] rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 shadow-sm touch-manipulation"
               onClick={onSplitAccount}
             >
               Dividir cuenta
-            </button>
+            </HostlyButton>
           </div>
         </div>
       ) : null}
