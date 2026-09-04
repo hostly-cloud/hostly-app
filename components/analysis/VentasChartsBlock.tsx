@@ -7,12 +7,12 @@ import {
   analysisRechartsTooltipProps,
 } from "@/components/analysis/analysis-recharts-surface";
 import type { VentasSelectorsCharts } from "@/components/analysis/hooks/useVentasSelectors";
-import { formatCurrency } from "@/components/analysis/utils";
+import { formatCurrencyEs } from "@/components/analysis/formatCurrencyEs";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChartColumnIncreasing } from "lucide-react";
 
 const formatEuroValue = (value: number): string => {
-  return formatCurrency(value);
+  return formatCurrencyEs(value);
 };
 
 const formatEuroAxisValue = (value: number): string => {
@@ -20,10 +20,13 @@ const formatEuroAxisValue = (value: number): string => {
   const absValue = Math.abs(safeValue);
 
   if (absValue >= 1000) {
-    return `${(safeValue / 1000).toFixed(1)}k€`;
+    return `${(safeValue / 1000).toLocaleString("es-ES", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })}k€`;
   }
 
-  return `${safeValue.toFixed(0)}€`;
+  return `${Math.round(safeValue).toLocaleString("es-ES")}€`;
 };
 
 export type VentasChartsBlockProps = {
