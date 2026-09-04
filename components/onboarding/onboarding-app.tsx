@@ -184,15 +184,17 @@ export default function OnboardingApp() {
               const active = index === stepIndex;
               const done = checkpoints[step.key];
               return (
-                <button
+                <HostlyButton
                   key={step.key}
-                  type="button"
+                  variant="ghost"
+                  size="compact"
+                  aria-current={active ? "step" : undefined}
                   onClick={() => {
                     setStepIndex(index);
                     setSuccessMessage(null);
                     setBusinessError(null);
                   }}
-                  className={`flex min-h-[42px] items-center gap-2 rounded-lg px-2.5 text-left text-sm font-semibold transition ${
+                  className={`flex min-h-[42px] w-full items-center justify-start gap-2 rounded-lg px-2.5 text-left text-sm font-semibold transition ${
                     active
                       ? "bg-[var(--hostly-accent-soft)] text-[var(--hostly-navy-deep)]"
                       : "text-[var(--hostly-ink-muted)] hover:bg-[var(--hostly-table-row-hover)]"
@@ -208,7 +210,7 @@ export default function OnboardingApp() {
                     {done ? "✓" : index + 1}
                   </span>
                   <span>{step.title}</span>
-                </button>
+                </HostlyButton>
               );
             })}
           </nav>
