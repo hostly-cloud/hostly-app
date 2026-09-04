@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { HostlyButton } from "@/components/ui/hostly";
 import {
   createEmptyBillingCustomerInput,
   type BillingCustomerInput,
@@ -273,21 +274,24 @@ export function NewBillingCustomerModal({
           ) : null}
 
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200/80 pt-4">
-            <button
-              type="button"
-              className="hostly-button-secondary min-h-[44px] px-4 rounded-2xl"
+            <HostlyButton
+              variant="secondary"
+              size="touch"
+              className="min-h-[44px] px-4 rounded-2xl"
               onClick={onClose}
               disabled={isSaving}
             >
               Cancelar
-            </button>
-            <button
+            </HostlyButton>
+            <HostlyButton
               type="submit"
-              className="hostly-button-primary min-h-[44px] px-5 rounded-2xl disabled:opacity-60"
+              variant="primary"
+              size="touch"
+              className="min-h-[44px] px-5 rounded-2xl disabled:opacity-60"
               disabled={isSaving}
             >
               {isSaving ? "Guardando…" : "Guardar empresa"}
-            </button>
+            </HostlyButton>
           </div>
         </form>
       </div>
