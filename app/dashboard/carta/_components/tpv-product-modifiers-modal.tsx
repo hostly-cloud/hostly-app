@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import {
   buildCartLineDisplayName,
   buildSelectedModifiersFromDraft,
@@ -112,14 +113,15 @@ function ModifierOptionButton({
   const optionStockLabel = getStockWarningShortLabel(optionStockWarning);
 
   return (
-    <button
-      type="button"
+    <HostlyButton
+      variant="chip"
+      size="touch"
+      active={active}
       className={
         active
           ? "carta-modifiers-option carta-modifiers-option--active"
           : "carta-modifiers-option"
       }
-      aria-pressed={active}
       onClick={onSelect}
     >
       <span className="carta-modifiers-option-name">
@@ -138,7 +140,7 @@ function ModifierOptionButton({
           {formatEuro(delta)}
         </span>
       ) : null}
-    </button>
+    </HostlyButton>
   );
 }
 
@@ -372,15 +374,17 @@ function TpvProductModifiersModalContent({
         </div>
 
         <div className="carta-line-editor-actions">
-          <button
-            type="button"
+          <HostlyButton
+            variant="ghost"
+            size="touch"
             className="carta-line-editor-btn carta-line-editor-btn--ghost"
             onClick={onCancel}
           >
             Cancelar
-          </button>
-          <button
-            type="button"
+          </HostlyButton>
+          <HostlyButton
+            variant="primary"
+            size="touch"
             className="carta-line-editor-btn carta-line-editor-btn--primary"
             disabled={!canConfirm}
             title={awaitingMixerChoice ? "Selecciona un refresco para continuar." : undefined}
@@ -393,7 +397,7 @@ function TpvProductModifiersModalContent({
             }
           >
             Añadir
-          </button>
+          </HostlyButton>
         </div>
       </div>
     </div>
