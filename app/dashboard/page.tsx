@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, type ReactNode } from "react";
 import { useAuth } from "@/components/auth/auth-context";
+import { OperationalDelayAlertsPanel } from "@/components/dashboard/operational-delay-alerts-panel";
 import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import type { HostlyCapability } from "@/lib/auth/hostly-capabilities";
 import ModulePageShell from "@/components/module-page-shell";
@@ -192,6 +193,7 @@ export default function DashboardPage() {
     [can],
   );
   const title = restaurantName?.trim() || DEFAULT_RESTAURANT_NAME;
+  const canSeeOperationalAlerts = can("kds.manage") || can("tpv.sell");
 
   return (
     <ModulePageShell
@@ -220,6 +222,7 @@ export default function DashboardPage() {
               </div>
             </div>
           </header>
+          {canSeeOperationalAlerts && <OperationalDelayAlertsPanel />}
           <section
             className="hostly-dashboard-command-main"
             aria-label="Acciones operativas"
