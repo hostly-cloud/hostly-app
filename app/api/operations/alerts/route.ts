@@ -17,12 +17,19 @@ function jsonError(status: number, error: string) {
 export async function GET(req: Request) {
   const authCtx = await requireAuthenticatedRestaurant(req);
   if (isAuthErrorResponse(authCtx)) return authCtx;
-  if (!serverRoleHasCapability(authCtx.role, "operations.audit")) {
-    return jsonError(403, "OPERATIONS_AUDIT_REQUIRED");
+  const summaryOnly = new URL(req.url).searchParams.get("summary") === "1";
+  const canViewSummary = serverRoleHasCapability(authCtx.role, "operations.audit")
+    || serverRoleHasCapability(authCtx.role, "kds.manage")
+    || serverRoleHasCapability(authCtx.role, "tpv.sell");
+  if (summaryOnly ? !canViewSummary : !serverRoleHasCapability(authCtx.role, "operations.audit")) {
+    return jsonError(403, summaryOnly ? "OPERATIONAL_ALERTS_VIEW_REQUIRED" : "OPERATIONS_AUDIT_REQUIRED");
   }
 
   try {
     const result = await buildAndSyncOperationalAlertCenter(authCtx.db, authCtx.restaurantId);
+    if (summaryOnly) {
+      return NextResponse.json({ ok: true, alerts: result.alerts });
+    }
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     console.error("[operational-alert-center] GET failed", error);
@@ -42,12 +49,7 @@ export async function POST(req: Request) {
       if (!serverRoleHasCapability(authCtx.role, "settings.manage")) {
         return jsonError(403, "SETTINGS_MANAGE_REQUIRED");
       }
-      const policy = await saveOperationalAlertPolicy(
-        authCtx.db,
-        authCtx.restaurantId,
-        body.policy,
-        authCtx.uid,
-      );
+      const policy = await saveOperationalAlertPolicy(authCtx.db, authCtx.restaurantId, body.policy, authCtx.uid);
       return NextResponse.json({ ok: true, policy });
     }
 
