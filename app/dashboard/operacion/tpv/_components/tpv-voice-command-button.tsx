@@ -1,7 +1,7 @@
 "use client";
 
 import { Mic, MicOff } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { HostlyButton } from "@/components/ui/hostly";
 import {
   TPV_VOICE_COMMAND_EVENT,
@@ -72,12 +72,18 @@ export function TpvVoiceCommandButton() {
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<TpvVoiceFeedbackTone>("info");
 
-  const showMessage = (nextMessage: string, tone: TpvVoiceFeedbackTone = "info") => {
-    setMessage(nextMessage);
-    setMessageTone(tone);
-    if (messageTimerRef.current != null) window.clearTimeout(messageTimerRef.current);
-    messageTimerRef.current = window.setTimeout(() => setMessage(null), 3200);
-  };
+  const showMessage = useCallback(
+    (nextMessage: string, tone: TpvVoiceFeedbackTone = "info") => {
+      setMessage(nextMessage);
+      setMessageTone(tone);
+      if (messageTimerRef.current != null) window.clearTimeout(messageTimerRef.current);
+      messageTimerRef.current = window.setTimeout(() => {
+        messageTimerRef.current = null;
+        setMessage(null);
+      }, 3200);
+    },
+    [],
+  );
 
   useEffect(() => {
     const feedbackHandler = (event: Event) => {
@@ -88,7 +94,7 @@ export function TpvVoiceCommandButton() {
     };
     window.addEventListener(TPV_VOICE_FEEDBACK_EVENT, feedbackHandler);
     return () => window.removeEventListener(TPV_VOICE_FEEDBACK_EVENT, feedbackHandler);
-  }, []);
+  }, [showMessage]);
 
   useEffect(() => {
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
@@ -106,7 +112,10 @@ export function TpvVoiceCommandButton() {
       setListening(true);
       setMessage("Escuchando…");
       setMessageTone("info");
-      if (messageTimerRef.current != null) window.clearTimeout(messageTimerRef.current);
+      if (messageTimerRef.current != null) {
+        window.clearTimeout(messageTimerRef.current);
+        messageTimerRef.current = null;
+      }
     };
 
     recognition.onresult = (event) => {
@@ -130,9 +139,6 @@ export function TpvVoiceCommandButton() {
 
     recognition.onend = () => {
       setListening(false);
-      if (messageTimerRef.current == null && message === "Escuchando…") {
-        showMessage("No he recibido ningún comando.", "error");
-      }
     };
 
     recognitionRef.current = recognition;
@@ -146,7 +152,7 @@ export function TpvVoiceCommandButton() {
       recognition.abort();
       recognitionRef.current = null;
     };
-  }, []);
+  }, [showMessage]);
 
   const toggleVoiceCommand = () => {
     if (!supported || !recognitionRef.current) {
