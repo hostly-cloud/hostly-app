@@ -19,6 +19,7 @@ import { de } from "@/locales/de";
 import { it } from "@/locales/it";
 import { pt } from "@/locales/pt";
 import { nl } from "@/locales/nl";
+import { getMultilingualOverrides } from "@/locales/multilingual-overrides";
 
 const CATALOG: Record<Locale, MessageTree> = {
   es,
@@ -84,9 +85,17 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const t = useMemo(
-    () => createTranslator(CATALOG[locale], CATALOG[FALLBACK_LOCALE]),
+  const effectiveCatalog = useMemo<MessageTree>(
+    () => ({
+      ...CATALOG[locale],
+      ...getMultilingualOverrides(locale),
+    }),
     [locale],
+  );
+
+  const t = useMemo(
+    () => createTranslator(effectiveCatalog, CATALOG[FALLBACK_LOCALE]),
+    [effectiveCatalog],
   );
 
   const value = useMemo(
