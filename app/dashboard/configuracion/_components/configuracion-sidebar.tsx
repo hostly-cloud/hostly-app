@@ -8,6 +8,7 @@ import {
   configPathnameMatches,
 } from "@/lib/configuracion/config-nav";
 import { HostlyBrandMark } from "@/components/brand/hostly-brand";
+import { HostlyButton } from "@/components/ui/hostly";
 
 type NavLeaf = { href: string; label: string };
 type NavGroup = { id: string; label: string; children: NavLeaf[] };
@@ -159,17 +160,17 @@ export function ConfiguracionMobileHeader({
 }) {
   return (
     <header className="hostly-config-mobile-header lg:hidden">
-      <button
-        type="button"
+      <HostlyButton
+        variant="icon"
         className="hostly-config-mobile-header__menu-btn"
         aria-expanded={navOpen}
-        aria-label="Abrir menú de configuración"
+        iconOnlyLabel="Abrir menú de configuración"
         onClick={onOpenNav}
       >
         <span className="text-lg leading-none" aria-hidden>
           ☰
         </span>
-      </button>
+      </HostlyButton>
       <HostlyBrandMark size={24} tone="app" />
       <span className="hostly-config-mobile-header__title">Configuración</span>
     </header>
