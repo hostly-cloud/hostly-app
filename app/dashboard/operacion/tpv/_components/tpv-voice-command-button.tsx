@@ -11,6 +11,7 @@ import {
   type TpvVoiceFeedbackTone,
 } from "@/lib/tpv/voice-command";
 import {
+  canonicalizeTpvVoiceTranscript,
   getTpvVoiceUi,
   persistTpvVoiceLanguage,
   resolveTpvVoiceLanguage,
@@ -88,6 +89,8 @@ function feedbackToneClass(tone: TpvVoiceFeedbackTone): string {
 export function TpvVoiceCommandButton() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const messageTimerRef = useRef<number | null>(null);
+  const rawTranscriptRef = useRef("");
+  const canonicalTranscriptRef = useRef("");
   const [language, setLanguage] = useState<TpvVoiceLanguage>("es");
   const [listening, setListening] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -133,7 +136,10 @@ export function TpvVoiceCommandButton() {
         messageTimerRef.current = null;
       }
       setMessage(null);
-      setPreview(detail);
+      setPreview({
+        ...detail,
+        transcript: rawTranscriptRef.current || detail.transcript,
+      });
     };
 
     window.addEventListener(TPV_VOICE_PREVIEW_EVENT, previewHandler);
@@ -150,6 +156,8 @@ export function TpvVoiceCommandButton() {
     recognition.lang = speechLocaleForTpvVoiceLanguage(language);
 
     recognition.onstart = () => {
+      rawTranscriptRef.current = "";
+      canonicalTranscriptRef.current = "";
       setListening(true);
       setPreview(null);
       setMessage(copy.listening);
@@ -166,9 +174,12 @@ export function TpvVoiceCommandButton() {
       const transcript = lastResult?.[0]?.transcript?.trim() ?? "";
       if (!transcript) return;
 
+      const canonicalTranscript = canonicalizeTpvVoiceTranscript(transcript, language);
+      rawTranscriptRef.current = transcript;
+      canonicalTranscriptRef.current = canonicalTranscript;
       setMessage(copy.interpreting(transcript));
       setMessageTone("info");
-      const detail = { transcript, source: "tpv" as const, language };
+      const detail = { transcript: canonicalTranscript, source: "tpv" as const };
       window.dispatchEvent(
         new CustomEvent(TPV_VOICE_PREVIEW_REQUEST_EVENT, { detail }),
       );
@@ -214,10 +225,11 @@ export function TpvVoiceCommandButton() {
 
   const confirmPreview = () => {
     if (!preview?.canConfirm) return;
+    const transcript = canonicalTranscriptRef.current.trim();
+    if (!transcript) return;
     const detail: TpvVoiceCommandDetail = {
-      transcript: preview.transcript,
+      transcript,
       source: "tpv",
-      language,
     };
     setPreview(null);
     setMessage(copy.sending);
@@ -228,6 +240,8 @@ export function TpvVoiceCommandButton() {
   };
 
   const cancelPreview = () => {
+    rawTranscriptRef.current = "";
+    canonicalTranscriptRef.current = "";
     setPreview(null);
     setMessage(null);
   };
@@ -235,6 +249,8 @@ export function TpvVoiceCommandButton() {
   const changeLanguage = (nextLanguage: TpvVoiceLanguage) => {
     if (listening) recognitionRef.current?.stop();
     persistTpvVoiceLanguage(nextLanguage);
+    rawTranscriptRef.current = "";
+    canonicalTranscriptRef.current = "";
     setPreview(null);
     setMessage(null);
     setLanguage(nextLanguage);
