@@ -3,6 +3,9 @@ import core from "@/locales/multilingual/core.json";
 import productRouting from "@/locales/multilingual/products-routing.json";
 import productActions from "@/locales/multilingual/products-actions.json";
 import menuCategories from "@/locales/multilingual/menu-categories.json";
+import receipts from "@/locales/multilingual/receipts.json";
+import invoicesCosts from "@/locales/multilingual/invoices-costs.json";
+import smartValidation from "@/locales/multilingual/smart-validation.json";
 
 type BaseMultilingualLocale = "fr" | "de" | "it" | "pt" | "nl";
 type TranslationTuple = [string, string, string, string, string];
@@ -14,6 +17,9 @@ const BUNDLES: TranslationBundle[] = [
   productRouting as TranslationBundle,
   productActions as TranslationBundle,
   menuCategories as TranslationBundle,
+  receipts as TranslationBundle,
+  invoicesCosts as TranslationBundle,
+  smartValidation as TranslationBundle,
 ];
 
 function baseLocale(locale: Locale): BaseMultilingualLocale | null {
