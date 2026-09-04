@@ -11,8 +11,7 @@ const entries = [
 
 test("prioriza una mesa visible exacta aunque existan mesas parecidas", () => {
   const match = chooseTpvVoiceTableCandidate("7", entries);
-  assert.notEqual(match, "ambiguous");
-  assert.ok(match);
+  if (!match || match === "ambiguous") assert.fail("Mesa 7 debe resolverse de forma exacta");
   assert.equal(match.value.id, "7");
   assert.equal(match.label, "Mesa 7");
 });
@@ -20,8 +19,7 @@ test("prioriza una mesa visible exacta aunque existan mesas parecidas", () => {
 test("entiende mesa y mesa numero sin crear candidatos duplicados", () => {
   for (const query of ["mesa 7", "mesa numero 7", "numero siete", "siete"]) {
     const match = chooseTpvVoiceTableCandidate(query, entries);
-    assert.notEqual(match, "ambiguous", query);
-    assert.ok(match, query);
+    if (!match || match === "ambiguous") assert.fail(`${query} debe resolver Mesa 7`);
     assert.equal(match.value.id, "7", query);
   }
 });
