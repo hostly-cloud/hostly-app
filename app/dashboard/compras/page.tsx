@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import ModulePageShell from "@/components/module-page-shell";
+import { HostlyButton } from "@/components/ui/hostly";
 import { migrateLegacyPurchasesFromBrowser } from "@/lib/purchases/legacy-purchase-migration";
 
 const CANONICAL_PURCHASES_ROUTE = "/dashboard/inventario/pedidos-compra";
@@ -52,18 +53,17 @@ export default function ComprasPage() {
           <>
             <p style={{ margin: 0, color: "var(--hostly-danger, #b42318)" }}>{displayError}</p>
             <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-              <button
-                type="button"
+              <HostlyButton
+                variant="primary"
                 onClick={() => {
                   setError(null);
                   startedRef.current = false;
                   setRetryNonce((value) => value + 1);
                 }}
-                className="hostly-button hostly-button--primary"
               >
                 Reintentar migración
-              </button>
-              <Link href={CANONICAL_PURCHASES_ROUTE} className="hostly-button">
+              </HostlyButton>
+              <Link href={CANONICAL_PURCHASES_ROUTE} className="hostly-button-secondary hostly-button-compact">
                 Ir a Pedidos de compra
               </Link>
             </div>
