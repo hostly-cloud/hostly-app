@@ -9,9 +9,9 @@ import { useAuth } from "@/components/auth/auth-context";
 import {
   HostlyAlert,
   HostlyOperationalEmptyState,
+  HostlySegmentedButton,
   HostlySegmentedControl,
   HostlyStatusBadge,
-  hostlySegmentTabClassName,
   type HostlyStatusBadgeTone,
 } from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -129,16 +129,13 @@ export default function OperacionSesionesPage() {
         <div className="hostly-operation-audit-toolbar">
           <HostlySegmentedControl aria-label="Filtrar sesiones">
             {FILTERS.map((item) => (
-              <button
+              <HostlySegmentedButton
                 key={item.key}
-                type="button"
-                role="tab"
-                className={hostlySegmentTabClassName()}
-                aria-selected={filter === item.key}
+                selected={filter === item.key}
                 onClick={() => setFilter(item.key)}
               >
                 {item.label}
-              </button>
+              </HostlySegmentedButton>
             ))}
           </HostlySegmentedControl>
           <span className="hostly-operation-audit-summary">
