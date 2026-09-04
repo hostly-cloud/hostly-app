@@ -6,6 +6,10 @@ import menuCategories from "@/locales/multilingual/menu-categories.json";
 import receipts from "@/locales/multilingual/receipts.json";
 import invoicesCosts from "@/locales/multilingual/invoices-costs.json";
 import smartValidation from "@/locales/multilingual/smart-validation.json";
+import purchases from "@/locales/multilingual/purchases.json";
+import salesCatalogCore from "@/locales/multilingual/sales-catalog-core.json";
+import salesCatalogRecipe from "@/locales/multilingual/sales-catalog-recipe.json";
+import modifiers from "@/locales/multilingual/modifiers.json";
 
 type BaseMultilingualLocale = "fr" | "de" | "it" | "pt" | "nl";
 type TranslationTuple = [string, string, string, string, string];
@@ -20,6 +24,10 @@ const BUNDLES: TranslationBundle[] = [
   receipts as TranslationBundle,
   invoicesCosts as TranslationBundle,
   smartValidation as TranslationBundle,
+  purchases as TranslationBundle,
+  salesCatalogCore as TranslationBundle,
+  salesCatalogRecipe as TranslationBundle,
+  modifiers as TranslationBundle,
 ];
 
 function baseLocale(locale: Locale): BaseMultilingualLocale | null {
