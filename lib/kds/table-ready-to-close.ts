@@ -1,5 +1,6 @@
 /** Línea mínima para evaluar si una mesa puede cerrarse operativamente. */
 export type TableReadyToCloseLine = {
+  qty?: number;
   status?: string;
 };
 
@@ -56,11 +57,19 @@ export function isOrderItemBlockingReadyToClose(
   return true;
 }
 
+function isMeaningfulOrderItem(item: TableReadyToCloseLine): boolean {
+  if (item.qty === undefined) return true;
+  return Number.isFinite(item.qty) && item.qty > 0;
+}
+
 /** Pedido activo sin líneas bloqueantes → servicio de comanda terminado. */
 export function isOrderReadyToClose(order: TableReadyToCloseOrder): boolean {
   if (!isActiveOrderForReadyToClose(order.status)) return false;
-  if (!Array.isArray(order.items) || order.items.length === 0) return false;
-  return !order.items.some((item) =>
+  const meaningfulItems = Array.isArray(order.items)
+    ? order.items.filter(isMeaningfulOrderItem)
+    : [];
+  if (meaningfulItems.length === 0) return false;
+  return !meaningfulItems.some((item) =>
     isOrderItemBlockingReadyToClose(item.status),
   );
 }
@@ -84,8 +93,11 @@ export function computeTablesReadyToClose(
     if (!matchesOrder(order)) continue;
 
     const tableKey = resolveTableReadyToCloseKey(order);
-    if (!Array.isArray(order.items) || order.items.length === 0) continue;
-    const hasBlocking = order.items.some((item) =>
+    const meaningfulItems = Array.isArray(order.items)
+      ? order.items.filter(isMeaningfulOrderItem)
+      : [];
+    if (meaningfulItems.length === 0) continue;
+    const hasBlocking = meaningfulItems.some((item) =>
       isOrderItemBlockingReadyToClose(item.status),
     );
 
