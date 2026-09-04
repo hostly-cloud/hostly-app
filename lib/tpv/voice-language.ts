@@ -1,6 +1,6 @@
 export type TpvVoiceLanguage = "es" | "en" | "fr" | "de" | "it";
 
-export const TPV_VOICE_LANGUAGE_STORAGE_KEY = "hostly:tpv-language";
+export const TPV_VOICE_LANGUAGE_STORAGE_KEY = "hostly.locale";
 
 export const TPV_VOICE_LANGUAGE_OPTIONS: ReadonlyArray<{
   code: TpvVoiceLanguage;
@@ -502,22 +502,20 @@ function translateOrderText(value: string, profile: LanguageProfile): string {
 }
 
 function findTrailingTableTarget(value: string, profile: LanguageProfile): { order: string; table: string } | null {
-  const padded = ` ${value} `;
   let bestIndex = -1;
-  let bestPhrase = "";
+  let bestNeedle = "";
   for (const phrase of profile.tableTargets) {
     const needle = ` ${phrase} `;
-    const index = padded.lastIndexOf(needle);
+    const index = value.lastIndexOf(needle);
     if (index > bestIndex) {
       bestIndex = index;
-      bestPhrase = phrase;
+      bestNeedle = needle;
     }
   }
 
-  if (bestIndex >= 0 && bestPhrase) {
-    const originalIndex = Math.max(0, bestIndex - 1);
-    const order = value.slice(0, originalIndex).trim();
-    const table = value.slice(originalIndex + bestPhrase.length).trim();
+  if (bestIndex >= 0 && bestNeedle) {
+    const order = value.slice(0, bestIndex).trim();
+    const table = value.slice(bestIndex + bestNeedle.length).trim();
     if (order && table) return { order, table };
   }
 
@@ -664,7 +662,13 @@ export function canonicalizeTpvVoiceTranscript(
   transcript: string,
   language: TpvVoiceLanguage,
 ): string {
-  if (language === "es") return transcript;
+  if (language === "es") {
+    const normalizedSpanish = normalizeSpeech(transcript);
+    const openMatch = normalizedSpanish.match(
+      /^(?:abre|abrir|entra|entrar|ve|vete|ir)\s+(?:(?:a|en)\s+)?(?:la\s+)?mesa\s+(.+)$/,
+    );
+    return openMatch?.[1] ? `mesa ${openMatch[1]}` : transcript;
+  }
 
   const profile = PROFILES[language];
   let normalized = normalizeSpeech(transcript);
