@@ -87,6 +87,32 @@ const ADD_VERBS = [
   "engadir",
 ] as const;
 
+const INLINE_SPEECH_FILLERS = new Set(["eh", "ehm", "em", "mmm", "mm"]);
+const LEADING_SPEECH_FILLERS = new Set([
+  "bueno",
+  "vale",
+  "pues",
+  "perdon",
+  "perdona",
+]);
+const CORRECTION_PREFIXES = ["quiero decir", "mejor dicho"] as const;
+const PACKAGING_WORDS = new Set([
+  "botella",
+  "botellas",
+  "copa",
+  "copas",
+  "vaso",
+  "vasos",
+  "cana",
+  "canas",
+  "jarra",
+  "jarras",
+  "unidad",
+  "unidades",
+  "racion",
+  "raciones",
+]);
+
 export function normalizeTpvVoiceText(value: string): string {
   return String(value ?? "")
     .normalize("NFD")
@@ -122,12 +148,71 @@ function stripLeadingAddVerb(value: string): string {
   return verb ? value.slice(verb.length).trim() : value.trim();
 }
 
+function stripSpeechDisfluencies(value: string): string {
+  let tokens = value
+    .split(" ")
+    .filter(Boolean)
+    .filter((token) => !INLINE_SPEECH_FILLERS.has(token));
+
+  while (tokens.length > 1 && LEADING_SPEECH_FILLERS.has(tokens[0]!)) {
+    tokens = tokens.slice(1);
+  }
+
+  let cleaned = tokens.join(" ").trim();
+  let changed = true;
+  while (changed && cleaned) {
+    changed = false;
+    for (const prefix of CORRECTION_PREFIXES) {
+      if (cleaned.startsWith(`${prefix} `)) {
+        cleaned = cleaned.slice(prefix.length).trim();
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  const correctionTokens = cleaned.split(" ").filter(Boolean);
+  if (
+    correctionTokens[0] === "era" &&
+    correctionTokens.length > 1 &&
+    (parseQuantityToken(correctionTokens[1]) != null ||
+      ["el", "la", "los", "las"].includes(correctionTokens[1]!))
+  ) {
+    cleaned = correctionTokens.slice(1).join(" ");
+  }
+
+  return cleaned.trim();
+}
+
+function stripRedundantTrailingPackagingPhrase(value: string): string {
+  const match = value.match(/\s+(?:a\s+(?:la|el)\s+|al\s+)([a-z0-9]+)$/);
+  const packagingToken = match?.[1] ?? "";
+  if (!match || !PACKAGING_WORDS.has(packagingToken)) return value.trim();
+
+  const preceding = value.slice(0, match.index).trim();
+  const precedingTokens = new Set(preceding.split(" ").filter(Boolean));
+  const singularPackaging = packagingToken.endsWith("s")
+    ? packagingToken.slice(0, -1)
+    : packagingToken;
+  const alreadyMentioned =
+    precedingTokens.has(packagingToken) || precedingTokens.has(singularPackaging);
+
+  return alreadyMentioned ? preceding : value.trim();
+}
+
+function normalizeTableQuery(value: string): string {
+  return stripLeadingFillers(stripSpeechDisfluencies(value))
+    .replace(/^(?:numero|num|nro)\s+/, "")
+    .trim();
+}
+
 function parseAddProduct(normalized: string): TpvVoiceCommand | null {
+  const cleaned = stripSpeechDisfluencies(normalized);
   const hasAddVerb = ADD_VERBS.some(
-    (verb) => normalized === verb || normalized.startsWith(`${verb} `),
+    (verb) => cleaned === verb || cleaned.startsWith(`${verb} `),
   );
 
-  let value = normalized;
+  let value = cleaned;
   if (hasAddVerb) value = stripLeadingAddVerb(value);
 
   const xSuffix = value.match(/^(.+?)\s+x\s*(\d{1,2})$/);
@@ -193,13 +278,18 @@ function parseCompositeOrderItem(value: string): TpvVoiceOrderItem | null {
 }
 
 function parseOrderForTable(normalized: string): TpvVoiceCommand | null {
-  const match = normalized.match(
+  const cleaned = stripSpeechDisfluencies(normalized);
+  const match = cleaned.match(
     /^(.+?)\s+(?:a|en|para)\s+(?:la\s+)?mesa\s+(.+)$/,
   );
   if (!match) return null;
 
-  const orderText = stripLeadingAddVerb(match[1]?.trim() ?? "");
-  const tableQuery = stripLeadingFillers(match[2]?.trim() ?? "");
+  const orderText = stripLeadingAddVerb(
+    stripRedundantTrailingPackagingPhrase(
+      stripSpeechDisfluencies(match[1]?.trim() ?? ""),
+    ),
+  );
+  const tableQuery = normalizeTableQuery(match[2]?.trim() ?? "");
   if (!orderText || !tableQuery) return null;
 
   const items = splitCompositeOrderItems(orderText)
@@ -216,7 +306,7 @@ function parseOrderForTable(normalized: string): TpvVoiceCommand | null {
 }
 
 export function parseTpvVoiceCommand(transcript: string): TpvVoiceCommand {
-  const normalized = normalizeTpvVoiceText(transcript);
+  const normalized = stripSpeechDisfluencies(normalizeTpvVoiceText(transcript));
   if (!normalized) return { type: "unknown", transcript };
 
   if (
@@ -272,7 +362,7 @@ export function parseTpvVoiceCommand(transcript: string): TpvVoiceCommand {
     /^(?:(?:abre|abrir|entra|entrar|ve|ir)\s+(?:a\s+)?(?:la\s+)?mesa|mesa)\s+(.+)$/,
   );
   if (tableMatch) {
-    const tableQuery = tableMatch[1]?.trim() ?? "";
+    const tableQuery = normalizeTableQuery(tableMatch[1] ?? "");
     if (tableQuery) return { type: "open_table", tableQuery };
   }
 
@@ -284,6 +374,8 @@ export function parseTpvVoiceCommand(transcript: string): TpvVoiceCommand {
 
 function canonicalToken(token: string): string {
   if (/^\d+$/.test(token)) return token;
+  const number = NUMBER_WORDS[token];
+  if (number != null) return String(number);
   if (token.length > 4 && token.endsWith("s")) return token.slice(0, -1);
   return token;
 }
