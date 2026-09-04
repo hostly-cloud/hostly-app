@@ -1,5 +1,7 @@
 "use client";
 
+import { HostlyButton } from "@/components/ui/hostly";
+
 export type SalaEspaciosEmptyStateProps = {
   onCreateEspacio: () => void;
   compact?: boolean;
@@ -15,9 +17,16 @@ export function SalaEspaciosEmptyState({
         <p className="hostly-sala-editor-toolbox__label" style={{ padding: "2px" }}>
           Sin espacios
         </p>
-        <button type="button" onClick={onCreateEspacio} className="hostly-sala-editor-toolbox__add" title="Crear espacio">
+        <HostlyButton
+          variant="icon"
+          size="compact"
+          iconOnlyLabel="Crear espacio"
+          onClick={onCreateEspacio}
+          className="hostly-sala-editor-toolbox__add"
+          title="Crear espacio"
+        >
           <span aria-hidden>+</span>
-        </button>
+        </HostlyButton>
       </div>
     );
   }
@@ -33,13 +42,14 @@ export function SalaEspaciosEmptyState({
           </span>
           <p className="hostly-sala-editor-empty__title">Crea un espacio de tu restaurante</p>
           <p className="hostly-sala-editor-empty__hint">Sala, terraza, reservado o la zona que quieras preparar ahora.</p>
-          <button
-            type="button"
+          <HostlyButton
+            variant="primary"
+            size="compact"
             onClick={onCreateEspacio}
             className="hostly-sala-editor-sidebar-action mt-3 max-w-[200px]"
           >
             Crear espacio
-          </button>
+          </HostlyButton>
         </div>
       </div>
     </div>
