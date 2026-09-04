@@ -1,7 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  Bot,
+  Building2,
+  ChevronRight,
+  CircleUserRound,
+  CreditCard,
+  LayoutDashboard,
+  MonitorCog,
+  PackageOpen,
+  PlugZap,
+  Search,
+  UsersRound,
+  UtensilsCrossed,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import ModulePageShell from "@/components/module-page-shell";
 import { HostlyBrandMark } from "@/components/brand/hostly-brand";
@@ -14,7 +35,7 @@ type HubCard = {
   status: string;
   statusTone: "ok" | "warn" | "neutral";
   visual: string;
-  icon: ReactNode;
+  Icon: LucideIcon;
 };
 
 const RESTAURANT_STATUS = [
@@ -30,12 +51,17 @@ const CONFIG_ROUTES = {
   operation: "/dashboard/configuracion/operacion",
   stations: "/dashboard/configuracion/estaciones",
   zones: "/dashboard/configuracion/espacios/zonas",
+  tables: "/dashboard/configuracion/espacios/mesas",
   spaceEditor: "/dashboard/configuracion/espacios/editor-v2",
   menuCategories: "/dashboard/configuracion/carta/categorias",
   menuFamilies: "/dashboard/configuracion/carta/familias",
   products: "/dashboard/configuracion/carta/productos",
   modifiers: "/dashboard/configuracion/modificadores",
+  recipes: "/dashboard/configuracion/carta/escandallos",
   team: "/dashboard/configuracion/empleados",
+  employeeOperations: "/dashboard/empleados/operaciones",
+  employeeClocking: "/dashboard/empleados/fichajes",
+  cash: "/dashboard/caja",
   printers: "/dashboard/configuracion/impresoras",
   printQueue: "/dashboard/configuracion/impresoras/cola",
   aiImport: "/dashboard/configuracion/carta/importacion",
@@ -51,7 +77,7 @@ const HUB_CARDS: HubCard[] = [
     status: "Configurar perfil",
     statusTone: "neutral",
     visual: "restaurant",
-    icon: <IconRestaurant />,
+    Icon: Building2,
   },
   {
     id: "operation",
@@ -61,7 +87,7 @@ const HUB_CARDS: HubCard[] = [
     status: "Configurar operación",
     statusTone: "neutral",
     visual: "operation",
-    icon: <IconOperation />,
+    Icon: LayoutDashboard,
   },
   {
     id: "menu",
@@ -71,7 +97,7 @@ const HUB_CARDS: HubCard[] = [
     status: "Gestionar carta",
     statusTone: "neutral",
     visual: "menu",
-    icon: <IconMenu />,
+    Icon: UtensilsCrossed,
   },
   {
     id: "products",
@@ -81,26 +107,27 @@ const HUB_CARDS: HubCard[] = [
     status: "Gestionar catálogo",
     statusTone: "neutral",
     visual: "products",
-    icon: <IconProducts />,
+    Icon: PackageOpen,
   },
   {
     id: "team",
     title: "Mi equipo",
-    description: "Empleados, roles, accesos e invitaciones.",
+    description: "Empleados, roles, accesos, fichajes y RRHH operativo.",
     href: CONFIG_ROUTES.team,
-    status: "Gestionar accesos",
+    status: "Gestionar equipo",
     statusTone: "neutral",
     visual: "team",
-    icon: <IconTeam />,
+    Icon: UsersRound,
   },
   {
     id: "cashier",
     title: "Mi caja",
-    description: "IVA, tickets, métodos de pago y cierre de caja.",
-    status: "Próximamente",
+    description: "Turnos, movimientos, cierre ciego y conciliación de caja.",
+    href: CONFIG_ROUTES.cash,
+    status: "Gestionar caja",
     statusTone: "neutral",
     visual: "cashier",
-    icon: <IconCashier />,
+    Icon: CreditCard,
   },
   {
     id: "devices",
@@ -110,7 +137,7 @@ const HUB_CARDS: HubCard[] = [
     status: "Configurar impresión",
     statusTone: "neutral",
     visual: "devices",
-    icon: <IconDevices />,
+    Icon: MonitorCog,
   },
   {
     id: "ai",
@@ -120,7 +147,7 @@ const HUB_CARDS: HubCard[] = [
     status: "Disponible",
     statusTone: "neutral",
     visual: "ai",
-    icon: <IconAI />,
+    Icon: Bot,
   },
   {
     id: "integrations",
@@ -130,7 +157,7 @@ const HUB_CARDS: HubCard[] = [
     status: "Próximamente",
     statusTone: "neutral",
     visual: "integrations",
-    icon: <IconIntegrations />,
+    Icon: PlugZap,
   },
   {
     id: "account",
@@ -139,7 +166,7 @@ const HUB_CARDS: HubCard[] = [
     status: "Próximamente",
     statusTone: "neutral",
     visual: "account",
-    icon: <IconAccount />,
+    Icon: CircleUserRound,
   },
 ];
 
@@ -186,6 +213,14 @@ const CONFIG_SEARCH_ITEMS: ConfigSearchItem[] = [
     keywords: ["zona", "zonas", "area", "areas", "espacio", "espacios"],
   },
   {
+    id: "tables",
+    section: "Mi operación",
+    title: "Mesas",
+    description: "Acceso a la gestión visual de mesas dentro del plano.",
+    href: CONFIG_ROUTES.tables,
+    keywords: ["mesa", "mesas", "plano", "sala", "terraza", "capacidad"],
+  },
+  {
     id: "space-editor",
     section: "Mi operación",
     title: "Editor de mapas V2",
@@ -226,12 +261,44 @@ const CONFIG_SEARCH_ITEMS: ConfigSearchItem[] = [
     keywords: ["modificador", "modificadores", "opcion", "opciones", "extra", "extras"],
   },
   {
+    id: "recipes",
+    section: "Mis productos",
+    title: "Escandallos",
+    description: "Costes, ingredientes y márgenes de los productos.",
+    href: CONFIG_ROUTES.recipes,
+    keywords: ["escandallo", "escandallos", "coste", "costes", "ingrediente", "ingredientes", "margen", "margenes"],
+  },
+  {
     id: "team",
     section: "Mi equipo",
     title: "Empleados y accesos",
     description: "Usuarios, empleados, roles, accesos e invitaciones.",
     href: CONFIG_ROUTES.team,
     keywords: ["equipo", "empleado", "empleados", "usuario", "usuarios", "rol", "roles", "acceso", "accesos", "invitacion", "invitaciones"],
+  },
+  {
+    id: "employee-operations",
+    section: "Mi equipo",
+    title: "RRHH operativo",
+    description: "Operativa de personal, jornadas y gestión del equipo.",
+    href: CONFIG_ROUTES.employeeOperations,
+    keywords: ["rrhh", "recursos", "humanos", "personal", "jornada", "jornadas", "empleados", "operaciones"],
+  },
+  {
+    id: "employee-clocking",
+    section: "Mi equipo",
+    title: "Terminal de fichaje",
+    description: "Fichaje seguro con QR rotatorio, ubicación y PIN.",
+    href: CONFIG_ROUTES.employeeClocking,
+    keywords: ["fichaje", "fichar", "qr", "pin", "terminal", "geolocalizacion", "ubicacion", "horario"],
+  },
+  {
+    id: "cash",
+    section: "Mi caja",
+    title: "Caja y conciliación",
+    description: "Turnos, apertura, movimientos, cierre ciego e historial de caja.",
+    href: CONFIG_ROUTES.cash,
+    keywords: ["caja", "turno", "turnos", "apertura", "cierre", "ciego", "conciliacion", "efectivo", "movimiento", "movimientos", "arqueo"],
   },
   {
     id: "printers",
@@ -384,7 +451,7 @@ export function ConfiguracionHubPageContent() {
           <label className="hostly-config-hub__search-wrap" htmlFor="config-hub-search">
             <span className="sr-only">Buscar configuración</span>
             <span className="hostly-config-hub__search-icon" aria-hidden>
-              <IconSearch />
+              <Search size={20} strokeWidth={2} />
             </span>
             <input
               id="config-hub-search"
@@ -497,21 +564,23 @@ export function ConfiguracionHubPageContent() {
             {HUB_CARDS.map((card) => {
               const content = (
                 <>
-                <span className="hostly-config-hub-card__icon">{card.icon}</span>
-                <span className="hostly-config-hub-card__body">
-                  <span className="hostly-config-hub-card__title">{card.title}</span>
-                  <span className="hostly-config-hub-card__description">{card.description}</span>
-                </span>
-                <span
-                  className={`hostly-config-hub-card__status hostly-config-hub-card__status--${card.statusTone}`}
-                >
-                  {card.status}
-                </span>
-                {card.href ? (
-                  <span className="hostly-config-hub-card__arrow" aria-hidden>
-                    <IconArrow />
+                  <span className="hostly-config-hub-card__icon" aria-hidden>
+                    <card.Icon size={22} strokeWidth={1.8} />
                   </span>
-                ) : null}
+                  <span className="hostly-config-hub-card__body">
+                    <span className="hostly-config-hub-card__title">{card.title}</span>
+                    <span className="hostly-config-hub-card__description">{card.description}</span>
+                  </span>
+                  <span
+                    className={`hostly-config-hub-card__status hostly-config-hub-card__status--${card.statusTone}`}
+                  >
+                    {card.status}
+                  </span>
+                  {card.href ? (
+                    <span className="hostly-config-hub-card__arrow" aria-hidden>
+                      <ChevronRight size={16} strokeWidth={1.9} />
+                    </span>
+                  ) : null}
                 </>
               );
               return card.href ? (
@@ -543,159 +612,5 @@ export function ConfiguracionHubPageContent() {
         </section>
       </div>
     </ModulePageShell>
-  );
-}
-
-function IconSearch({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-      <path d="M20 20l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function IconArrow({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M5 12h14M14 7l5 5-5 5"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function IconRestaurant({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M4 10V4h3v16H4M10 4v7M13 4v7M10 11h3v9M17 4h3v16h-3"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function IconOperation({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <rect x="3" y="8" width="8" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" />
-      <rect x="13" y="4" width="8" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M7 12h0M17 10h0M17 14h0" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function IconMenu({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M6 4h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V6a2 2 0 012-2z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M9 9h6M9 13h6M9 17h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function IconProducts({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M12 12l8-4.5M12 12v9M12 12L4 7.5" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
-function IconTeam({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="9" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8" />
-      <circle cx="17" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M3 20c0-3.3 2.7-5 6-5s6 1.7 6 5M14 20c0-2.2 1.8-3.5 4-3.5"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function IconCashier({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M7 10h4M7 14h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="16" cy="12" r="2" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
-function IconDevices({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <rect x="4" y="4" width="16" height="11" rx="2" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M8 20h8M12 15v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M8 9h8M8 12h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function IconAI({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M12 3l1.6 4.9L18.5 9l-4.9 1.6L12 15.5 10.4 10.6 5.5 9l4.9-1.6L12 3z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M19 14l.8 2.4L22 17l-2.2.6L19 20l-.8-2.4L16 17l2.2-.6L19 14z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function IconIntegrations({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="6" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.8" />
-      <circle cx="18" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.8" />
-      <circle cx="18" cy="18" r="2.5" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M8.5 11l7-3.5M8.5 13l7 3.5" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
-function IconAccount({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }
