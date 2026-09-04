@@ -21,6 +21,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Hardcoded Spanish UI audit
+        run: node scripts/audit-i18n-hardcoded.mjs
+
+      - name: Publish i18n hardcoded audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-hardcoded-audit
+          path: i18n-hardcoded-audit.json
+          retention-days: 14
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -79,16 +89,6 @@ jobs:
         with:
           name: interactive-controls-audit
           path: interactive-controls-audit.json
-          retention-days: 14
-
-      - name: Hardcoded Spanish UI audit
-        run: node scripts/audit-i18n-hardcoded.mjs
-
-      - name: Publish i18n hardcoded audit
-        uses: actions/upload-artifact@v4
-        with:
-          name: i18n-hardcoded-audit
-          path: i18n-hardcoded-audit.json
           retention-days: 14
 
       - name: Lint debt report
