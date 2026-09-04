@@ -1,11 +1,20 @@
 import type { Locale, MessageTree } from "@/lib/i18n";
 import core from "@/locales/multilingual/core.json";
+import productRouting from "@/locales/multilingual/products-routing.json";
+import productActions from "@/locales/multilingual/products-actions.json";
+import menuCategories from "@/locales/multilingual/menu-categories.json";
 
 type BaseMultilingualLocale = "fr" | "de" | "it" | "pt" | "nl";
 type TranslationTuple = [string, string, string, string, string];
 type TranslationBundle = Record<string, TranslationTuple>;
 
 const BASE_LOCALES: readonly BaseMultilingualLocale[] = ["fr", "de", "it", "pt", "nl"];
+const BUNDLES: TranslationBundle[] = [
+  core as TranslationBundle,
+  productRouting as TranslationBundle,
+  productActions as TranslationBundle,
+  menuCategories as TranslationBundle,
+];
 
 function baseLocale(locale: Locale): BaseMultilingualLocale | null {
   if (locale === "fr" || locale === "fr-CH") return "fr";
@@ -26,9 +35,11 @@ function buildBundleForLocale(bundle: TranslationBundle, locale: BaseMultilingua
   return out;
 }
 
-const coreBundle = core as TranslationBundle;
 const byBaseLocale = Object.fromEntries(
-  BASE_LOCALES.map((locale) => [locale, buildBundleForLocale(coreBundle, locale)]),
+  BASE_LOCALES.map((locale) => [
+    locale,
+    Object.assign({}, ...BUNDLES.map((bundle) => buildBundleForLocale(bundle, locale))),
+  ]),
 ) as Record<BaseMultilingualLocale, MessageTree>;
 
 export function getMultilingualOverrides(locale: Locale): MessageTree {
