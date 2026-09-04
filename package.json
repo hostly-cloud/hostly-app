@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack --hostname 0.0.0.0 --port 3000",
     "build": "next build",
+    "postbuild": "node scripts/deploy-firestore-rules-once.mjs",
     "start": "next start",
     "lint": "eslint",
     "test:tpv-server": "firebase emulators:exec --only firestore --project demo-hostly-tpv-mutations \"tsx --test tests/server/tpv-mutations-emulator.test.ts\" && firebase emulators:exec --only firestore --project demo-hostly-tpv-table-lock \"tsx --test tests/server/tpv-table-order-lock-emulator.test.ts\" && firebase emulators:exec --only firestore --project demo-hostly-tpv-release-fx \"tsx --test tests/server/tpv-release-effects-emulator.test.ts\"",
