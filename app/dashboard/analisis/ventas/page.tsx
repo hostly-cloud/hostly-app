@@ -11,6 +11,7 @@ import {
   HostlySurface,
 } from "@/components/ui/hostly";
 import { AnalyticsDateRangeFields } from "@/components/analysis/AnalyticsDateRangeFields";
+import { formatCurrencyEs } from "@/components/analysis/formatCurrencyEs";
 import { useAuth } from "@/components/auth/auth-context";
 import {
   countDistinctPaidSales,
@@ -120,23 +121,34 @@ function ymdEndMs(ymd: string): number | null {
   return endOfDayMs(d);
 }
 
+function formatYmdEs(ymd: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd ?? "").trim());
+  if (!m) return ymd;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
 function n(v: unknown): number {
   const num = typeof v === "number" ? v : Number(v);
   return Number.isFinite(num) ? num : 0;
 }
 
 function formatEur(amount: number): string {
-  return `${amount.toFixed(2)} €`;
+  return formatCurrencyEs(amount);
 }
 
 function formatTime(ms: number | undefined): string {
   if (!ms) return "—";
   const d = new Date(ms);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatNumberEU(value: unknown): string {
-  return Number(value || 0).toFixed(2).replace(".", ",");
+  const parsed = Number(value || 0);
+  const safeValue = Number.isFinite(parsed) && Math.abs(parsed) >= 0.005 ? parsed : 0;
+  return safeValue.toLocaleString("es-ES", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export default function AnalisisVentasPage() {
@@ -308,7 +320,7 @@ export default function AnalisisVentasPage() {
     if (dateFilter === "yesterday") return "Ayer";
     if (dateFilter === "range") {
       if (!dateFrom || !dateTo) return "Rango";
-      return `${new Date(dateFrom).toLocaleDateString("es-ES")} - ${new Date(dateTo).toLocaleDateString("es-ES")}`;
+      return `${formatYmdEs(dateFrom)} - ${formatYmdEs(dateTo)}`;
     }
     return "";
   };
@@ -543,23 +555,23 @@ export default function AnalisisVentasPage() {
           <HostlyKpiCard title="Ventas" value={formatEur(totals.totalVentas)} helper={dateLabel} />
           <HostlyKpiCard title="Propinas" value={formatEur(totals.totalPropinas)} />
           <HostlyKpiCard title="Total cobrado" value={formatEur(totals.totalCobrado)} />
-          <HostlyKpiCard title="Ticket medio" value={`${avgTicket.toFixed(2)} €`} />
+          <HostlyKpiCard title="Ticket medio" value={formatEur(avgTicket)} />
           <HostlyKpiCard title="Tickets" value={ticketsCount} />
         </div>
 
         <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics hostly-kpi-grid-unified--5">
-          <HostlyKpiCard title="Efectivo" value={`${byMethod.cash.toFixed(2)} €`} variant="soft" />
-          <HostlyKpiCard title="Tarjeta" value={`${byMethod.card.toFixed(2)} €`} variant="soft" />
-          <HostlyKpiCard title="Voucher" value={`${totalVoucher.toFixed(2)} €`} variant="soft" />
+          <HostlyKpiCard title="Efectivo" value={formatEur(byMethod.cash)} variant="soft" />
+          <HostlyKpiCard title="Tarjeta" value={formatEur(byMethod.card)} variant="soft" />
+          <HostlyKpiCard title="Voucher" value={formatEur(totalVoucher)} variant="soft" />
           <HostlyKpiCard
             title="Propinas"
-            value={`${byMethod.tips.toFixed(2)} €`}
+            value={formatEur(byMethod.tips)}
             variant="soft"
             accentColor="#16a34a"
           />
           <HostlyKpiCard
             title="Descuentos"
-            value={`-${formatNumberEU(totals.totalDiscounts)} €`}
+            value={formatEur(-totals.totalDiscounts)}
             variant="soft"
             accentColor="#dc2626"
           />
@@ -579,7 +591,7 @@ export default function AnalisisVentasPage() {
                     }}
                   />
                 </div>
-                <div className="w-14 shrink-0 text-right text-xs tabular-nums">{h.total.toFixed(0)}€</div>
+                <div className="w-14 shrink-0 text-right text-xs tabular-nums">{Math.round(h.total).toLocaleString("es-ES")}€</div>
               </div>
             ))}
           </div>
@@ -602,8 +614,8 @@ export default function AnalisisVentasPage() {
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="text-sm font-semibold tabular-nums">{w.total.toFixed(2)} €</div>
-                  <div className="text-xs text-[color:#16a34a] tabular-nums">{w.tips.toFixed(2)} € propinas</div>
+                  <div className="text-sm font-semibold tabular-nums">{formatEur(w.total)}</div>
+                  <div className="text-xs text-[color:#16a34a] tabular-nums">{formatEur(w.tips)} propinas</div>
                 </div>
               </div>
             ))}
@@ -691,15 +703,15 @@ export default function AnalisisVentasPage() {
           <div className="mb-2">{new Date().toLocaleString("es-ES")}</div>
 
           <div className="border-t border-b py-2 my-2">
-            <div>Ventas: {formatNumberEU(totals.totalVentas)} €</div>
-            <div>Descuentos: -{formatNumberEU(totals.totalDiscounts)} €</div>
-            <div>Cobrado: {formatNumberEU(totals.totalCobrado)} €</div>
-            <div>Propinas: {formatNumberEU(totals.totalPropinas)} €</div>
-            <div>Efectivo: {formatNumberEU(byMethod.cash)} €</div>
-            <div>Tarjeta: {formatNumberEU(byMethod.card)} €</div>
-            <div>Voucher: {formatNumberEU(totalVoucher)} €</div>
+            <div>Ventas: {formatEur(totals.totalVentas)}</div>
+            <div>Descuentos: {formatEur(-totals.totalDiscounts)}</div>
+            <div>Cobrado: {formatEur(totals.totalCobrado)}</div>
+            <div>Propinas: {formatEur(totals.totalPropinas)}</div>
+            <div>Efectivo: {formatEur(byMethod.cash)}</div>
+            <div>Tarjeta: {formatEur(byMethod.card)}</div>
+            <div>Voucher: {formatEur(totalVoucher)}</div>
             <div>Tickets: {ticketsCount}</div>
-            <div>Ticket medio: {formatNumberEU(avgTicket)} €</div>
+            <div>Ticket medio: {formatEur(avgTicket)}</div>
           </div>
         </div>
       </div>
