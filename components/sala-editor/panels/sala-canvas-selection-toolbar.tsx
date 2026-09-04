@@ -1,5 +1,7 @@
 "use client";
 
+import { HostlyButton } from "@/components/ui/hostly";
+
 export type SalaCanvasSelectionToolbarProps = {
   onDuplicate: () => void;
   onDelete: () => void;
@@ -11,48 +13,52 @@ export function SalaCanvasSelectionToolbar({
 }: SalaCanvasSelectionToolbarProps) {
   return (
     <div className="hostly-sala-canvas-toolbar" role="toolbar" aria-label="Acciones rápidas">
-      <button
-        type="button"
+      <HostlyButton
+        variant="icon"
+        size="compact"
+        iconOnlyLabel="Duplicar"
         className="hostly-sala-canvas-toolbar__btn"
         title="Duplicar"
-        aria-label="Duplicar"
         onClick={(event) => {
           event.stopPropagation();
           onDuplicate();
         }}
       >
         <span aria-hidden>⧉</span>
-      </button>
-      <button
-        type="button"
+      </HostlyButton>
+      <HostlyButton
+        variant="destructive"
+        size="compact"
+        aria-label="Eliminar"
         className="hostly-sala-canvas-toolbar__btn hostly-sala-canvas-toolbar__btn--danger"
         title="Eliminar"
-        aria-label="Eliminar"
         onClick={(event) => {
           event.stopPropagation();
           onDelete();
         }}
       >
         <span aria-hidden>⌫</span>
-      </button>
-      <button
-        type="button"
+      </HostlyButton>
+      <HostlyButton
+        variant="icon"
+        size="compact"
+        iconOnlyLabel="Bloquear — próximamente"
         className="hostly-sala-canvas-toolbar__btn"
         title="Bloquear — próximamente"
-        aria-label="Bloquear — próximamente"
         disabled
       >
         <span aria-hidden>🔒</span>
-      </button>
-      <button
-        type="button"
+      </HostlyButton>
+      <HostlyButton
+        variant="icon"
+        size="compact"
+        iconOnlyLabel="Más opciones — próximamente"
         className="hostly-sala-canvas-toolbar__btn"
         title="Más — próximamente"
-        aria-label="Más opciones — próximamente"
         disabled
       >
         <span aria-hidden>⋯</span>
-      </button>
+      </HostlyButton>
     </div>
   );
 }
