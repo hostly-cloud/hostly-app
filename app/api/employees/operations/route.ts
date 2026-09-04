@@ -5,13 +5,13 @@ import {
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import {
   applyClockAction,
-  correctTimeEntry,
   deleteEmployeeShift,
   EmployeeOperationsError,
   listEmployeeOperations,
   saveEmployeeShift,
   upsertEmployeeProfile,
 } from "@/lib/server/employees/employee-operations";
+import { correctTimeEntryWithAudit } from "@/lib/server/employees/time-entry-audit";
 import type { ClockAction } from "@/lib/employees/types";
 
 function jsonError(status: number, error: string) {
@@ -134,7 +134,7 @@ export async function POST(req: Request) {
     }
 
     if (action === "time.correct") {
-      await correctTimeEntry({
+      await correctTimeEntryWithAudit({
         db: auth.db,
         restaurantId: auth.restaurantId,
         actorUid: auth.uid,
