@@ -16,6 +16,7 @@ import { dbgRunTransaction, dbgUpdateDoc } from "@/lib/firestore/instrumentedWri
 import { purchaseOrderDocRef } from "@/lib/firestore/purchase-orders";
 import {
   applyCreatedStockMovements,
+  buildPurchaseReceiptMovementId,
   createStockMovementsForPurchaseReceipt,
 } from "@/lib/firestore/stock-movements";
 import {
@@ -30,9 +31,11 @@ import {
   computePurchaseReceiptTotalQuantity,
   normalizePurchaseReceiptDocument,
   PurchaseReceiptFromOrderError,
+  type PurchaseReceiptApplySummary,
   type PurchaseReceiptDocument,
   type PurchaseReceiptInputLine,
 } from "@/lib/purchases/purchase-receipt-types";
+import { applyPurchaseReceiptCosting } from "@/lib/inventory/purchase-receipt-costing";
 import { roundInventoryQuantity } from "@/lib/inventory/unit-conversions";
 import {
   buildActivityMetadata,
@@ -209,11 +212,8 @@ export type CreatePurchaseReceiptFromOrderResult = {
   purchaseOrderId: string;
   orderStatus: PurchaseOrderStatus;
   movementIds: string[];
-  applySummary: {
-    applied: number;
-    skipped: number;
-    failed: number;
-  };
+  applySummary: PurchaseReceiptApplySummary;
+  procurementSummary: PurchaseReceiptApplySummary;
 };
 
 export async function createPurchaseReceiptFromOrder(
@@ -316,11 +316,24 @@ export async function createPurchaseReceiptFromOrder(
     });
   }
 
-  const applySummary = {
+  const applySummary: PurchaseReceiptApplySummary = {
     applied: applyResult.applied,
     skipped: applyResult.skipped,
     failed: applyResult.failed,
   };
+
+  const procurementSummary = await applyPurchaseReceiptCosting({
+    restaurantId: rid,
+    purchaseReceiptId: txResult.receiptId,
+    lines: txResult.receiptLines.map((line) => ({
+      ...line,
+      movementId: buildPurchaseReceiptMovementId(
+        purchaseOrderId,
+        line.productId,
+        txResult.receiptId,
+      ),
+    })),
+  });
 
   try {
     await dbgUpdateDoc(
@@ -328,6 +341,7 @@ export async function createPurchaseReceiptFromOrder(
       {
         movementIds: movementResult.movementIds,
         applySummary,
+        procurementSummary,
       },
       {
         label: "purchaseReceipts:updateApplySummary",
@@ -336,7 +350,7 @@ export async function createPurchaseReceiptFromOrder(
       },
     );
   } catch {
-    // La recepción y el pedido ya están persistidos; el resumen de apply es informativo.
+    // La recepción y el pedido ya están persistidos; los resúmenes son informativos.
   }
 
   void createActivityLog({
@@ -353,6 +367,8 @@ export async function createPurchaseReceiptFromOrder(
       totalReceivedQuantity: computePurchaseReceiptTotalQuantity(txResult.receiptLines),
       movementCount: movementResult.movementIds.length,
       stockApplyFailed: applySummary.failed,
+      procurementApplied: procurementSummary.applied,
+      procurementFailed: procurementSummary.failed,
       route: "purchases",
     }),
   });
@@ -363,5 +379,6 @@ export async function createPurchaseReceiptFromOrder(
     orderStatus: txResult.orderStatus,
     movementIds: movementResult.movementIds,
     applySummary,
+    procurementSummary,
   };
 }

@@ -17,6 +17,10 @@ export type PurchaseReceiptLine = {
   orderedQuantity?: number;
   previouslyReceivedQuantity?: number;
   remainingAfterQuantity?: number;
+  /** Coste unitario esperado del pedido en el momento de la recepción. */
+  estimatedUnitCost?: number | null;
+  /** Proveedor resuelto para esta línea en el momento de la recepción. */
+  supplierName?: string | null;
 };
 
 export type PurchaseReceiptApplySummary = {
@@ -70,6 +74,7 @@ export function sanitizePurchaseReceiptLine(raw: unknown): PurchaseReceiptLine |
   const orderedQuantity = readFiniteNumber(rec.orderedQuantity);
   const previouslyReceivedQuantity = readFiniteNumber(rec.previouslyReceivedQuantity);
   const remainingAfterQuantity = readFiniteNumber(rec.remainingAfterQuantity);
+  const estimatedUnitCost = readFiniteNumber(rec.estimatedUnitCost);
 
   return {
     productId,
@@ -88,6 +93,11 @@ export function sanitizePurchaseReceiptLine(raw: unknown): PurchaseReceiptLine |
       remainingAfterQuantity != null && remainingAfterQuantity >= 0
         ? roundInventoryQuantity(remainingAfterQuantity)
         : undefined,
+    estimatedUnitCost:
+      estimatedUnitCost != null && estimatedUnitCost >= 0
+        ? roundInventoryQuantity(estimatedUnitCost)
+        : null,
+    supplierName: readTrimmedString(rec.supplierName, MAX_NAME_LENGTH),
   };
 }
 
@@ -177,6 +187,25 @@ export type PurchaseReceiptInputLine = {
   quantity: number;
 };
 
+function aggregateReceiptInputLines(
+  inputLines: PurchaseReceiptInputLine[],
+): PurchaseReceiptInputLine[] {
+  const quantityByProductId = new Map<string, number>();
+  for (const input of inputLines) {
+    const productId = input.productId.trim();
+    if (!productId) continue;
+    const qty = readFiniteNumber(input.quantity);
+    if (qty == null || qty <= 0) continue;
+    quantityByProductId.set(
+      productId,
+      roundInventoryQuantity((quantityByProductId.get(productId) ?? 0) + qty),
+    );
+  }
+  return [...quantityByProductId.entries()]
+    .slice(0, MAX_LINES)
+    .map(([productId, quantity]) => ({ productId, quantity }));
+}
+
 export function buildPurchaseReceiptLinesFromOrder(params: {
   order: PurchaseOrderDocument;
   inputLines: PurchaseReceiptInputLine[];
@@ -187,22 +216,23 @@ export function buildPurchaseReceiptLinesFromOrder(params: {
   }
 
   const receiptLines: PurchaseReceiptLine[] = [];
+  const aggregatedInputs = aggregateReceiptInputLines(params.inputLines);
 
-  for (const input of params.inputLines) {
-    if (receiptLines.length >= MAX_LINES) break;
-    const productId = input.productId.trim();
-    if (!productId) continue;
-
+  for (const input of aggregatedInputs) {
+    const productId = input.productId;
     const orderLine = orderLineByProductId.get(productId);
-    if (!orderLine) continue;
-
-    const qty = readFiniteNumber(input.quantity);
-    if (qty == null || qty <= 0) continue;
+    if (!orderLine) {
+      throw new PurchaseReceiptFromOrderError("unknown_product");
+    }
 
     const remaining = getPurchaseOrderLineRemainingQuantity(orderLine);
     if (remaining <= 0) continue;
 
-    const quantity = roundInventoryQuantity(Math.min(qty, remaining));
+    if (input.quantity > remaining) {
+      throw new PurchaseReceiptFromOrderError("quantity_exceeds_remaining");
+    }
+
+    const quantity = roundInventoryQuantity(input.quantity);
     if (quantity <= 0) continue;
 
     const previouslyReceived = orderLine.receivedQuantity ?? 0;
@@ -217,6 +247,9 @@ export function buildPurchaseReceiptLinesFromOrder(params: {
       remainingAfterQuantity: roundInventoryQuantity(
         Math.max(0, orderLine.quantity - previouslyReceived - quantity),
       ),
+      estimatedUnitCost: orderLine.estimatedUnitCost ?? null,
+      supplierName:
+        orderLine.supplierName?.trim() || params.order.supplierName?.trim() || null,
     });
   }
 
