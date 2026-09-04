@@ -1,3 +1,4 @@
+import { HostlyButton } from "@/components/ui/hostly";
 import type { ComandaItem, PastOrder } from "@/types/comanda";
 
 type MesaOrderHistoryProps = {
@@ -44,8 +45,9 @@ export function MesaOrderHistory({
                   {getOrderItemsCount(o.items)} productos
                 </div>
               </div>
-              <button
-                type="button"
+              <HostlyButton
+                variant="secondary"
+                size="compact"
                 disabled={isSentToKitchen}
                 onClick={() => onRepeatOrder(o.items)}
                 style={{
@@ -60,11 +62,10 @@ export function MesaOrderHistory({
                 }}
               >
                 Repetir
-              </button>
+              </HostlyButton>
             </div>
           ))
       )}
     </div>
   );
 }
-
