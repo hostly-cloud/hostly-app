@@ -6,15 +6,15 @@ import {
   attachCustomerToOrder,
   detachCustomerFromOrder,
   getCustomerCrmSnapshotV2,
-  redeemLoyaltyReward,
   saveLoyaltyConfig,
 } from "@/lib/server/customers/customer-crm-v2";
+import { redeemAvailableLoyaltyReward } from "@/lib/server/customers/customer-loyalty-redeem";
 
 function jsonError(status: number, error: string) { return NextResponse.json({ ok: false, error }, { status }); }
 function statusForError(code: string): number {
   if (["CUSTOMER_CRM_ACCESS_REQUIRED","CUSTOMER_CRM_EDIT_REQUIRED","CUSTOMER_VIP_MANAGE_REQUIRED","CUSTOMER_LOYALTY_MANAGE_REQUIRED","ORDER_TENANT_MISMATCH"].includes(code)) return 403;
   if (["CUSTOMER_NOT_FOUND","ORDER_NOT_FOUND","ACTIVE_ORDER_NOT_FOUND"].includes(code)) return 404;
-  if (["MULTIPLE_ACTIVE_ORDERS","ORDER_NOT_ACTIVE","ORDER_TABLE_MISMATCH"].includes(code)) return 409;
+  if (["MULTIPLE_ACTIVE_ORDERS","ORDER_NOT_ACTIVE","ORDER_TABLE_MISMATCH","LOYALTY_REWARD_NOT_AVAILABLE"].includes(code)) return 409;
   if (["CUSTOMER_NAME_REQUIRED","CUSTOMER_IDENTITY_REQUIRED","INVALID_BIRTHDAY","CUSTOMER_AND_TABLE_REQUIRED","INVALID_ACTION"].includes(code)) return 400;
   return 500;
 }
@@ -40,8 +40,8 @@ export async function POST(req: Request) {
       const consent = body.marketingConsent === "granted" || body.marketingConsent === "denied" ? body.marketingConsent : "unknown";
       await auth.db.collection("restaurants").doc(auth.restaurantId).collection("customerProfiles").doc(result.profileId).set({
         marketingConsent: consent,
-        marketingConsentAt: body.marketingConsent === undefined ? FieldValue.delete() : FieldValue.serverTimestamp(),
-        marketingConsentSource: body.marketingConsentSource === "customer" ? "customer" : "staff_recorded",
+        marketingConsentAt: consent === "unknown" ? FieldValue.delete() : FieldValue.serverTimestamp(),
+        marketingConsentSource: consent === "unknown" ? FieldValue.delete() : body.marketingConsentSource === "customer" ? "customer" : "staff_recorded",
       }, { merge: true });
       return NextResponse.json({ ok: true, ...result });
     }
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, loyalty: result });
     }
     if (action === "loyalty.redeem") {
-      const result = await redeemLoyaltyReward({ db: auth.db, restaurantId: auth.restaurantId, actorUid: auth.uid, actorRole: auth.role, profileId: String(body.profileId ?? "") });
+      const result = await redeemAvailableLoyaltyReward({ db: auth.db, restaurantId: auth.restaurantId, actorUid: auth.uid, actorRole: auth.role, profileId: String(body.profileId ?? "") });
       return NextResponse.json({ ok: true, ...result });
     }
     return jsonError(400,"INVALID_ACTION");
