@@ -1,3 +1,4 @@
+import { HostlyButton } from "@/components/ui/hostly";
 import type { CatalogProduct, ComandaItem } from "@/types/comanda";
 
 type MesaProductGridProps = {
@@ -57,9 +58,11 @@ export function MesaProductGrid({
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         {categories.map((c) => (
-          <button
+          <HostlyButton
             key={c}
-            type="button"
+            variant="chip"
+            size="compact"
+            active={selectedCategory === c}
             onClick={() => onSelectedCategoryChange(c)}
             style={{
               padding: "6px 10px",
@@ -70,7 +73,7 @@ export function MesaProductGrid({
             }}
           >
             {c} · {getCategoryCount(c)}
-          </button>
+          </HostlyButton>
         ))}
       </div>
 
@@ -100,9 +103,10 @@ export function MesaProductGrid({
             const itemInOrder = items.find((item) => item.id === p.id);
 
             return (
-              <button
+              <HostlyButton
                 key={p.id}
-                type="button"
+                variant="secondary"
+                size="touch"
                 onClick={() => onAddItem(p)}
                 disabled={isOrderLocked}
                 style={{
@@ -159,7 +163,7 @@ export function MesaProductGrid({
                     Añadido
                   </div>
                 )}
-              </button>
+              </HostlyButton>
             );
           })
         )}
@@ -167,4 +171,3 @@ export function MesaProductGrid({
     </div>
   );
 }
-
