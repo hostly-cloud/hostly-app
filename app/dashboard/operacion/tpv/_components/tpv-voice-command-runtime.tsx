@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import { useAuth } from "@/components/auth/auth-context";
+import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
+import { resolveTpvMenuGroup } from "@/lib/carta/tpv-menu-group";
+import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { listTpvV2TableControllers } from "@/lib/tpv/v2-table-controller-registry";
 import {
+  normalizeTpvVoiceText,
   parseTpvVoiceCommand,
   scoreTpvVoiceCandidate,
   TPV_VOICE_COMMAND_EVENT,
@@ -10,7 +15,9 @@ import {
   type TpvVoiceCommandDetail,
   type TpvVoiceFeedbackDetail,
   type TpvVoiceFeedbackTone,
+  type TpvVoiceOrderItem,
 } from "@/lib/tpv/voice-command";
+import type { Product } from "@/types/product";
 
 type Candidate<T> = {
   value: T;
@@ -20,6 +27,8 @@ type Candidate<T> = {
 
 const MATCH_MIN_SCORE = 0.72;
 const MATCH_AMBIGUITY_GAP = 0.08;
+const UI_WAIT_STEP_MS = 55;
+const UI_WAIT_TIMEOUT_MS = 2400;
 
 function emitFeedback(message: string, tone: TpvVoiceFeedbackTone = "info") {
   const detail: TpvVoiceFeedbackDetail = { message, tone };
@@ -56,6 +65,20 @@ function isVisible(element: HTMLElement): boolean {
   return element.getClientRects().length > 0;
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function waitFor<T>(factory: () => T | null, timeoutMs = UI_WAIT_TIMEOUT_MS): Promise<T | null> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const value = factory();
+    if (value != null) return value;
+    await wait(UI_WAIT_STEP_MS);
+  }
+  return null;
+}
+
 function visibleProductButtons(): Array<{ value: HTMLButtonElement; label: string }> {
   return Array.from(
     document.querySelectorAll<HTMLButtonElement>("button.carta-product-card"),
@@ -69,10 +92,14 @@ function visibleProductButtons(): Array<{ value: HTMLButtonElement; label: strin
     .filter((candidate) => candidate.label.length > 0);
 }
 
-function clickProductWithQuantity(button: HTMLButtonElement, quantity: number): boolean {
+async function clickProductWithQuantity(
+  button: HTMLButtonElement,
+  quantity: number,
+): Promise<boolean> {
   const safeQuantity = Math.max(1, Math.min(50, Math.trunc(quantity)));
   if (safeQuantity === 1) {
     button.click();
+    await wait(120);
     return true;
   }
 
@@ -82,44 +109,41 @@ function clickProductWithQuantity(button: HTMLButtonElement, quantity: number): 
   if (!trigger || trigger.disabled || !isVisible(trigger)) return false;
 
   trigger.click();
-  window.setTimeout(() => {
-    const clearButton = document.querySelector<HTMLButtonElement>(
+  const clearButton = await waitFor(() =>
+    document.querySelector<HTMLButtonElement>(
       "#carta-tpv-quantity-pad [aria-label='Restablecer cantidad a una unidad']",
+    ),
+  );
+  if (!clearButton) return false;
+  clearButton.click();
+
+  for (const digit of String(safeQuantity).split("")) {
+    const digitButton = document.querySelector<HTMLButtonElement>(
+      `#carta-tpv-quantity-pad [aria-label='Cantidad ${digit}']`,
     );
-    if (!clearButton) {
-      emitFeedback("No he podido preparar la cantidad indicada.", "error");
-      return;
-    }
-    clearButton.click();
+    if (!digitButton) return false;
+    digitButton.click();
+    await wait(45);
+  }
 
-    const digits = String(safeQuantity).split("");
-    digits.forEach((digit, index) => {
-      window.setTimeout(() => {
-        const digitButton = document.querySelector<HTMLButtonElement>(
-          `#carta-tpv-quantity-pad [aria-label='Cantidad ${digit}']`,
-        );
-        if (!digitButton) {
-          emitFeedback("No he podido preparar la cantidad indicada.", "error");
-          return;
-        }
-        digitButton.click();
-      }, 45 * (index + 1));
-    });
-
-    window.setTimeout(() => button.click(), 45 * (digits.length + 2));
-  }, 45);
-
+  await wait(70);
+  button.click();
+  await wait(140);
   return true;
 }
 
-function executeOpenTable(query: string) {
+function findTable(query: string) {
   const entries = listTpvV2TableControllers();
   const candidates = entries.flatMap((entry) => [
     { value: entry, label: entry.tableLabel },
     { value: entry, label: entry.tableId },
     { value: entry, label: `mesa ${entry.tableLabel}` },
   ]);
-  const match = chooseCandidate(query, candidates);
+  return chooseCandidate(query, candidates);
+}
+
+function executeOpenTable(query: string) {
+  const match = findTable(query);
   if (match === "ambiguous") {
     emitFeedback("Hay varias mesas parecidas. Di el número o nombre completo de la mesa.", "error");
     return;
@@ -132,7 +156,7 @@ function executeOpenTable(query: string) {
   emitFeedback(`Abriendo ${match.value.tableLabel}.`, "success");
 }
 
-function executeAddProduct(query: string, quantity: number) {
+async function executeAddProduct(query: string, quantity: number) {
   const match = chooseCandidate(query, visibleProductButtons());
   if (match === "ambiguous") {
     emitFeedback("Hay varios productos parecidos. Di el nombre completo del producto.", "error");
@@ -142,28 +166,167 @@ function executeAddProduct(query: string, quantity: number) {
     emitFeedback(`No veo el producto “${query}” en la categoría actual.`, "error");
     return;
   }
-  if (!clickProductWithQuantity(match.value, quantity)) {
+  if (!(await clickProductWithQuantity(match.value, quantity))) {
     emitFeedback("No he podido preparar la cantidad indicada.", "error");
     return;
   }
   emitFeedback(
     quantity === 1
-      ? `Añadiendo ${match.label}.`
-      : `Añadiendo ${quantity} unidades de ${match.label}.`,
+      ? `Añadido ${match.label}.`
+      : `Añadidas ${quantity} unidades de ${match.label}.`,
     "success",
   );
 }
 
-function executeSendOrder() {
+function chooseCatalogProduct(query: string, products: Product[]) {
+  return chooseCandidate(
+    query,
+    products.map((product) => ({ value: product, label: product.nombre })),
+  );
+}
+
+async function selectProductCategory(product: Product): Promise<boolean> {
+  const group = resolveTpvMenuGroup(product);
+  const groupLabel = group === "bebida" ? "bebida" : "comida";
+  const groupTab = Array.from(
+    document.querySelectorAll<HTMLButtonElement>("button[role='tab']"),
+  ).find(
+    (button) =>
+      !button.disabled &&
+      isVisible(button) &&
+      normalizeTpvVoiceText(button.textContent ?? "") === groupLabel,
+  );
+  if (groupTab && groupTab.getAttribute("aria-selected") !== "true") {
+    groupTab.click();
+    await wait(100);
+  }
+
+  const categoryName = product.categoria?.trim();
+  if (categoryName) {
+    const categoryButton = await waitFor(() =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>("button.carta-cat-btn")).find(
+        (button) =>
+          !button.disabled &&
+          isVisible(button) &&
+          normalizeTpvVoiceText(button.textContent ?? "") ===
+            normalizeTpvVoiceText(categoryName),
+      ) ?? null,
+    );
+    if (categoryButton && !categoryButton.classList.contains("carta-cat-btn--active")) {
+      categoryButton.click();
+      await wait(100);
+    }
+  }
+
+  return Boolean(
+    await waitFor(() =>
+      visibleProductButtons().find(
+        ({ label }) =>
+          normalizeTpvVoiceText(label) === normalizeTpvVoiceText(product.nombre),
+      )?.value ?? null,
+    ),
+  );
+}
+
+function modifierDialogOpen(): boolean {
+  return Array.from(document.querySelectorAll<HTMLElement>("[role='dialog']")).some((dialog) => {
+    const label = normalizeTpvVoiceText(dialog.getAttribute("aria-label") ?? "");
+    return isVisible(dialog) && label.startsWith("opciones de ");
+  });
+}
+
+async function addCatalogProduct(product: Product, quantity: number): Promise<"added" | "modifier" | "failed"> {
+  if (!(await selectProductCategory(product))) return "failed";
+  const button = visibleProductButtons().find(
+    ({ label }) => normalizeTpvVoiceText(label) === normalizeTpvVoiceText(product.nombre),
+  )?.value;
+  if (!button) return "failed";
+  if (!(await clickProductWithQuantity(button, quantity))) return "failed";
+  if (modifierDialogOpen()) return "modifier";
+  return "added";
+}
+
+function executeSendOrder(): boolean {
   const button = document.querySelector<HTMLButtonElement>(
     ".carta-tpv-payment-dock .carta-comanda-button",
   );
   if (!button || button.disabled || !isVisible(button)) {
     emitFeedback("No hay líneas de comanda listas para enviar.", "error");
-    return;
+    return false;
   }
   button.click();
   emitFeedback("Comanda enviada.", "success");
+  return true;
+}
+
+async function executeProductsToTable(
+  tableQuery: string,
+  items: TpvVoiceOrderItem[],
+  products: Product[],
+) {
+  if (products.length === 0) {
+    emitFeedback("La carta todavía no está disponible. Prueba de nuevo en unos segundos.", "error");
+    return;
+  }
+
+  const tableMatch = findTable(tableQuery);
+  if (tableMatch === "ambiguous") {
+    emitFeedback("Hay varias mesas parecidas. Di el número o nombre completo de la mesa.", "error");
+    return;
+  }
+  if (!tableMatch) {
+    emitFeedback(`No encuentro la mesa “${tableQuery}” en el plano actual.`, "error");
+    return;
+  }
+
+  const resolvedItems: Array<{ product: Product; quantity: number }> = [];
+  for (const item of items) {
+    const productMatch = chooseCatalogProduct(item.productQuery, products);
+    if (productMatch === "ambiguous") {
+      emitFeedback(`Hay varios productos parecidos a “${item.productQuery}”. Di el nombre completo.`, "error");
+      return;
+    }
+    if (!productMatch) {
+      emitFeedback(`No encuentro “${item.productQuery}” en la carta activa.`, "error");
+      return;
+    }
+    resolvedItems.push({ product: productMatch.value, quantity: item.quantity });
+  }
+
+  tableMatch.value.controller.onClick();
+  emitFeedback(`Abriendo ${tableMatch.value.tableLabel} y preparando el pedido…`, "info");
+
+  const ready = await waitFor(() => {
+    const hasProducts = document.querySelector("button.carta-product-card");
+    const hasComanda = document.querySelector(".carta-tpv-payment-dock");
+    return hasProducts || hasComanda ? true : null;
+  });
+  if (!ready) {
+    emitFeedback("La mesa se abrió, pero el TPV no terminó de cargar el pedido.", "error");
+    return;
+  }
+
+  for (const { product, quantity } of resolvedItems) {
+    const result = await addCatalogProduct(product, quantity);
+    if (result === "failed") {
+      emitFeedback(`No he podido añadir ${product.nombre}.`, "error");
+      return;
+    }
+    if (result === "modifier") {
+      emitFeedback(
+        `${product.nombre} necesita opciones. Elige el formato o modificador; después di “enviar comanda”.`,
+        "info",
+      );
+      return;
+    }
+  }
+
+  await wait(220);
+  if (!executeSendOrder()) return;
+  const summary = resolvedItems
+    .map(({ product, quantity }) => `${quantity} × ${product.nombre}`)
+    .join(", ");
+  emitFeedback(`${summary} · ${tableMatch.value.tableLabel} · enviado.`, "success");
 }
 
 function executeMarchCourse(course: "primeros" | "segundos" | "postres") {
@@ -232,6 +395,12 @@ function executeCharge() {
 }
 
 export function TpvVoiceCommandRuntime() {
+  const { restaurantId } = useAuth();
+  const operationalRestaurantId = resolveOperationalRestaurantId(restaurantId ?? null);
+  const operationalCatalog = useCentralProductsForCarta(operationalRestaurantId, {
+    scope: "tpv_menu",
+  });
+
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<TpvVoiceCommandDetail>).detail;
@@ -247,7 +416,14 @@ export function TpvVoiceCommandRuntime() {
           executeBackToMap();
           break;
         case "add_product":
-          executeAddProduct(command.productQuery, command.quantity);
+          void executeAddProduct(command.productQuery, command.quantity);
+          break;
+        case "add_products_to_table":
+          void executeProductsToTable(
+            command.tableQuery,
+            command.items,
+            operationalCatalog.products,
+          );
           break;
         case "send_order":
           executeSendOrder();
@@ -266,7 +442,7 @@ export function TpvVoiceCommandRuntime() {
           break;
         default:
           emitFeedback(
-            `No entiendo “${transcript}”. Prueba con “mesa 4”, “dos Coca-Colas”, “enviar comanda” o “volver al mapa”.`,
+            `No entiendo “${transcript}”. Prueba con “un carpaccio a mesa 3”, “dos Coca-Colas”, “enviar comanda” o “volver al mapa”.`,
             "error",
           );
       }
@@ -274,7 +450,7 @@ export function TpvVoiceCommandRuntime() {
 
     window.addEventListener(TPV_VOICE_COMMAND_EVENT, handler);
     return () => window.removeEventListener(TPV_VOICE_COMMAND_EVENT, handler);
-  }, []);
+  }, [operationalCatalog.products]);
 
   return null;
 }
