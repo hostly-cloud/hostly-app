@@ -138,8 +138,25 @@ export function extractMarketingLeadClientIp(headers: Headers) {
   return "unknown";
 }
 
+export function resolveMarketingLeadAbuseSecret(
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  const explicit = env.HOSTLY_MARKETING_RATE_LIMIT_SECRET?.trim();
+  if (explicit) return explicit;
+
+  const privateKey = env.FIREBASE_PRIVATE_KEY?.trim();
+  const projectId = env.FIREBASE_PROJECT_ID?.trim();
+  if (!privateKey || !projectId) return null;
+
+  return createHash("sha256")
+    .update(`hostly:marketing-leads:v1:${projectId}:${privateKey}`)
+    .digest("hex");
+}
+
 export function hashMarketingLeadClientKey(value: string, secret: string) {
-  return createHmac("sha256", secret).update(value.trim().toLowerCase()).digest("hex");
+  return createHmac("sha256", secret)
+    .update(value.trim().toLowerCase())
+    .digest("hex");
 }
 
 export function fingerprintMarketingLeadSubmission(input: {
