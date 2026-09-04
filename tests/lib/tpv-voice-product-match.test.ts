@@ -32,16 +32,36 @@ test("encuentra una caña aunque la transcripción pierda la ñ", () => {
   assert.equal(match.product.id, "draft");
 });
 
-test("normaliza errores fonéticos comunes de caña", () => {
-  for (const query of ["kana", "canna", "cania", "cagna", "cano", "caños"]) {
+test("generaliza deformaciones fonéticas sin depender de una tabla por producto", () => {
+  const cases: Array<[string, Product]> = [
+    ["canos", product("draft", "Caña", "Cervezas")],
+    ["cocacora", product("coke", "Coca-Cola", "Refrescos")],
+    ["carpasio", product("carpaccio", "Carpaccio de ternera", "Entrantes")],
+    ["ruinar", product("ruinart", "Ruinart", "Champagne")],
+    ["agua minera", product("water", "Agua mineral", "Aguas")],
+  ];
+
+  for (const [query, expected] of cases) {
     const match = requireMatch(
       chooseTpvVoiceProductCandidate(query, [
-        product("draft", "Caña", "Cervezas"),
+        expected,
+        product("other", "Tarta de queso", "Postres"),
       ]),
       query,
     );
-    assert.equal(match.product.id, "draft", query);
+    assert.equal(match.product.id, expected.id, query);
   }
+});
+
+test("tolera una palabra sobrante si el resto apunta claramente al producto", () => {
+  const match = requireMatch(
+    chooseTpvVoiceProductCandidate("quiero cocacora", [
+      product("coke", "Coca-Cola", "Refrescos"),
+      product("sprite", "Sprite", "Refrescos"),
+    ]),
+  );
+
+  assert.equal(match.product.id, "coke");
 });
 
 test("usa vocabulario de servicio para relacionar caña con cerveza", () => {
@@ -54,7 +74,7 @@ test("usa vocabulario de servicio para relacionar caña con cerveza", () => {
   assert.equal(match.product.id, "draft");
 });
 
-test("no elige a ciegas si caña puede significar varias cervezas", () => {
+test("no elige a ciegas si el contexto puede corresponder a varios productos", () => {
   const match = chooseTpvVoiceProductCandidate("cana", [
     product("lager", "Lager de barril", "Cervezas"),
     product("ipa", "IPA de barril", "Cervezas"),
@@ -63,12 +83,11 @@ test("no elige a ciegas si caña puede significar varias cervezas", () => {
   assert.equal(match, "ambiguous");
 });
 
-test("tolera pequeñas desviaciones de pronunciación con confirmación posterior", () => {
-  const match = requireMatch(
-    chooseTpvVoiceProductCandidate("cocacola", [
-      product("coke", "Coca-Cola", "Refrescos"),
-    ]),
-  );
+test("no convierte una frase muy lejana en un producto solo por forzar coincidencia", () => {
+  const match = chooseTpvVoiceProductCandidate("servilletas limpias", [
+    product("coke", "Coca-Cola", "Refrescos"),
+    product("steak", "Solomillo", "Carnes"),
+  ]);
 
-  assert.equal(match.product.id, "coke");
+  assert.equal(match, null);
 });
