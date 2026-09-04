@@ -5,6 +5,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import { resolveTpvMenuGroup } from "@/lib/carta/tpv-menu-group";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
+import { chooseTpvVoiceProductCandidate } from "@/lib/tpv/voice-product-match";
 import { chooseTpvVoiceTableCandidate } from "@/lib/tpv/voice-table-match";
 import { listTpvV2TableControllers } from "@/lib/tpv/v2-table-controller-registry";
 import {
@@ -26,6 +27,29 @@ type Candidate<T> = {
   score: number;
 };
 
+type VoicePreviewRequestDetail = {
+  transcript: string;
+  source: "tpv";
+};
+
+type VoicePreviewDetail = {
+  transcript: string;
+  summary: string;
+  canConfirm: boolean;
+  tone: TpvVoiceFeedbackTone;
+};
+
+type ResolvedOrderItem = {
+  product: Product;
+  quantity: number;
+};
+
+type ResolveOrderItemsResult =
+  | { ok: true; resolvedItems: ResolvedOrderItem[] }
+  | { ok: false; error: string };
+
+const TPV_VOICE_PREVIEW_REQUEST_EVENT = "hostly:tpv-voice-preview-request";
+const TPV_VOICE_PREVIEW_EVENT = "hostly:tpv-voice-preview";
 const MATCH_MIN_SCORE = 0.72;
 const MATCH_AMBIGUITY_GAP = 0.08;
 const UI_WAIT_STEP_MS = 55;
@@ -35,6 +59,12 @@ function emitFeedback(message: string, tone: TpvVoiceFeedbackTone = "info") {
   const detail: TpvVoiceFeedbackDetail = { message, tone };
   window.dispatchEvent(
     new CustomEvent<TpvVoiceFeedbackDetail>(TPV_VOICE_FEEDBACK_EVENT, { detail }),
+  );
+}
+
+function emitPreview(detail: VoicePreviewDetail) {
+  window.dispatchEvent(
+    new CustomEvent<VoicePreviewDetail>(TPV_VOICE_PREVIEW_EVENT, { detail }),
   );
 }
 
@@ -145,6 +175,10 @@ function findTable(query: string) {
   );
 }
 
+function chooseCatalogProduct(query: string, products: Product[]) {
+  return chooseTpvVoiceProductCandidate(query, products);
+}
+
 function executeOpenTable(query: string) {
   const match = findTable(query);
   if (match === "ambiguous") {
@@ -157,35 +191,6 @@ function executeOpenTable(query: string) {
   }
   match.value.controller.onClick();
   emitFeedback(`Abriendo ${match.value.tableLabel}.`, "success");
-}
-
-async function executeAddProduct(query: string, quantity: number) {
-  const match = chooseCandidate(query, visibleProductButtons());
-  if (match === "ambiguous") {
-    emitFeedback("Hay varios productos parecidos. Di el nombre completo del producto.", "error");
-    return;
-  }
-  if (!match) {
-    emitFeedback(`No veo el producto “${query}” en la categoría actual.`, "error");
-    return;
-  }
-  if (!(await clickProductWithQuantity(match.value, quantity))) {
-    emitFeedback("No he podido preparar la cantidad indicada.", "error");
-    return;
-  }
-  emitFeedback(
-    quantity === 1
-      ? `Añadido ${match.label}.`
-      : `Añadidas ${quantity} unidades de ${match.label}.`,
-    "success",
-  );
-}
-
-function chooseCatalogProduct(query: string, products: Product[]) {
-  return chooseCandidate(
-    query,
-    products.map((product) => ({ value: product, label: product.nombre })),
-  );
 }
 
 async function selectProductCategory(product: Product): Promise<boolean> {
@@ -249,6 +254,36 @@ async function addCatalogProduct(product: Product, quantity: number): Promise<"a
   return "added";
 }
 
+async function executeAddProduct(query: string, quantity: number, products: Product[]) {
+  const match = chooseCatalogProduct(query, products);
+  if (match === "ambiguous") {
+    emitFeedback("Hay varios productos parecidos. Di el nombre completo del producto.", "error");
+    return;
+  }
+  if (!match) {
+    emitFeedback(`No encuentro “${query}” en la carta activa.`, "error");
+    return;
+  }
+  const result = await addCatalogProduct(match.product, quantity);
+  if (result === "failed") {
+    emitFeedback(`No he podido añadir ${match.product.nombre}.`, "error");
+    return;
+  }
+  if (result === "modifier") {
+    emitFeedback(
+      `${match.product.nombre} necesita opciones. Elige el formato o modificador; después di “enviar comanda”.`,
+      "info",
+    );
+    return;
+  }
+  emitFeedback(
+    quantity === 1
+      ? `Añadido ${match.product.nombre}.`
+      : `Añadidas ${quantity} unidades de ${match.product.nombre}.`,
+    "success",
+  );
+}
+
 function executeSendOrder(): boolean {
   const button = document.querySelector<HTMLButtonElement>(
     ".carta-tpv-payment-dock .carta-comanda-button",
@@ -260,6 +295,30 @@ function executeSendOrder(): boolean {
   button.click();
   emitFeedback("Comanda enviada.", "success");
   return true;
+}
+
+function resolveOrderItems(
+  items: TpvVoiceOrderItem[],
+  products: Product[],
+): ResolveOrderItemsResult {
+  const resolvedItems: ResolvedOrderItem[] = [];
+  for (const item of items) {
+    const productMatch = chooseCatalogProduct(item.productQuery, products);
+    if (productMatch === "ambiguous") {
+      return {
+        ok: false,
+        error: `Hay varios productos que podrían ser “${item.productQuery}”. Di algo más concreto.`,
+      };
+    }
+    if (!productMatch) {
+      return {
+        ok: false,
+        error: `No encuentro “${item.productQuery}” en la carta activa.`,
+      };
+    }
+    resolvedItems.push({ product: productMatch.product, quantity: item.quantity });
+  }
+  return { ok: true, resolvedItems };
 }
 
 async function executeProductsToTable(
@@ -282,18 +341,10 @@ async function executeProductsToTable(
     return;
   }
 
-  const resolvedItems: Array<{ product: Product; quantity: number }> = [];
-  for (const item of items) {
-    const productMatch = chooseCatalogProduct(item.productQuery, products);
-    if (productMatch === "ambiguous") {
-      emitFeedback(`Hay varios productos parecidos a “${item.productQuery}”. Di el nombre completo.`, "error");
-      return;
-    }
-    if (!productMatch) {
-      emitFeedback(`No encuentro “${item.productQuery}” en la carta activa.`, "error");
-      return;
-    }
-    resolvedItems.push({ product: productMatch.value, quantity: item.quantity });
+  const resolved = resolveOrderItems(items, products);
+  if (!resolved.ok) {
+    emitFeedback(resolved.error, "error");
+    return;
   }
 
   tableMatch.value.controller.onClick();
@@ -309,7 +360,7 @@ async function executeProductsToTable(
     return;
   }
 
-  for (const { product, quantity } of resolvedItems) {
+  for (const { product, quantity } of resolved.resolvedItems) {
     const result = await addCatalogProduct(product, quantity);
     if (result === "failed") {
       emitFeedback(`No he podido añadir ${product.nombre}.`, "error");
@@ -326,7 +377,7 @@ async function executeProductsToTable(
 
   await wait(220);
   if (!executeSendOrder()) return;
-  const summary = resolvedItems
+  const summary = resolved.resolvedItems
     .map(({ product, quantity }) => `${quantity} × ${product.nombre}`)
     .join(", ");
   emitFeedback(`${summary} · ${tableMatch.value.tableLabel} · enviado.`, "success");
@@ -397,6 +448,126 @@ function executeCharge() {
   emitFeedback("Cobro abierto. Confirma el método y el importe en pantalla.", "info");
 }
 
+function previewTranscript(transcript: string, products: Product[]) {
+  const command = parseTpvVoiceCommand(transcript);
+
+  switch (command.type) {
+    case "add_products_to_table": {
+      const tableMatch = findTable(command.tableQuery);
+      if (tableMatch === "ambiguous") {
+        emitPreview({
+          transcript,
+          summary: "No estoy seguro de qué mesa has dicho. Di el número o nombre completo.",
+          canConfirm: false,
+          tone: "error",
+        });
+        return;
+      }
+      if (!tableMatch) {
+        emitPreview({
+          transcript,
+          summary: `No encuentro la mesa “${command.tableQuery}” en el plano actual.`,
+          canConfirm: false,
+          tone: "error",
+        });
+        return;
+      }
+
+      const resolved = resolveOrderItems(command.items, products);
+      if (!resolved.ok) {
+        emitPreview({ transcript, summary: resolved.error, canConfirm: false, tone: "error" });
+        return;
+      }
+
+      const orderSummary = resolved.resolvedItems
+        .map(({ product, quantity }) => `${quantity} × ${product.nombre}`)
+        .join(", ");
+      emitPreview({
+        transcript,
+        summary: `${orderSummary} → ${tableMatch.value.tableLabel}. Al pulsar OK se añadirá y enviará la comanda.`,
+        canConfirm: true,
+        tone: "info",
+      });
+      return;
+    }
+    case "add_product": {
+      const match = chooseCatalogProduct(command.productQuery, products);
+      if (match === "ambiguous") {
+        emitPreview({
+          transcript,
+          summary: `No estoy seguro de qué producto quieres con “${command.productQuery}”. Di algo más concreto.`,
+          canConfirm: false,
+          tone: "error",
+        });
+        return;
+      }
+      if (!match) {
+        emitPreview({
+          transcript,
+          summary: `No encuentro “${command.productQuery}” en la carta activa.`,
+          canConfirm: false,
+          tone: "error",
+        });
+        return;
+      }
+      emitPreview({
+        transcript,
+        summary: `${command.quantity} × ${match.product.nombre} en la mesa abierta.`,
+        canConfirm: true,
+        tone: "info",
+      });
+      return;
+    }
+    case "open_table": {
+      const match = findTable(command.tableQuery);
+      if (match === "ambiguous" || !match) {
+        emitPreview({
+          transcript,
+          summary:
+            match === "ambiguous"
+              ? "No estoy seguro de qué mesa has dicho."
+              : `No encuentro la mesa “${command.tableQuery}”.`,
+          canConfirm: false,
+          tone: "error",
+        });
+        return;
+      }
+      emitPreview({
+        transcript,
+        summary: `Abrir ${match.value.tableLabel}.`,
+        canConfirm: true,
+        tone: "info",
+      });
+      return;
+    }
+    case "send_order":
+      emitPreview({ transcript, summary: "Enviar la comanda de la mesa abierta.", canConfirm: true, tone: "info" });
+      return;
+    case "march_course":
+      emitPreview({ transcript, summary: `Marchar ${command.course}.`, canConfirm: true, tone: "info" });
+      return;
+    case "confirm_march":
+      emitPreview({ transcript, summary: "Confirmar la marcha pendiente.", canConfirm: true, tone: "info" });
+      return;
+    case "preticket":
+      emitPreview({ transcript, summary: "Abrir el pre-ticket.", canConfirm: true, tone: "info" });
+      return;
+    case "charge":
+      emitPreview({ transcript, summary: "Abrir el cobro de la mesa actual.", canConfirm: true, tone: "info" });
+      return;
+    case "back_to_map":
+      emitPreview({ transcript, summary: "Volver al mapa del TPV.", canConfirm: true, tone: "info" });
+      return;
+    default:
+      emitPreview({
+        transcript,
+        summary: "No he entendido el pedido con suficiente seguridad. Vuelve a decirlo.",
+        canConfirm: false,
+        tone: "error",
+      });
+  }
+}
+
 export function TpvVoiceCommandRuntime() {
   const { restaurantId } = useAuth();
   const operationalRestaurantId = resolveOperationalRestaurantId(restaurantId ?? null);
@@ -405,7 +576,14 @@ export function TpvVoiceCommandRuntime() {
   });
 
   useEffect(() => {
-    const handler = (event: Event) => {
+    const previewHandler = (event: Event) => {
+      const detail = (event as CustomEvent<VoicePreviewRequestDetail>).detail;
+      const transcript = detail?.transcript?.trim() ?? "";
+      if (!transcript) return;
+      previewTranscript(transcript, operationalCatalog.products);
+    };
+
+    const commandHandler = (event: Event) => {
       const detail = (event as CustomEvent<TpvVoiceCommandDetail>).detail;
       const transcript = detail?.transcript?.trim() ?? "";
       if (!transcript) return;
@@ -419,7 +597,7 @@ export function TpvVoiceCommandRuntime() {
           executeBackToMap();
           break;
         case "add_product":
-          void executeAddProduct(command.productQuery, command.quantity);
+          void executeAddProduct(command.productQuery, command.quantity, operationalCatalog.products);
           break;
         case "add_products_to_table":
           void executeProductsToTable(
@@ -445,14 +623,18 @@ export function TpvVoiceCommandRuntime() {
           break;
         default:
           emitFeedback(
-            `No entiendo “${transcript}”. Prueba con “un carpaccio a mesa 3”, “dos Coca-Colas”, “enviar comanda” o “volver al mapa”.`,
+            `No entiendo “${transcript}”. Prueba con “una caña a mesa 5”, “dos Coca-Colas”, “enviar comanda” o “volver al mapa”.`,
             "error",
           );
       }
     };
 
-    window.addEventListener(TPV_VOICE_COMMAND_EVENT, handler);
-    return () => window.removeEventListener(TPV_VOICE_COMMAND_EVENT, handler);
+    window.addEventListener(TPV_VOICE_PREVIEW_REQUEST_EVENT, previewHandler);
+    window.addEventListener(TPV_VOICE_COMMAND_EVENT, commandHandler);
+    return () => {
+      window.removeEventListener(TPV_VOICE_PREVIEW_REQUEST_EVENT, previewHandler);
+      window.removeEventListener(TPV_VOICE_COMMAND_EVENT, commandHandler);
+    };
   }, [operationalCatalog.products]);
 
   return null;
