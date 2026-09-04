@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 const ROOT = process.cwd();
 const API_ROOT = join(ROOT, "app", "api");
@@ -35,11 +35,8 @@ function walkRoutes(dir) {
   const routes = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      routes.push(...walkRoutes(path));
-      continue;
-    }
-    if (/^route\.(?:ts|tsx|js|mjs|cjs)$/.test(entry.name)) routes.push(path);
+    if (entry.isDirectory()) routes.push(...walkRoutes(path));
+    else if (/^route\.(?:ts|tsx|js|mjs|cjs)$/.test(entry.name)) routes.push(path);
   }
   return routes.sort();
 }
@@ -48,20 +45,28 @@ function repoPath(path) {
   return relative(ROOT, path).split(sep).join("/");
 }
 
-function resolveServerImport(specifier) {
-  if (!specifier.startsWith("@/lib/server/")) return null;
-  const base = join(ROOT, specifier.slice(2));
-  for (const candidate of [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
+function resolveSource(base) {
+  for (const candidate of [base, `${base}.ts`, `${base}.tsx`, `${base}.js`, join(base, "index.ts")]) {
     if (existsSync(candidate)) return candidate;
   }
   return null;
 }
 
-function importedServerFiles(source) {
+function resolveAuditableImport(specifier, currentFile) {
+  if (specifier.startsWith("./") || specifier.startsWith("../")) {
+    return resolveSource(resolve(dirname(currentFile), specifier));
+  }
+  if (specifier.startsWith("@/lib/server/")) {
+    return resolveSource(join(ROOT, specifier.slice(2)));
+  }
+  return null;
+}
+
+function importedAuditableFiles(source, currentFile) {
   const files = [];
-  const pattern = /from\s+["'](@\/lib\/server\/[^"']+)["']/g;
+  const pattern = /from\s+["']([^"']+)["']/g;
   for (const match of source.matchAll(pattern)) {
-    const resolved = resolveServerImport(match[1]);
+    const resolved = resolveAuditableImport(match[1], currentFile);
     if (resolved) files.push(resolved);
   }
   return files;
@@ -72,7 +77,7 @@ function hasSecuritySignal(file, visited = new Set()) {
   visited.add(file);
   const source = readFileSync(file, "utf8");
   if (SECURITY_SIGNALS.some((pattern) => pattern.test(source))) return true;
-  return importedServerFiles(source).some((dependency) =>
+  return importedAuditableFiles(source, file).some((dependency) =>
     hasSecuritySignal(dependency, visited),
   );
 }
