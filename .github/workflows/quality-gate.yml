@@ -37,7 +37,10 @@ jobs:
         run: npm ci
 
       - name: Dependency security audit
-        run: npm audit --audit-level=high
+        run: npm audit
+
+      - name: Firebase CLI stream-json security compatibility tests
+        run: node --test tests/security/stream-json-compat.test.mjs
 
       - name: TypeScript
         run: npx tsc --noEmit
