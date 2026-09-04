@@ -21,6 +21,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare i18n source snapshot
+        run: tar -czf i18n-source-snapshot.tar.gz app components locales lib hooks context package.json tsconfig.json
+
+      - name: Publish i18n source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-source-snapshot
+          path: i18n-source-snapshot.tar.gz
+          retention-days: 2
+
       - name: Hardcoded Spanish UI audit
         run: node scripts/audit-i18n-hardcoded.mjs
 
