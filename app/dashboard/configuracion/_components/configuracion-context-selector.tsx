@@ -132,8 +132,8 @@ export function ConfiguracionContextSelector() {
           >
             Configuración
           </Link>
-          <button
-            type="button"
+          <HostlyButton
+            variant="secondary"
             className="hostly-config-context-selector__trigger"
             aria-haspopup="dialog"
             aria-expanded={open}
@@ -157,7 +157,7 @@ export function ConfiguracionContextSelector() {
               strokeWidth={2.4}
               aria-hidden
             />
-          </button>
+          </HostlyButton>
         </div>
         <LanguageSwitcher className="hostly-config-context-selector__language" />
       </div>
