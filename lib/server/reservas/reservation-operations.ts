@@ -1,4 +1,9 @@
-import { FieldValue, type Firestore, type QueryDocumentSnapshot } from "firebase-admin/firestore";
+import {
+  FieldValue,
+  type DocumentSnapshot,
+  type Firestore,
+  type Transaction,
+} from "firebase-admin/firestore";
 import {
   canTransitionReservationStatus,
   findReservationTableConflict,
@@ -32,61 +37,78 @@ function requiredPartySize(value: unknown): number {
   return partySize;
 }
 
-function mapReservation(doc: QueryDocumentSnapshot): OperationalReservation {
-  const data = doc.data() as Record<string, unknown>;
+function mapReservation(doc: DocumentSnapshot): OperationalReservation {
+  const data = (doc.data() ?? {}) as Record<string, unknown>;
   return {
     id: doc.id,
     restaurantId: clean(data.restaurantId, 120),
     customerName: clean(data.customerName, 160),
     customerPhone: clean(data.customerPhone, 80),
-    ...(clean(data.customerEmail, 200) ? { customerEmail: clean(data.customerEmail, 200) } : {}),
+    ...(clean(data.customerEmail, 200)
+      ? { customerEmail: clean(data.customerEmail, 200) }
+      : {}),
     date: clean(data.date, 10),
     time: clean(data.time, 5),
     partySize: Math.max(1, Math.round(Number(data.partySize) || 1)),
     status: normalizeOperationalReservationStatus(data.status),
     durationMinutes: normalizeReservationDuration(data.durationMinutes),
     ...(clean(data.tableId, 160) ? { tableId: clean(data.tableId, 160) } : {}),
-    ...(clean(data.tableLabel, 160) ? { tableLabel: clean(data.tableLabel, 160) } : {}),
-    ...(clean(data.floorPlanId, 160) ? { floorPlanId: clean(data.floorPlanId, 160) } : {}),
+    ...(clean(data.tableLabel, 160)
+      ? { tableLabel: clean(data.tableLabel, 160) }
+      : {}),
+    ...(clean(data.floorPlanId, 160)
+      ? { floorPlanId: clean(data.floorPlanId, 160) }
+      : {}),
     ...(clean(data.floorName, 160) ? { floorName: clean(data.floorName, 160) } : {}),
     ...(clean(data.zoneId, 160) ? { zoneId: clean(data.zoneId, 160) } : {}),
     ...(clean(data.zoneName, 160) ? { zoneName: clean(data.zoneName, 160) } : {}),
     ...(clean(data.notes, 1000) ? { notes: clean(data.notes, 1000) } : {}),
     ...(clean(data.allergies, 500) ? { allergies: clean(data.allergies, 500) } : {}),
-    ...(clean(data.preferences, 500) ? { preferences: clean(data.preferences, 500) } : {}),
+    ...(clean(data.preferences, 500)
+      ? { preferences: clean(data.preferences, 500) }
+      : {}),
     ...(clean(data.occasion, 160) ? { occasion: clean(data.occasion, 160) } : {}),
   };
 }
 
 async function tableAssignmentPayload(args: {
   db: Firestore;
+  transaction: Transaction;
   restaurantId: string;
   tableId: string;
   partySize: number;
 }) {
   const tableId = clean(args.tableId, 160);
-  if (!tableId) return {
-    tableId: null,
-    tableLabel: null,
-    floorPlanId: null,
-    floorName: null,
-    zoneId: null,
-    zoneName: null,
-  };
+  if (!tableId) {
+    return {
+      tableId: null,
+      tableLabel: null,
+      floorPlanId: null,
+      floorName: null,
+      zoneId: null,
+      zoneName: null,
+    };
+  }
 
   const tableRef = args.db.collection("tables").doc(tableId);
-  const tableSnap = await tableRef.get();
+  const tableSnap = await args.transaction.get(tableRef);
   if (!tableSnap.exists) throw new Error("TABLE_NOT_FOUND");
   const table = tableSnap.data() as Record<string, unknown>;
-  if (clean(table.restaurantId, 120) !== args.restaurantId) throw new Error("TABLE_TENANT_MISMATCH");
-  if ((table.type ?? "table") !== "table" || table.isActive === false) throw new Error("TABLE_NOT_AVAILABLE");
+  if (clean(table.restaurantId, 120) !== args.restaurantId) {
+    throw new Error("TABLE_TENANT_MISMATCH");
+  }
+  if ((table.type ?? "table") !== "table" || table.isActive === false) {
+    throw new Error("TABLE_NOT_AVAILABLE");
+  }
   const seats = Math.max(0, Math.round(Number(table.seats) || 0));
   if (seats < args.partySize) throw new Error("TABLE_CAPACITY_EXCEEDED");
 
   const floorPlanId = clean(table.floorPlanId, 160);
   let floorName = "";
   if (floorPlanId) {
-    const planSnap = await args.db.collection("floorPlans").doc(floorPlanId).get();
+    const planSnap = await args.transaction.get(
+      args.db.collection("floorPlans").doc(floorPlanId),
+    );
     if (planSnap.exists) floorName = clean(planSnap.data()?.name, 160);
   }
   return {
@@ -101,6 +123,7 @@ async function tableAssignmentPayload(args: {
 
 async function assertNoConflict(args: {
   db: Firestore;
+  transaction: Transaction;
   restaurantId: string;
   tableId?: string | null;
   date: string;
@@ -110,11 +133,11 @@ async function assertNoConflict(args: {
 }) {
   const tableId = clean(args.tableId, 160);
   if (!tableId) return;
-  const snap = await args.db
+  const query = args.db
     .collection("reservations")
     .where("restaurantId", "==", args.restaurantId)
-    .where("date", "==", args.date)
-    .get();
+    .where("date", "==", args.date);
+  const snap = await args.transaction.get(query);
   const conflict = findReservationTableConflict({
     reservations: snap.docs.map(mapReservation),
     tableId,
@@ -138,43 +161,53 @@ export async function createOperationalReservation(args: {
   const time = requiredTime(args.input.time);
   const partySize = requiredPartySize(args.input.partySize);
   const durationMinutes = normalizeReservationDuration(args.input.durationMinutes);
-  const table = await tableAssignmentPayload({
-    db: args.db,
-    restaurantId: args.restaurantId,
-    tableId: clean(args.input.tableId, 160),
-    partySize,
-  });
-  await assertNoConflict({
-    db: args.db,
-    restaurantId: args.restaurantId,
-    tableId: table.tableId,
-    date,
-    time,
-    durationMinutes,
-  });
   const requestedStatus = normalizeOperationalReservationStatus(args.input.status);
-  const status: OperationalReservationStatus = requestedStatus === "booked" ? "booked" : "pending";
-  const payload = {
-    restaurantId: args.restaurantId,
-    customerName,
-    customerPhone: clean(args.input.customerPhone, 80),
-    customerEmail: clean(args.input.customerEmail, 200) || null,
-    date,
-    time,
-    partySize,
-    durationMinutes,
-    status,
-    ...table,
-    notes: clean(args.input.notes, 1000) || null,
-    allergies: clean(args.input.allergies, 500) || null,
-    preferences: clean(args.input.preferences, 500) || null,
-    occasion: clean(args.input.occasion, 160) || null,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-    createdBy: args.userId,
-    ...(status === "booked" ? { confirmedAt: FieldValue.serverTimestamp() } : {}),
-  };
-  const ref = await args.db.collection("reservations").add(payload);
+  const status: OperationalReservationStatus =
+    requestedStatus === "booked" ? "booked" : "pending";
+  const ref = args.db.collection("reservations").doc();
+
+  await args.db.runTransaction(async (transaction) => {
+    const table = await tableAssignmentPayload({
+      db: args.db,
+      transaction,
+      restaurantId: args.restaurantId,
+      tableId: clean(args.input.tableId, 160),
+      partySize,
+    });
+    await assertNoConflict({
+      db: args.db,
+      transaction,
+      restaurantId: args.restaurantId,
+      tableId: table.tableId,
+      date,
+      time,
+      durationMinutes,
+    });
+
+    transaction.create(ref, {
+      restaurantId: args.restaurantId,
+      customerName,
+      customerPhone: clean(args.input.customerPhone, 80),
+      customerEmail: clean(args.input.customerEmail, 200) || null,
+      date,
+      time,
+      partySize,
+      durationMinutes,
+      status,
+      ...table,
+      notes: clean(args.input.notes, 1000) || null,
+      allergies: clean(args.input.allergies, 500) || null,
+      preferences: clean(args.input.preferences, 500) || null,
+      occasion: clean(args.input.occasion, 160) || null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      createdBy: args.userId,
+      ...(status === "booked"
+        ? { confirmedAt: FieldValue.serverTimestamp() }
+        : {}),
+    });
+  });
+
   return { id: ref.id };
 }
 
@@ -188,53 +221,88 @@ export async function updateOperationalReservation(args: {
   const id = clean(args.reservationId, 160);
   if (!id) throw new Error("RESERVATION_REQUIRED");
   const ref = args.db.collection("reservations").doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) throw new Error("RESERVATION_NOT_FOUND");
-  const current = mapReservation(snap as QueryDocumentSnapshot);
-  if (current.restaurantId !== args.restaurantId) throw new Error("RESERVATION_TENANT_MISMATCH");
 
-  const date = args.input.date !== undefined ? requiredDate(args.input.date) : current.date;
-  const time = args.input.time !== undefined ? requiredTime(args.input.time) : current.time;
-  const partySize = args.input.partySize !== undefined ? requiredPartySize(args.input.partySize) : current.partySize;
-  const durationMinutes = args.input.durationMinutes !== undefined
-    ? normalizeReservationDuration(args.input.durationMinutes)
-    : normalizeReservationDuration(current.durationMinutes);
-  const tableId = args.input.tableId !== undefined ? clean(args.input.tableId, 160) : clean(current.tableId, 160);
-  const table = await tableAssignmentPayload({
-    db: args.db,
-    restaurantId: args.restaurantId,
-    tableId,
-    partySize,
-  });
-  await assertNoConflict({
-    db: args.db,
-    restaurantId: args.restaurantId,
-    tableId: table.tableId,
-    date,
-    time,
-    durationMinutes,
-    excludeReservationId: id,
-  });
-
-  const patch: Record<string, unknown> = {
-    date,
-    time,
-    partySize,
-    durationMinutes,
-    ...table,
-    updatedAt: FieldValue.serverTimestamp(),
-    updatedBy: args.userId,
-  };
-  for (const key of ["customerName", "customerPhone", "customerEmail", "notes", "allergies", "preferences", "occasion"] as const) {
-    if (args.input[key] !== undefined) {
-      const max = key === "notes" ? 1000 : key === "customerEmail" ? 200 : key === "customerName" ? 160 : 500;
-      patch[key] = clean(args.input[key], max) || null;
+  await args.db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists) throw new Error("RESERVATION_NOT_FOUND");
+    const current = mapReservation(snap);
+    if (current.restaurantId !== args.restaurantId) {
+      throw new Error("RESERVATION_TENANT_MISMATCH");
     }
-  }
-  if (args.input.customerName !== undefined && !clean(args.input.customerName, 160)) {
-    throw new Error("CUSTOMER_NAME_REQUIRED");
-  }
-  await ref.update(patch);
+
+    const date =
+      args.input.date !== undefined ? requiredDate(args.input.date) : current.date;
+    const time =
+      args.input.time !== undefined ? requiredTime(args.input.time) : current.time;
+    const partySize =
+      args.input.partySize !== undefined
+        ? requiredPartySize(args.input.partySize)
+        : current.partySize;
+    const durationMinutes =
+      args.input.durationMinutes !== undefined
+        ? normalizeReservationDuration(args.input.durationMinutes)
+        : normalizeReservationDuration(current.durationMinutes);
+    const tableId =
+      args.input.tableId !== undefined
+        ? clean(args.input.tableId, 160)
+        : clean(current.tableId, 160);
+    const table = await tableAssignmentPayload({
+      db: args.db,
+      transaction,
+      restaurantId: args.restaurantId,
+      tableId,
+      partySize,
+    });
+    await assertNoConflict({
+      db: args.db,
+      transaction,
+      restaurantId: args.restaurantId,
+      tableId: table.tableId,
+      date,
+      time,
+      durationMinutes,
+      excludeReservationId: id,
+    });
+
+    const patch: Record<string, unknown> = {
+      date,
+      time,
+      partySize,
+      durationMinutes,
+      ...table,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: args.userId,
+    };
+    for (const key of [
+      "customerName",
+      "customerPhone",
+      "customerEmail",
+      "notes",
+      "allergies",
+      "preferences",
+      "occasion",
+    ] as const) {
+      if (args.input[key] !== undefined) {
+        const max =
+          key === "notes"
+            ? 1000
+            : key === "customerEmail"
+              ? 200
+              : key === "customerName"
+                ? 160
+                : 500;
+        patch[key] = clean(args.input[key], max) || null;
+      }
+    }
+    if (
+      args.input.customerName !== undefined &&
+      !clean(args.input.customerName, 160)
+    ) {
+      throw new Error("CUSTOMER_NAME_REQUIRED");
+    }
+    transaction.update(ref, patch);
+  });
+
   return { id };
 }
 
@@ -246,29 +314,43 @@ export async function transitionOperationalReservation(args: {
   nextStatus: OperationalReservationStatus;
 }) {
   const id = clean(args.reservationId, 160);
+  if (!id) throw new Error("RESERVATION_REQUIRED");
   const ref = args.db.collection("reservations").doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) throw new Error("RESERVATION_NOT_FOUND");
-  const current = mapReservation(snap as QueryDocumentSnapshot);
-  if (current.restaurantId !== args.restaurantId) throw new Error("RESERVATION_TENANT_MISMATCH");
   const nextStatus = normalizeOperationalReservationStatus(args.nextStatus);
-  if (!canTransitionReservationStatus(current.status, nextStatus)) {
-    throw new Error("INVALID_STATUS_TRANSITION");
-  }
-  if (nextStatus === "seated" && !clean(current.tableId, 160)) {
-    throw new Error("TABLE_REQUIRED_TO_SEAT");
-  }
-  const eventField =
-    nextStatus === "booked" ? "confirmedAt" :
-      nextStatus === "seated" ? "seatedAt" :
-        nextStatus === "completed" ? "completedAt" :
-          nextStatus === "cancelled" ? "cancelledAt" :
-            nextStatus === "no_show" ? "noShowAt" : null;
-  await ref.update({
-    status: nextStatus,
-    updatedAt: FieldValue.serverTimestamp(),
-    updatedBy: args.userId,
-    ...(eventField ? { [eventField]: FieldValue.serverTimestamp() } : {}),
+
+  await args.db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists) throw new Error("RESERVATION_NOT_FOUND");
+    const current = mapReservation(snap);
+    if (current.restaurantId !== args.restaurantId) {
+      throw new Error("RESERVATION_TENANT_MISMATCH");
+    }
+    if (!canTransitionReservationStatus(current.status, nextStatus)) {
+      throw new Error("INVALID_STATUS_TRANSITION");
+    }
+    if (nextStatus === "seated" && !clean(current.tableId, 160)) {
+      throw new Error("TABLE_REQUIRED_TO_SEAT");
+    }
+
+    const eventField =
+      nextStatus === "booked"
+        ? "confirmedAt"
+        : nextStatus === "seated"
+          ? "seatedAt"
+          : nextStatus === "completed"
+            ? "completedAt"
+            : nextStatus === "cancelled"
+              ? "cancelledAt"
+              : nextStatus === "no_show"
+                ? "noShowAt"
+                : null;
+    transaction.update(ref, {
+      status: nextStatus,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: args.userId,
+      ...(eventField ? { [eventField]: FieldValue.serverTimestamp() } : {}),
+    });
   });
+
   return { id, status: nextStatus };
 }
