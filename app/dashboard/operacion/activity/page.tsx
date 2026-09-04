@@ -11,8 +11,8 @@ import {
   HostlyAlert,
   HostlyInput,
   HostlyOperationalEmptyState,
+  HostlySegmentedButton,
   HostlySegmentedControl,
-  hostlySegmentTabClassName,
 } from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
@@ -118,16 +118,13 @@ export default function OperacionActivityPage() {
         <div className="hostly-operation-audit-toolbar">
           <HostlySegmentedControl aria-label="Filtrar actividad">
             {FILTERS.map((item) => (
-              <button
+              <HostlySegmentedButton
                 key={item.key}
-                type="button"
-                role="tab"
-                className={hostlySegmentTabClassName()}
-                aria-selected={filter === item.key}
+                selected={filter === item.key}
                 onClick={() => setFilter(item.key)}
               >
                 {item.label}
-              </button>
+              </HostlySegmentedButton>
             ))}
           </HostlySegmentedControl>
           <HostlyInput
