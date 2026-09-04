@@ -13,22 +13,31 @@ const RESTAURANT_ID = "restaurant-rbac-a";
 
 let testEnv: RulesTestEnvironment;
 
+const PROFILE_SEEDS = [
+  ["owner-a", "owner"],
+  ["manager-a", "manager"],
+  ["waiter-a", "waiter"],
+  ["kitchen-a", "kitchen"],
+  ["viewer-a", "viewer"],
+] as const;
+
+function profileEmail(uid: string) {
+  return `${uid}@hostly-rbac.test`;
+}
+
 async function seed() {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
-    const profiles = [
-      ["owner-a", "owner"],
-      ["manager-a", "manager"],
-      ["waiter-a", "waiter"],
-      ["kitchen-a", "kitchen"],
-      ["viewer-a", "viewer"],
-    ] as const;
-    for (const [uid, role] of profiles) {
-      await setDoc(doc(db, "users", uid), {
+    for (const [uid, role] of PROFILE_SEEDS) {
+      const profile = {
+        uid,
+        email: profileEmail(uid),
         restaurantId: RESTAURANT_ID,
         role,
-        disabled: false,
-      });
+        status: "active",
+      };
+      await setDoc(doc(db, "users", uid), profile);
+      await setDoc(doc(db, "usuarios", uid), profile);
     }
 
     await setDoc(doc(db, "reservations", "reservation-a"), {
@@ -66,7 +75,7 @@ async function seed() {
 }
 
 function firestoreFor(uid: string) {
-  return testEnv.authenticatedContext(uid).firestore();
+  return testEnv.authenticatedContext(uid, { email: profileEmail(uid) }).firestore();
 }
 
 describe("operational RBAC Firestore rules", () => {
