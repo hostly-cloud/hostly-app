@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
+import { HostlyButton } from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   requestManagedRestaurantUsers,
@@ -196,6 +197,7 @@ export default function EmpleadosPageContent({
                 const protectedAdmin = isManagedAdmin(row.role) && actorRole !== "owner";
                 const locked = isSelf || owner || protectedAdmin || Boolean(row.reviewRequired);
                 const actionBusy = removingId === row.id;
+                const enabling = row.status === "disabled";
                 return (
                   <article className="hostly-employees-row" key={row.id}>
                     <div className="hostly-employees-person">
@@ -255,19 +257,20 @@ export default function EmpleadosPageContent({
 
                     <div className="hostly-employees-action-cell">
                       <span className="hostly-employees-mobile-label">Acceso</span>
-                      <button
-                        type="button"
+                      <HostlyButton
+                        variant={enabling ? "secondary" : "destructive"}
+                        size="compact"
                         disabled={actionBusy || locked}
                         onClick={() => void onRemove(row.id)}
                         className="hostly-employees-access-btn"
-                        data-state={row.status === "disabled" ? "enable" : "disable"}
+                        data-state={enabling ? "enable" : "disable"}
                       >
                         {row.reviewRequired
                           ? "Revisión necesaria"
-                          : row.status === "disabled"
+                          : enabling
                             ? "Activar"
                             : "Desactivar"}
-                      </button>
+                      </HostlyButton>
                     </div>
                   </article>
                 );

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import OnboardingApp from "@/components/onboarding/onboarding-app";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlySection, HostlySurface } from "@/components/ui/hostly";
+import { HostlyButton, HostlySection, HostlySurface } from "@/components/ui/hostly";
 
 export default function OnboardingPage() {
   const { t } = useI18n();
@@ -47,9 +47,14 @@ export default function OnboardingPage() {
       backLabel={t("onboarding.shellBack")}
       headerBelow={headerBelow}
       headerRight={
-        <button type="button" onClick={() => router.push("/dashboard")} className="hostly-button-secondary shrink-0 whitespace-nowrap">
+        <HostlyButton
+          variant="secondary"
+          size="compact"
+          onClick={() => router.push("/dashboard")}
+          className="shrink-0 whitespace-nowrap"
+        >
           {t("onboarding.exitLater")}
-        </button>
+        </HostlyButton>
       }
     >
       <HostlySection stack="sm" className="onboarding-scroll-host pt-1">

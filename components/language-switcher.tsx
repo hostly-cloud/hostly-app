@@ -3,7 +3,7 @@
 import type { Locale } from "@/lib/i18n";
 import { SUPPORTED_LOCALES } from "@/lib/i18n";
 import { useI18n } from "@/components/i18n-provider";
-import { hostlyCx } from "@/components/ui/hostly";
+import { HostlyButton, hostlyCx } from "@/components/ui/hostly";
 
 export function LanguageSwitcher({ className }: { className?: string }) {
   const { locale, setLocale, t } = useI18n();
@@ -17,18 +17,19 @@ export function LanguageSwitcher({ className }: { className?: string }) {
       {SUPPORTED_LOCALES.map((code: Locale) => {
         const active = locale === code;
         return (
-          <button
+          <HostlyButton
             key={code}
-            type="button"
+            variant="chip"
+            size="compact"
+            active={active}
             onClick={() => setLocale(code)}
-            aria-pressed={active}
             className={hostlyCx(
               "hostly-language-switch__button",
               active && "hostly-language-switch__button--active",
             )}
           >
             {code.toUpperCase()}
-          </button>
+          </HostlyButton>
         );
       })}
     </div>

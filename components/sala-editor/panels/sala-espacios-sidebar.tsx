@@ -23,6 +23,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import { sortSalaEspacios } from "@/lib/sala-editor/types/espacio";
 import { salaEspacioTypeIcon } from "@/lib/sala-editor/catalog/espacio-types";
@@ -183,28 +184,31 @@ export function SalaEspaciosSidebar({
             );
           })}
         </ul>
-        <button
-          type="button"
+        <HostlyButton
+          variant="secondary"
+          size="compact"
           className="hostly-sala-editor-space-switcher__add"
           onClick={onRequestAddEspacio}
         >
           <span aria-hidden>+</span>
           Nuevo espacio
-        </button>
+        </HostlyButton>
       </div>
     );
   }
 
   return (
     <div className="hostly-sala-editor-toolbox hostly-sala-editor-toolbox--spaces">
-      <button
-        type="button"
+      <HostlyButton
+        variant="icon"
+        size="compact"
+        iconOnlyLabel="Añadir espacio"
         onClick={onRequestAddEspacio}
         className="hostly-sala-editor-toolbox__add hostly-sala-editor-toolbox__add--icon"
         title="Añadir espacio"
       >
         <span aria-hidden>+</span>
-      </button>
+      </HostlyButton>
 
       <SpaceReorderDndRoot
         sortedIds={sortedIds}
