@@ -29,7 +29,11 @@ export type TpvVoiceCommand =
       sendOrder: true;
     }
   | { type: "send_order" }
-  | { type: "march_course"; course: "primeros" | "segundos" | "postres" }
+  | {
+      type: "march_course";
+      course: "primeros" | "segundos" | "postres";
+      tableQuery?: string;
+    }
   | { type: "confirm_march" }
   | { type: "preticket" }
   | { type: "charge" }
@@ -622,6 +626,12 @@ function parseOrderForTable(normalized: string): TpvVoiceCommand | null {
   };
 }
 
+function normalizeMarchCourse(raw: string): "primeros" | "segundos" | "postres" {
+  if (raw.startsWith("primer")) return "primeros";
+  if (raw.startsWith("segund")) return "segundos";
+  return "postres";
+}
+
 export function parseTpvVoiceCommand(transcript: string): TpvVoiceCommand {
   const normalized = stripSpeechDisfluencies(normalizeTpvVoiceText(transcript));
   if (!normalized) return { type: "unknown", transcript };
@@ -641,17 +651,25 @@ export function parseTpvVoiceCommand(transcript: string): TpvVoiceCommand {
     return { type: "send_order" };
   }
 
+  const targetedMarchMatch = normalized.match(
+    /^(?:marchar|marcha)\s+(primeros?|segundos?|postres?)\s+(?:de\s+|en\s+|para\s+)?(?:la\s+)?mesa\s+(.+)$/,
+  );
+  if (targetedMarchMatch) {
+    const tableQuery = normalizeTableQuery(targetedMarchMatch[2] ?? "");
+    if (tableQuery) {
+      return {
+        type: "march_course",
+        course: normalizeMarchCourse(targetedMarchMatch[1] ?? ""),
+        tableQuery,
+      };
+    }
+  }
+
   const marchMatch = normalized.match(
     /^(?:marchar|marcha)\s+(primeros?|segundos?|postres?)$/,
   );
   if (marchMatch) {
-    const raw = marchMatch[1] ?? "";
-    const course = raw.startsWith("primer")
-      ? "primeros"
-      : raw.startsWith("segund")
-        ? "segundos"
-        : "postres";
-    return { type: "march_course", course };
+    return { type: "march_course", course: normalizeMarchCourse(marchMatch[1] ?? "") };
   }
 
   if (/^(?:confirmar|confirma)(?:\s+marcha)?$/.test(normalized)) {
