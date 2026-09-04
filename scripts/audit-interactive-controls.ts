@@ -33,6 +33,8 @@ const CANONICAL_CLICK_COMPONENTS = new Set([
   "HostlyFormToggle",
   "HostlyRowActionButton",
   "HostlyRowActions",
+  "HostlyDataRow",
+  "HostlyMobileListItem",
   // Carta workbench wrappers delegate directly to HostlyButton. Counting their
   // onClick props as custom interaction debt produced false positives across
   // configuration screens even though the rendered control is canonical.
