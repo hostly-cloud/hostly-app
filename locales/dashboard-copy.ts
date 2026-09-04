@@ -1,0 +1,60 @@
+import type { Locale } from "@/lib/i18n";
+
+type DashboardCopy = {
+  readyForService: string;
+  operation: string;
+  management: string;
+  openTpv: string;
+  tpvSubtitle: string;
+  kitchen: string;
+  kitchenSubtitle: string;
+  bar: string;
+  barSubtitle: string;
+  cocktail: string;
+  cocktailSubtitle: string;
+  reservations: string;
+  reservationsSubtitle: string;
+  products: string;
+  productsSubtitle: string;
+  settings: string;
+  settingsSubtitle: string;
+  analytics: string;
+  analyticsSubtitle: string;
+};
+
+const base: Record<"es" | "en" | "fr" | "de" | "it" | "pt" | "nl", DashboardCopy> = {
+  es: {
+    readyForService: "Todo listo para empezar el servicio.", operation: "Operación", management: "Gestión", openTpv: "Abrir TPV", tpvSubtitle: "Mesas, pedidos y cobro", kitchen: "Cocina", kitchenSubtitle: "Pedidos en preparación", bar: "Barra", barSubtitle: "Bebidas y cafés", cocktail: "Coctelería", cocktailSubtitle: "Cócteles y combinados", reservations: "Reservas", reservationsSubtitle: "Llegadas de hoy", products: "Productos", productsSubtitle: "Carta y catálogo", settings: "Configuración", settingsSubtitle: "Restaurante y equipo", analytics: "Análisis", analyticsSubtitle: "Ventas y rendimiento",
+  },
+  en: {
+    readyForService: "Everything is ready for service.", operation: "Operations", management: "Management", openTpv: "Open POS", tpvSubtitle: "Tables, orders and checkout", kitchen: "Kitchen", kitchenSubtitle: "Orders being prepared", bar: "Bar", barSubtitle: "Drinks and coffee", cocktail: "Cocktails", cocktailSubtitle: "Cocktails and mixed drinks", reservations: "Reservations", reservationsSubtitle: "Today's arrivals", products: "Products", productsSubtitle: "Menu and catalog", settings: "Settings", settingsSubtitle: "Restaurant and team", analytics: "Analytics", analyticsSubtitle: "Sales and performance",
+  },
+  fr: {
+    readyForService: "Tout est prêt pour commencer le service.", operation: "Opération", management: "Gestion", openTpv: "Ouvrir le TPV", tpvSubtitle: "Tables, commandes et encaissement", kitchen: "Cuisine", kitchenSubtitle: "Commandes en préparation", bar: "Bar", barSubtitle: "Boissons et cafés", cocktail: "Cocktails", cocktailSubtitle: "Cocktails et spiritueux", reservations: "Réservations", reservationsSubtitle: "Arrivées du jour", products: "Produits", productsSubtitle: "Carte et catalogue", settings: "Configuration", settingsSubtitle: "Restaurant et équipe", analytics: "Analyse", analyticsSubtitle: "Ventes et performance",
+  },
+  de: {
+    readyForService: "Alles ist bereit für den Service.", operation: "Betrieb", management: "Verwaltung", openTpv: "TPV öffnen", tpvSubtitle: "Tische, Bestellungen und Zahlung", kitchen: "Küche", kitchenSubtitle: "Bestellungen in Zubereitung", bar: "Bar", barSubtitle: "Getränke und Kaffee", cocktail: "Cocktailbar", cocktailSubtitle: "Cocktails und Longdrinks", reservations: "Reservierungen", reservationsSubtitle: "Heutige Ankünfte", products: "Produkte", productsSubtitle: "Speisekarte und Katalog", settings: "Einstellungen", settingsSubtitle: "Restaurant und Team", analytics: "Analyse", analyticsSubtitle: "Umsatz und Leistung",
+  },
+  it: {
+    readyForService: "Tutto pronto per iniziare il servizio.", operation: "Operatività", management: "Gestione", openTpv: "Apri TPV", tpvSubtitle: "Tavoli, ordini e pagamenti", kitchen: "Cucina", kitchenSubtitle: "Ordini in preparazione", bar: "Bar", barSubtitle: "Bevande e caffè", cocktail: "Cocktail", cocktailSubtitle: "Cocktail e long drink", reservations: "Prenotazioni", reservationsSubtitle: "Arrivi di oggi", products: "Prodotti", productsSubtitle: "Menu e catalogo", settings: "Configurazione", settingsSubtitle: "Ristorante e team", analytics: "Analisi", analyticsSubtitle: "Vendite e performance",
+  },
+  pt: {
+    readyForService: "Tudo pronto para começar o serviço.", operation: "Operação", management: "Gestão", openTpv: "Abrir TPV", tpvSubtitle: "Mesas, pedidos e pagamentos", kitchen: "Cozinha", kitchenSubtitle: "Pedidos em preparação", bar: "Bar", barSubtitle: "Bebidas e cafés", cocktail: "Cocktails", cocktailSubtitle: "Cocktails e combinados", reservations: "Reservas", reservationsSubtitle: "Chegadas de hoje", products: "Produtos", productsSubtitle: "Carta e catálogo", settings: "Configuração", settingsSubtitle: "Restaurante e equipa", analytics: "Análise", analyticsSubtitle: "Vendas e desempenho",
+  },
+  nl: {
+    readyForService: "Alles is klaar om de service te starten.", operation: "Operatie", management: "Beheer", openTpv: "TPV openen", tpvSubtitle: "Tafels, bestellingen en betaling", kitchen: "Keuken", kitchenSubtitle: "Bestellingen in voorbereiding", bar: "Bar", barSubtitle: "Dranken en koffie", cocktail: "Cocktails", cocktailSubtitle: "Cocktails en mixdranken", reservations: "Reserveringen", reservationsSubtitle: "Aankomsten van vandaag", products: "Producten", productsSubtitle: "Menu en catalogus", settings: "Configuratie", settingsSubtitle: "Restaurant en team", analytics: "Analyse", analyticsSubtitle: "Verkoop en prestaties",
+  },
+};
+
+export const DASHBOARD_COPY: Record<Locale, DashboardCopy> = {
+  es: base.es,
+  en: base.en,
+  fr: base.fr,
+  de: base.de,
+  it: base.it,
+  pt: base.pt,
+  nl: base.nl,
+  "de-CH": base.de,
+  "fr-CH": base.fr,
+  "it-CH": base.it,
+};
