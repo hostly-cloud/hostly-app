@@ -60,6 +60,10 @@ export const CONFIG_NAV_GROUPS: ConfigNavGroup[] = [
         label: "Zonas",
       },
       {
+        href: "/dashboard/configuracion/espacios/mesas",
+        label: "Mesas",
+      },
+      {
         href: "/dashboard/configuracion/espacios/editor-v2",
         label: "Editor de mapas V2",
       },
