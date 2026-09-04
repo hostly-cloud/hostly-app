@@ -1,0 +1,39 @@
+name: One-shot zero audit
+
+on:
+  push:
+    branches:
+      - fix/security-zero-moderate-audit
+
+permissions:
+  contents: write
+
+jobs:
+  audit-and-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Regenerate lockfile
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Full dependency audit
+        run: npm audit
+      - name: Show vulnerable tree
+        if: failure()
+        run: |
+          npm audit --json > audit.json || true
+          cat audit.json
+      - name: Remove one-shot workflow and commit lockfile
+        if: success()
+        run: |
+          rm .github/workflows/one-shot-zero-audit.yml
+          git config user.name "hostly-cloud"
+          git config user.email "fer@hostlyapp.app"
+          git add package-lock.json .github/workflows/one-shot-zero-audit.yml
+          git commit -m "chore(security): refresh lockfile with zero audit" || exit 0
+          git push
