@@ -64,9 +64,11 @@ jobs:
 
           const rootPath = 'package.json';
           const root = JSON.parse(fs.readFileSync(rootPath, 'utf8'));
+          root.devDependencies = root.devDependencies || {};
+          root.devDependencies['stream-json'] = 'file:vendor/stream-json-compat';
           root.overrides = root.overrides || {};
           root.overrides['firebase-tools'] = root.overrides['firebase-tools'] || {};
-          root.overrides['firebase-tools']['stream-json'] = 'file:vendor/stream-json-compat';
+          root.overrides['firebase-tools']['stream-json'] = '$stream-json';
           fs.writeFileSync(rootPath, JSON.stringify(root, null, 2) + '\n');
           NODE
 
