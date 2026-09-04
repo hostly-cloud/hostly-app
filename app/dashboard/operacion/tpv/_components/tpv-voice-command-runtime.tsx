@@ -5,6 +5,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import { resolveTpvMenuGroup } from "@/lib/carta/tpv-menu-group";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
+import { chooseTpvVoiceTableCandidate } from "@/lib/tpv/voice-table-match";
 import { listTpvV2TableControllers } from "@/lib/tpv/v2-table-controller-registry";
 import {
   normalizeTpvVoiceText,
@@ -134,12 +135,14 @@ async function clickProductWithQuantity(
 
 function findTable(query: string) {
   const entries = listTpvV2TableControllers();
-  const candidates = entries.flatMap((entry) => [
-    { value: entry, label: entry.tableLabel },
-    { value: entry, label: entry.tableId },
-    { value: entry, label: `mesa ${entry.tableLabel}` },
-  ]);
-  return chooseCandidate(query, candidates);
+  return chooseTpvVoiceTableCandidate(
+    query,
+    entries.map((entry) => ({
+      value: entry,
+      tableId: entry.tableId,
+      tableLabel: entry.tableLabel,
+    })),
+  );
 }
 
 function executeOpenTable(query: string) {
