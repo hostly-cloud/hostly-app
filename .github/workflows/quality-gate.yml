@@ -48,6 +48,9 @@ jobs:
       - name: Production security config tests
         run: node --test tests/config/next-security-headers.test.mjs
 
+      - name: Marketing lead abuse protection tests
+        run: npx tsx --test tests/lib/marketing-lead-abuse.test.ts
+
       - name: Operational RBAC tests
         run: |
           npx tsx --test tests/lib/operational-rbac.test.ts
