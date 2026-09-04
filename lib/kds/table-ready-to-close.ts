@@ -58,6 +58,14 @@ export function isOrderItemBlockingReadyToClose(
 }
 
 function isMeaningfulOrderItem(item: TableReadyToCloseLine): boolean {
+  const status = normalizeStatus(item.status);
+  if (
+    status === "cancelled" ||
+    status === "canceled" ||
+    status === "cancelado"
+  ) {
+    return false;
+  }
   if (item.qty === undefined) return true;
   return Number.isFinite(item.qty) && item.qty > 0;
 }
