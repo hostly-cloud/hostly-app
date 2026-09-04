@@ -2,6 +2,7 @@
 
 import { HostlyBackButton } from "@/components/hostly/back-button";
 import { useI18n } from "@/components/i18n-provider";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { TpvOperatorPickerOption } from "@/lib/tpv/active-operator-session";
 
 type ActiveOperatorPickerProps = {
@@ -46,16 +47,17 @@ export function ActiveOperatorPicker({
 
         <div className="hostly-tpv-operator-picker__list">
           {options.map((option) => (
-            <button
+            <HostlyButton
               key={option.id}
-              type="button"
+              variant="secondary"
+              size="touch"
               onClick={() => onSelect(option)}
               className="hostly-tpv-operator-picker__card"
             >
               <span className="hostly-tpv-operator-picker__card-name">
                 {option.name}
               </span>
-            </button>
+            </HostlyButton>
           ))}
         </div>
 
