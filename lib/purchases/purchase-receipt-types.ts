@@ -187,6 +187,25 @@ export type PurchaseReceiptInputLine = {
   quantity: number;
 };
 
+function aggregateReceiptInputLines(
+  inputLines: PurchaseReceiptInputLine[],
+): PurchaseReceiptInputLine[] {
+  const quantityByProductId = new Map<string, number>();
+  for (const input of inputLines) {
+    const productId = input.productId.trim();
+    if (!productId) continue;
+    const qty = readFiniteNumber(input.quantity);
+    if (qty == null || qty <= 0) continue;
+    quantityByProductId.set(
+      productId,
+      roundInventoryQuantity((quantityByProductId.get(productId) ?? 0) + qty),
+    );
+  }
+  return [...quantityByProductId.entries()]
+    .slice(0, MAX_LINES)
+    .map(([productId, quantity]) => ({ productId, quantity }));
+}
+
 export function buildPurchaseReceiptLinesFromOrder(params: {
   order: PurchaseOrderDocument;
   inputLines: PurchaseReceiptInputLine[];
@@ -197,22 +216,23 @@ export function buildPurchaseReceiptLinesFromOrder(params: {
   }
 
   const receiptLines: PurchaseReceiptLine[] = [];
+  const aggregatedInputs = aggregateReceiptInputLines(params.inputLines);
 
-  for (const input of params.inputLines) {
-    if (receiptLines.length >= MAX_LINES) break;
-    const productId = input.productId.trim();
-    if (!productId) continue;
-
+  for (const input of aggregatedInputs) {
+    const productId = input.productId;
     const orderLine = orderLineByProductId.get(productId);
-    if (!orderLine) continue;
-
-    const qty = readFiniteNumber(input.quantity);
-    if (qty == null || qty <= 0) continue;
+    if (!orderLine) {
+      throw new PurchaseReceiptFromOrderError("unknown_product");
+    }
 
     const remaining = getPurchaseOrderLineRemainingQuantity(orderLine);
     if (remaining <= 0) continue;
 
-    const quantity = roundInventoryQuantity(Math.min(qty, remaining));
+    if (input.quantity > remaining) {
+      throw new PurchaseReceiptFromOrderError("quantity_exceeds_remaining");
+    }
+
+    const quantity = roundInventoryQuantity(input.quantity);
     if (quantity <= 0) continue;
 
     const previouslyReceived = orderLine.receivedQuantity ?? 0;
