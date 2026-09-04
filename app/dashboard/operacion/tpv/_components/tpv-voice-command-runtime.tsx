@@ -49,12 +49,15 @@ type ResolveOrderItemsResult =
   | { ok: true; resolvedItems: ResolvedOrderItem[] }
   | { ok: false; error: string };
 
+type MarchCourse = "primeros" | "segundos" | "postres";
+
 const TPV_VOICE_PREVIEW_REQUEST_EVENT = "hostly:tpv-voice-preview-request";
 const TPV_VOICE_PREVIEW_EVENT = "hostly:tpv-voice-preview";
 const MATCH_MIN_SCORE = 0.72;
 const MATCH_AMBIGUITY_GAP = 0.08;
 const UI_WAIT_STEP_MS = 55;
 const UI_WAIT_TIMEOUT_MS = 2400;
+const MARCH_ACK_TIMEOUT_MS = 12_000;
 
 function emitFeedback(message: string, tone: TpvVoiceFeedbackTone = "info") {
   const detail: TpvVoiceFeedbackDetail = { message, tone };
@@ -402,27 +405,107 @@ async function executeProductsToTable(
   emitFeedback(`${summary} · ${tableMatch.value.tableLabel} · enviado.`, "success");
 }
 
-function executeMarchCourse(course: "primeros" | "segundos" | "postres") {
-  const singular = course === "primeros" ? "primero" : course === "segundos" ? "segundo" : "postre";
-  const pattern = new RegExp(`^${singular}s?:\\s*\\d+\\s+pendientes de marchar$`, "i");
-  const button = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
-    (candidate) => !candidate.disabled && pattern.test(candidate.getAttribute("aria-label") ?? ""),
+function marchCoursePattern(course: MarchCourse): RegExp {
+  const singular =
+    course === "primeros" ? "primero" : course === "segundos" ? "segundo" : "postre";
+  return new RegExp(`^${singular}s?:\\s*\\d+\\s+pendientes de marchar$`, "i");
+}
+
+function findMarchCourseButton(course: MarchCourse): HTMLButtonElement | null {
+  const pattern = marchCoursePattern(course);
+  return (
+    Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+      (candidate) =>
+        !candidate.disabled &&
+        isVisible(candidate) &&
+        pattern.test(candidate.getAttribute("aria-label") ?? ""),
+    ) ?? null
   );
-  if (!button) {
-    emitFeedback(`No hay ${course} pendientes de marchar.`, "error");
-    return;
+}
+
+function findMarchConfirmButton(): HTMLButtonElement | null {
+  const dialogs = Array.from(document.querySelectorAll<HTMLElement>("[role='dialog']")).filter(isVisible);
+  for (const dialog of dialogs) {
+    const button = Array.from(dialog.querySelectorAll<HTMLButtonElement>("button")).find(
+      (candidate) =>
+        !candidate.disabled &&
+        isVisible(candidate) &&
+        /^Marchar$/i.test(candidate.textContent?.trim() ?? ""),
+    );
+    if (button) return button;
   }
-  button.click();
-  emitFeedback(`Confirmación preparada para marchar ${course}.`, "info");
+  return null;
+}
+
+async function executeMarchCourse(course: MarchCourse, tableQuery?: string): Promise<boolean> {
+  let tableLabel: string | null = null;
+
+  if (tableQuery) {
+    const tableMatch = findTable(tableQuery);
+    if (tableMatch === "ambiguous") {
+      emitFeedback("Hay varias mesas parecidas. Di el número o nombre completo de la mesa.", "error");
+      return false;
+    }
+    if (!tableMatch) {
+      emitFeedback(`No encuentro la mesa “${tableQuery}” en el plano actual.`, "error");
+      return false;
+    }
+
+    tableLabel = tableMatch.value.tableLabel;
+    tableMatch.value.controller.onClick();
+    emitFeedback(`Abriendo ${tableLabel} para marchar ${course}…`, "info");
+
+    const tableReady = await waitFor(() =>
+      document.querySelector(".carta-tpv-payment-dock") ? true : null,
+    );
+    if (!tableReady) {
+      emitFeedback(`${tableLabel} se abrió, pero la comanda no terminó de cargar.`, "error");
+      return false;
+    }
+  }
+
+  const marchButton = await waitFor(() => findMarchCourseButton(course));
+  if (!marchButton) {
+    emitFeedback(
+      tableLabel
+        ? `No hay ${course} pendientes de marchar en ${tableLabel}.`
+        : `No hay ${course} pendientes de marchar.`,
+      "error",
+    );
+    return false;
+  }
+
+  marchButton.click();
+  const confirmButton = await waitFor(() => findMarchConfirmButton());
+  if (!confirmButton) {
+    emitFeedback(`No he podido abrir la confirmación para marchar ${course}.`, "error");
+    return false;
+  }
+
+  confirmButton.click();
+  emitFeedback(`Marchando ${course}${tableLabel ? ` de ${tableLabel}` : ""}…`, "info");
+
+  const acknowledged = await waitFor(
+    () => (findMarchCourseButton(course) ? null : true),
+    MARCH_ACK_TIMEOUT_MS,
+  );
+  if (!acknowledged) {
+    emitFeedback(
+      `No he podido confirmar que ${course} se hayan marchado${tableLabel ? ` en ${tableLabel}` : ""}. Revisa la comanda.`,
+      "error",
+    );
+    return false;
+  }
+
+  emitFeedback(
+    `${course[0]!.toUpperCase()}${course.slice(1)} marchados${tableLabel ? ` · ${tableLabel}` : ""}.`,
+    "success",
+  );
+  return true;
 }
 
 function executeConfirmMarch() {
-  const dialog = document.querySelector<HTMLElement>("[role='dialog']");
-  const button = dialog
-    ? Array.from(dialog.querySelectorAll<HTMLButtonElement>("button")).find(
-        (candidate) => !candidate.disabled && /^Marchar$/i.test(candidate.textContent?.trim() ?? ""),
-      )
-    : null;
+  const button = findMarchConfirmButton();
   if (!button) {
     emitFeedback("No hay ninguna marcha pendiente de confirmar.", "error");
     return;
@@ -562,9 +645,32 @@ function previewTranscript(transcript: string, products: Product[]) {
     case "send_order":
       emitPreview({ transcript, summary: "Enviar la comanda de la mesa abierta.", canConfirm: true, tone: "info" });
       return;
-    case "march_course":
-      emitPreview({ transcript, summary: `Marchar ${command.course}.`, canConfirm: true, tone: "info" });
+    case "march_course": {
+      if (!command.tableQuery) {
+        emitPreview({ transcript, summary: `Marchar ${command.course} de la mesa abierta.`, canConfirm: true, tone: "info" });
+        return;
+      }
+      const tableMatch = findTable(command.tableQuery);
+      if (tableMatch === "ambiguous" || !tableMatch) {
+        emitPreview({
+          transcript,
+          summary:
+            tableMatch === "ambiguous"
+              ? "No estoy seguro de qué mesa has dicho."
+              : `No encuentro la mesa “${command.tableQuery}”.`,
+          canConfirm: false,
+          tone: "error",
+        });
+        return;
+      }
+      emitPreview({
+        transcript,
+        summary: `Marchar ${command.course} de ${tableMatch.value.tableLabel}.`,
+        canConfirm: true,
+        tone: "info",
+      });
       return;
+    }
     case "confirm_march":
       emitPreview({ transcript, summary: "Confirmar la marcha pendiente.", canConfirm: true, tone: "info" });
       return;
@@ -629,7 +735,7 @@ export function TpvVoiceCommandRuntime() {
           void executeSendOrder();
           break;
         case "march_course":
-          executeMarchCourse(command.course);
+          void executeMarchCourse(command.course, command.tableQuery);
           break;
         case "confirm_march":
           executeConfirmMarch();
@@ -642,7 +748,7 @@ export function TpvVoiceCommandRuntime() {
           break;
         default:
           emitFeedback(
-            `No entiendo “${transcript}”. Prueba con “una caña a mesa 5”, “dos Coca-Colas”, “enviar comanda” o “volver al mapa”.`,
+            `No entiendo “${transcript}”. Prueba con “una caña a mesa 5”, “marchar segundos de la mesa 5”, “enviar comanda” o “volver al mapa”.`,
             "error",
           );
       }

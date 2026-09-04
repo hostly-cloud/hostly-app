@@ -145,10 +145,13 @@ function resolveComandaReleaseLineId(
 }
 
 /**
- * Al pulsar Comanda:
- * - Bebidas/cóctel pending: siempre.
- * - Cocina sin servicio iniciado: primer pase pending más bajo (puede ser 1–4).
- * - Cocina con servicio iniciado: solo entrantes (pase 1) pending; 2–4 → Marchar.
+ * Política estricta al pulsar «Enviar comanda»:
+ * - Bebidas/cóctel pending: se liberan siempre.
+ * - Cocina: únicamente pase 1 (Entrantes).
+ * - Pases 2, 3 y 4 permanecen pending hasta una acción explícita de Marchar.
+ *
+ * No existe fallback al «pase pending más bajo»: si una mesa solo tiene segundos o
+ * postres, «Enviar comanda» no puede adelantarlos accidentalmente.
  */
 export function selectLinesToReleaseOnComanda<
   T extends ComandaReleaseLine & { id?: string },
@@ -156,8 +159,6 @@ export function selectLinesToReleaseOnComanda<
   const pending = lines.filter(isPendingReleaseLine);
   if (pending.length === 0) return [];
 
-  const kitchenServiceStarted = hasKitchenPassAlreadyReleased(lines);
-  const lowestKitchenCourse = resolveLowestPendingKitchenCourse(pending);
   const selected: T[] = [];
 
   for (const line of pending) {
@@ -168,15 +169,7 @@ export function selectLinesToReleaseOnComanda<
     if (!isPendingKitchenReleaseLine(line)) continue;
 
     const course = resolveEffectiveComandaLineCourse(line) ?? 1;
-
-    if (kitchenServiceStarted) {
-      if (course === 1) selected.push(line);
-      continue;
-    }
-
-    if (lowestKitchenCourse != null && course === lowestKitchenCourse) {
-      selected.push(line);
-    }
+    if (course === 1) selected.push(line);
   }
 
   return selected;

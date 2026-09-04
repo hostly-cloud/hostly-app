@@ -221,6 +221,24 @@ test("interpreta acciones operativas", () => {
   assert.deepEqual(parseTpvVoiceCommand("cobrar mesa"), { type: "charge" });
 });
 
+test("permite marchar un pase directamente sobre una mesa concreta", () => {
+  assert.deepEqual(parseTpvVoiceCommand("marchar segundos de la mesa 5"), {
+    type: "march_course",
+    course: "segundos",
+    tableQuery: "5",
+  });
+  assert.deepEqual(parseTpvVoiceCommand("marchar postre de mesa cinco"), {
+    type: "march_course",
+    course: "postres",
+    tableQuery: "5",
+  });
+  assert.deepEqual(parseTpvVoiceCommand("marcha primeros en la mesa 12"), {
+    type: "march_course",
+    course: "primeros",
+    tableQuery: "12",
+  });
+});
+
 test("tolera pluralización y signos en nombres de producto", () => {
   assert.ok(scoreTpvVoiceCandidate("coca colas", "Coca-Cola") >= 0.72);
 });
