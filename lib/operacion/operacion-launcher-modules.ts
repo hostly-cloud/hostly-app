@@ -10,6 +10,7 @@ export type OperacionModuleSlug =
   | "cocteleria"
   | "sala"
   | "reservas"
+  | "centro"
   | "activity"
   | "sesiones";
 
@@ -28,6 +29,7 @@ export const OPERACION_LAUNCHER_MODULES: readonly OperacionLauncherModule[] = [
   { slug: "cocteleria", label: "Coctelería", subtitle: "Cócteles y preparación" },
   { slug: "sala", label: "Sala", subtitle: "Entrega y servicio" },
   { slug: "reservas", label: "Reservas", subtitle: "Gestión de mesas" },
+  { slug: "centro", label: "Centro de operaciones", subtitle: "Alertas, escalados e incidencias" },
   { slug: "activity", label: "Actividad", subtitle: "Historial del servicio" },
   { slug: "sesiones", label: "Sesiones", subtitle: "Turnos y cierre" },
 ] as const;
@@ -40,11 +42,13 @@ export function isOperacionModuleSlug(value: string | null): value is OperacionM
 }
 
 export function operacionModuleHref(slug: OperacionModuleSlug): string {
-  return slug === "caja" ? "/dashboard/caja" : `/dashboard/operacion/${slug}`;
+  if (slug === "caja") return "/dashboard/caja";
+  if (slug === "centro") return "/dashboard/operacion/activity/alerts";
+  return `/dashboard/operacion/${slug}`;
 }
 
 /** Marcador de build — comprobar en consola/DOM tras deploy. */
-export const OPERACION_LAUNCHER_BUILD_ID = "launcher-9-unfiltered-v2";
+export const OPERACION_LAUNCHER_BUILD_ID = "launcher-10-alert-center-v1";
 
 export function getOperacionLauncherDiagnostic() {
   return {

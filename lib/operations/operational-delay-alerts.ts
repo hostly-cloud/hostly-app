@@ -3,12 +3,13 @@ import {
   type KdsDestination,
   type KdsRoutableItem,
 } from "@/lib/kds/kds-destination";
+import type { KdsSlaLevel, KdsStationKind } from "@/lib/kds/kds-sla";
 import {
-  kdsSlaThresholds,
-  resolveKdsSlaLevel,
-  type KdsSlaLevel,
-  type KdsStationKind,
-} from "@/lib/kds/kds-sla";
+  DEFAULT_OPERATIONAL_ALERT_POLICY,
+  isOperationalAlertEscalated,
+  resolveOperationalAlertLevel,
+  type OperationalAlertPolicy,
+} from "@/lib/operations/operational-alert-policy";
 
 export type OperationalDelayAlertLevel = Exclude<KdsSlaLevel, "normal">;
 
@@ -21,11 +22,14 @@ export type OperationalDelayAlert = {
   stationLabel: string;
   stationHref: string;
   level: OperationalDelayAlertLevel;
+  escalated: boolean;
   elapsedMs: number;
   elapsedMinutes: number;
   oldestSentAtMs: number;
   delayedLineCount: number;
   thresholdMinutes: number;
+  criticalThresholdMinutes: number;
+  escalationAfterMinutes: number;
 };
 
 export type OperationalOrderRecord = {
@@ -38,13 +42,7 @@ export type OperationalOrderRecord = {
   items?: unknown;
 };
 
-const TERMINAL_ORDER_STATUSES = new Set([
-  "closed",
-  "paid",
-  "cancelled",
-  "canceled",
-  "merged",
-]);
+const TERMINAL_ORDER_STATUSES = new Set(["closed", "paid", "cancelled", "canceled", "merged"]);
 const ACTIVE_PRODUCTION_LINE_STATUSES = new Set(["sent", "preparing"]);
 
 const STATION_META: Record<KdsStationKind, { label: string; href: string }> = {
@@ -71,46 +69,31 @@ function isProductionLineActive(status: unknown): boolean {
 }
 
 function hasExplicitNoProductionDestination(item: Record<string, unknown>): boolean {
-  return (
-    text(item.station).toLowerCase() === "none" ||
-    text(item.preparationArea).toLowerCase() === "none"
-  );
+  return text(item.station).toLowerCase() === "none" || text(item.preparationArea).toLowerCase() === "none";
 }
 
 export function readOperationalTimestampMs(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (value instanceof Date) return value.getTime();
   if (!value || typeof value !== "object") return null;
-
-  if (
-    "toMillis" in value &&
-    typeof (value as { toMillis?: unknown }).toMillis === "function"
-  ) {
+  if ("toMillis" in value && typeof (value as { toMillis?: unknown }).toMillis === "function") {
     const millis = (value as { toMillis: () => number }).toMillis();
     return Number.isFinite(millis) ? millis : null;
   }
-
-  if (
-    "toDate" in value &&
-    typeof (value as { toDate?: unknown }).toDate === "function"
-  ) {
+  if ("toDate" in value && typeof (value as { toDate?: unknown }).toDate === "function") {
     const date = (value as { toDate: () => Date }).toDate();
     const millis = date?.getTime();
     return Number.isFinite(millis) ? millis : null;
   }
-
   const seconds = Number((value as { seconds?: unknown }).seconds);
   const nanoseconds = Number((value as { nanoseconds?: unknown }).nanoseconds ?? 0);
-  if (Number.isFinite(seconds) && Number.isFinite(nanoseconds)) {
-    return seconds * 1000 + Math.floor(nanoseconds / 1_000_000);
-  }
-  return null;
+  return Number.isFinite(seconds) && Number.isFinite(nanoseconds)
+    ? seconds * 1000 + Math.floor(nanoseconds / 1_000_000)
+    : null;
 }
 
 function stationFromDestination(destination: KdsDestination): KdsStationKind | null {
-  if (destination === "kitchen") return "kitchen";
-  if (destination === "bar") return "bar";
-  if (destination === "cocktail") return "cocktail";
+  if (destination === "kitchen" || destination === "bar" || destination === "cocktail") return destination;
   return null;
 }
 
@@ -118,8 +101,7 @@ function tableLabel(order: OperationalOrderRecord): string {
   const direct = text(order.table) || text(order.tableName);
   if (direct) return direct;
   const tableId = text(order.tableId);
-  if (tableId) return `Mesa ${tableId}`;
-  return "Sin mesa";
+  return tableId ? `Mesa ${tableId}` : "Sin mesa";
 }
 
 function levelScore(level: OperationalDelayAlertLevel): number {
@@ -130,13 +112,15 @@ export function buildOperationalDelayAlerts({
   orders,
   restaurantId,
   nowMs,
+  policy = DEFAULT_OPERATIONAL_ALERT_POLICY,
 }: {
   orders: OperationalOrderRecord[];
   restaurantId: string;
   nowMs: number;
+  policy?: OperationalAlertPolicy;
 }): OperationalDelayAlert[] {
   const tenantId = restaurantId.trim();
-  if (!tenantId || !Number.isFinite(nowMs)) return [];
+  if (!tenantId || !Number.isFinite(nowMs) || !policy.enabled) return [];
 
   const alerts = new Map<string, OperationalDelayAlert>();
   for (const order of orders) {
@@ -146,20 +130,19 @@ export function buildOperationalDelayAlerts({
     for (const rawItem of order.items) {
       if (!rawItem || typeof rawItem !== "object") continue;
       const item = rawItem as Record<string, unknown>;
-      if (!isProductionLineActive(item.status)) continue;
-      if (hasExplicitNoProductionDestination(item)) continue;
+      if (!isProductionLineActive(item.status) || hasExplicitNoProductionDestination(item)) continue;
       const sentAtMs = readOperationalTimestampMs(item.sentAt);
       if (sentAtMs == null || sentAtMs > nowMs) continue;
 
       const station = stationFromDestination(resolveKdsDestination(item as KdsRoutableItem));
       if (!station) continue;
       const elapsedMs = nowMs - sentAtMs;
-      const level = resolveKdsSlaLevel(elapsedMs, station);
+      const level = resolveOperationalAlertLevel(elapsedMs, station, policy);
       if (level === "normal") continue;
 
       const key = `${order.id}:${station}`;
       const meta = STATION_META[station];
-      const thresholds = kdsSlaThresholds(station);
+      const thresholds = policy.stations[station];
       const existing = alerts.get(key);
       const nextLevel: OperationalDelayAlertLevel = level;
       if (!existing) {
@@ -172,11 +155,14 @@ export function buildOperationalDelayAlerts({
           stationLabel: meta.label,
           stationHref: meta.href,
           level: nextLevel,
+          escalated: isOperationalAlertEscalated(elapsedMs, station, policy),
           elapsedMs,
           elapsedMinutes: Math.floor(elapsedMs / 60_000),
           oldestSentAtMs: sentAtMs,
           delayedLineCount: 1,
-          thresholdMinutes: nextLevel === "critical" ? thresholds.critical : thresholds.attention,
+          thresholdMinutes: nextLevel === "critical" ? thresholds.criticalMinutes : thresholds.attentionMinutes,
+          criticalThresholdMinutes: thresholds.criticalMinutes,
+          escalationAfterMinutes: thresholds.criticalMinutes + thresholds.escalationMinutes,
         });
         continue;
       }
@@ -186,15 +172,17 @@ export function buildOperationalDelayAlerts({
         existing.oldestSentAtMs = sentAtMs;
         existing.elapsedMs = elapsedMs;
         existing.elapsedMinutes = Math.floor(elapsedMs / 60_000);
+        existing.escalated = isOperationalAlertEscalated(elapsedMs, station, policy);
       }
       if (levelScore(nextLevel) > levelScore(existing.level)) {
         existing.level = nextLevel;
-        existing.thresholdMinutes = nextLevel === "critical" ? thresholds.critical : thresholds.attention;
+        existing.thresholdMinutes = nextLevel === "critical" ? thresholds.criticalMinutes : thresholds.attentionMinutes;
       }
     }
   }
 
   return Array.from(alerts.values()).sort((a, b) => {
+    if (a.escalated !== b.escalated) return a.escalated ? -1 : 1;
     const levelDelta = levelScore(b.level) - levelScore(a.level);
     if (levelDelta !== 0) return levelDelta;
     const elapsedDelta = b.elapsedMs - a.elapsedMs;
