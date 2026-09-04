@@ -3,6 +3,7 @@
 import { useCallback, useId, useMemo, useState } from "react";
 import { BillingCustomerSelectedCard } from "@/components/tpv/payment/billing-customer-selected-card";
 import { NewBillingCustomerModal } from "@/components/tpv/payment/new-billing-customer-modal";
+import { HostlyButton } from "@/components/ui/hostly";
 import { useBillingCustomers } from "@/hooks/useBillingCustomers";
 import type { BillingCustomer, BillingCustomerInput } from "@/types/billing-customer";
 
@@ -96,8 +97,9 @@ export function PaymentBillingSection({
     <>
       {isDock ? (
         <div className="pt-0.5">
-          <button
-            type="button"
+          <HostlyButton
+            variant="ghost"
+            size="touch"
             aria-expanded={billingOpen}
             aria-controls={`${sectionId}-panel`}
             aria-label={
@@ -146,7 +148,7 @@ export function PaymentBillingSection({
             >
               ▸
             </span>
-          </button>
+          </HostlyButton>
 
           {billingOpen ? (
             <div id={`${sectionId}-panel`} className="space-y-3 pb-4 pt-2">
@@ -185,8 +187,9 @@ export function PaymentBillingSection({
                       >
                         {searchResults.map((customer) => (
                           <li key={customer.id} role="option" aria-selected={false}>
-                            <button
-                              type="button"
+                            <HostlyButton
+                              variant="ghost"
+                              size="touch"
                               className="hostly-payment-list-item w-full rounded-lg px-2.5 py-1.5 text-left touch-manipulation"
                               onClick={() => handleSelectCustomer(customer)}
                             >
@@ -196,7 +199,7 @@ export function PaymentBillingSection({
                               <div className="text-xs font-semibold text-slate-500">
                                 {customer.taxId} · {customer.email}
                               </div>
-                            </button>
+                            </HostlyButton>
                           </li>
                         ))}
                       </ul>
@@ -211,8 +214,9 @@ export function PaymentBillingSection({
                     ) : null}
                   </div>
 
-                  <button
-                    type="button"
+                  <HostlyButton
+                    variant="secondary"
+                    size="touch"
                     className="hostly-payment-chip-btn inline-flex min-h-[42px] w-full items-center justify-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-3.5 text-sm font-extrabold text-blue-700 shadow-sm touch-manipulation"
                     onClick={() => setNewCustomerModalOpen(true)}
                   >
@@ -220,7 +224,7 @@ export function PaymentBillingSection({
                       +
                     </span>
                     Nueva empresa
-                  </button>
+                  </HostlyButton>
                 </>
               )}
 
@@ -257,8 +261,9 @@ export function PaymentBillingSection({
             Facturación
           </div>
 
-          <button
-            type="button"
+          <HostlyButton
+            variant="secondary"
+            size="touch"
             aria-expanded={billingOpen}
             aria-controls={`${sectionId}-panel`}
             className={
@@ -269,7 +274,7 @@ export function PaymentBillingSection({
             onClick={toggleBilling}
           >
             Emitir factura
-          </button>
+          </HostlyButton>
 
           {billingOpen ? (
             <div id={`${sectionId}-panel`} className="space-y-2 pt-0.5">
@@ -311,8 +316,9 @@ export function PaymentBillingSection({
                       >
                         {searchResults.map((customer) => (
                           <li key={customer.id} role="option" aria-selected={false}>
-                            <button
-                              type="button"
+                            <HostlyButton
+                              variant="ghost"
+                              size="touch"
                               className="hostly-payment-list-item w-full rounded-xl px-3 py-2 text-left touch-manipulation"
                               onClick={() => handleSelectCustomer(customer)}
                             >
@@ -322,7 +328,7 @@ export function PaymentBillingSection({
                               <div className="text-xs font-semibold text-slate-500">
                                 {customer.taxId} · {customer.email}
                               </div>
-                            </button>
+                            </HostlyButton>
                           </li>
                         ))}
                       </ul>
@@ -337,8 +343,9 @@ export function PaymentBillingSection({
                     ) : null}
                   </div>
 
-                  <button
-                    type="button"
+                  <HostlyButton
+                    variant="secondary"
+                    size="touch"
                     className="hostly-payment-chip-btn inline-flex min-h-[42px] w-full items-center justify-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-3.5 text-sm font-extrabold text-blue-700 shadow-sm touch-manipulation"
                     onClick={() => setNewCustomerModalOpen(true)}
                   >
@@ -346,7 +353,7 @@ export function PaymentBillingSection({
                       +
                     </span>
                     Nueva empresa
-                  </button>
+                  </HostlyButton>
                 </>
               )}
 
