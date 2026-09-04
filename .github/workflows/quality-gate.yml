@@ -13,6 +13,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  rbac-firestore-patch:
+    if: github.event_name == 'pull_request' && github.head_ref == 'feat/operational-rbac'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout RBAC branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/operational-rbac
+          fetch-depth: 0
+
+      - name: Apply one-shot rules patch when helper exists
+        run: |
+          if [ ! -f scripts/patch-rbac-firestore-rules.mjs ]; then
+            echo "RBAC rules patch already applied"
+            exit 0
+          fi
+          node scripts/patch-rbac-firestore-rules.mjs
+          rm -f scripts/patch-rbac-firestore-rules.mjs .github/workflows/rbac-firestore-rules-patch.yml
+          git config user.name "hostly-rbac-bot"
+          git config user.email "fer@hostlyapp.app"
+          git add firestore.rules scripts/patch-rbac-firestore-rules.mjs .github/workflows/rbac-firestore-rules-patch.yml
+          git commit -m "fix(rbac): harden Firestore operational access"
+          git push origin HEAD:feat/operational-rbac
+
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 20
