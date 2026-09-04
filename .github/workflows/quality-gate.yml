@@ -53,6 +53,9 @@ jobs:
           npx tsx --test tests/lib/operational-rbac.test.ts
           npx firebase emulators:exec --only firestore --project demo-hostly-operational-rbac "node --import tsx --test tests/server/operational-rbac-rules.test.ts"
 
+      - name: Operational delay alert tests
+        run: npx tsx --test tests/lib/operational-delay-alerts.test.ts
+
       - name: Products control UX tests
         run: npx tsx --test tests/lib/product-ui-navigation.test.ts tests/lib/product-row-hierarchy.test.ts tests/lib/product-modifier-kind.test.ts tests/lib/product-commercial-edit-intent.test.ts tests/lib/product-image-list-filter.test.ts tests/lib/catalog-image-bulk-readiness.test.ts
 
