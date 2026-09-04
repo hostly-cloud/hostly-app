@@ -1,5 +1,6 @@
 "use client";
 
+import { HostlyButton } from "@/components/ui/hostly";
 import type { BillingCustomer } from "@/types/billing-customer";
 
 export type BillingCustomerSelectedCardProps = {
@@ -33,13 +34,14 @@ export function BillingCustomerSelectedCard({
         <div className="text-[11px] font-medium text-slate-600 truncate">
           {customer.email}
         </div>
-        <button
-          type="button"
+        <HostlyButton
+          variant="secondary"
+          size="touch"
           className="hostly-payment-chip-btn mt-2 min-h-[40px] rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm touch-manipulation"
           onClick={onChange}
         >
           Cambiar empresa
-        </button>
+        </HostlyButton>
       </div>
     );
   }
@@ -73,20 +75,22 @@ export function BillingCustomerSelectedCard({
         </div>
       </div>
       <div className="flex flex-wrap gap-2 pt-0.5">
-        <button
-          type="button"
+        <HostlyButton
+          variant="secondary"
+          size="touch"
           className="hostly-payment-chip-btn min-h-[36px] rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm touch-manipulation"
           onClick={onChange}
         >
           Cambiar empresa
-        </button>
-        <button
-          type="button"
+        </HostlyButton>
+        <HostlyButton
+          variant="destructive"
+          size="touch"
           className="hostly-payment-chip-btn hostly-payment-chip-btn-danger min-h-[36px] rounded-xl border border-transparent px-3 text-xs font-bold text-red-700 touch-manipulation"
           onClick={onClear}
         >
           Eliminar selección
-        </button>
+        </HostlyButton>
       </div>
     </div>
   );

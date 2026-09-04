@@ -1,5 +1,6 @@
 "use client";
 
+import { HostlyButton } from "@/components/ui/hostly";
 import { useBillingInvoiceActions } from "@/hooks/useBillingInvoiceActions";
 import type { BillingInvoice } from "@/types/billing-invoice";
 
@@ -64,8 +65,9 @@ export function BillingInvoiceCompletionPanel({
         ) : null}
 
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <button
-            type="button"
+          <HostlyButton
+            variant="primary"
+            size="touch"
             disabled={!companyEmail || isSending}
             className="col-span-2 min-h-[48px] rounded-2xl bg-blue-600 text-sm font-extrabold text-white shadow-sm disabled:opacity-50 touch-manipulation"
             onClick={() => {
@@ -77,28 +79,31 @@ export function BillingInvoiceCompletionPanel({
             }}
           >
             {isSending ? "Preparando envío…" : "Enviar factura"}
-          </button>
-          <button
-            type="button"
+          </HostlyButton>
+          <HostlyButton
+            variant="secondary"
+            size="touch"
             className="min-h-[44px] rounded-2xl border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm touch-manipulation"
             onClick={() => downloadPdf(invoice)}
           >
             Descargar PDF
-          </button>
-          <button
-            type="button"
+          </HostlyButton>
+          <HostlyButton
+            variant="secondary"
+            size="touch"
             className="min-h-[44px] rounded-2xl border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm touch-manipulation"
             onClick={() => printPdf(invoice)}
           >
             Imprimir
-          </button>
-          <button
-            type="button"
+          </HostlyButton>
+          <HostlyButton
+            variant="ghost"
+            size="touch"
             className="col-span-2 min-h-[44px] rounded-2xl bg-slate-100 text-sm font-bold text-slate-700 touch-manipulation"
             onClick={onClose}
           >
             Cerrar
-          </button>
+          </HostlyButton>
         </div>
       </div>
     </div>

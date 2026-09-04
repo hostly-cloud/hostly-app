@@ -2,6 +2,7 @@
 
 import { createPortal } from "react-dom";
 import { useEffect } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 
 export type TpvQuickActionItem = {
   id: string;
@@ -75,9 +76,10 @@ export function TpvQuickActionsMenu({
         ) : null}
         <div className="hostly-tpv-quick-actions-menu-list">
           {actions.map((action) => (
-            <button
+            <HostlyButton
               key={action.id}
-              type="button"
+              variant={action.tone === "danger" ? "destructive" : "ghost"}
+              size="touch"
               role="menuitem"
               disabled={action.disabled}
               className={`hostly-tpv-quick-actions-menu-item${
@@ -90,7 +92,7 @@ export function TpvQuickActionsMenu({
               }}
             >
               {action.label}
-            </button>
+            </HostlyButton>
           ))}
         </div>
       </div>
