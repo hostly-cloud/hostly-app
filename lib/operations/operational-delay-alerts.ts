@@ -70,6 +70,13 @@ function isProductionLineActive(status: unknown): boolean {
   return ACTIVE_PRODUCTION_LINE_STATUSES.has(normalizedStatus(status));
 }
 
+function hasExplicitNoProductionDestination(item: Record<string, unknown>): boolean {
+  return (
+    text(item.station).toLowerCase() === "none" ||
+    text(item.preparationArea).toLowerCase() === "none"
+  );
+}
+
 export function readOperationalTimestampMs(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (value instanceof Date) return value.getTime();
@@ -140,6 +147,7 @@ export function buildOperationalDelayAlerts({
       if (!rawItem || typeof rawItem !== "object") continue;
       const item = rawItem as Record<string, unknown>;
       if (!isProductionLineActive(item.status)) continue;
+      if (hasExplicitNoProductionDestination(item)) continue;
       const sentAtMs = readOperationalTimestampMs(item.sentAt);
       if (sentAtMs == null || sentAtMs > nowMs) continue;
 
