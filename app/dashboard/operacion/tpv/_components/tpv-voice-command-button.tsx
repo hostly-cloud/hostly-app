@@ -67,7 +67,6 @@ function feedbackToneClass(tone: TpvVoiceFeedbackTone): string {
 export function TpvVoiceCommandButton() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const messageTimerRef = useRef<number | null>(null);
-  const [supported, setSupported] = useState(true);
   const [listening, setListening] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<TpvVoiceFeedbackTone>("info");
@@ -98,10 +97,7 @@ export function TpvVoiceCommandButton() {
 
   useEffect(() => {
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-    if (!Recognition) {
-      setSupported(false);
-      return;
-    }
+    if (!Recognition) return;
 
     const recognition = new Recognition();
     recognition.continuous = false;
@@ -155,7 +151,7 @@ export function TpvVoiceCommandButton() {
   }, [showMessage]);
 
   const toggleVoiceCommand = () => {
-    if (!supported || !recognitionRef.current) {
+    if (!recognitionRef.current) {
       showMessage("Los comandos por voz no están disponibles en este navegador.", "error");
       return;
     }
