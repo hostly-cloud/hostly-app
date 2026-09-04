@@ -25,7 +25,7 @@ const nextConfig = {
           {
             key: "Permissions-Policy",
             value:
-              "geolocation=(self), microphone=(), usb=(), browsing-topics=()",
+              "geolocation=(self), microphone=(self), usb=(), browsing-topics=()",
           },
           { key: "X-DNS-Prefetch-Control", value: "off" },
         ],

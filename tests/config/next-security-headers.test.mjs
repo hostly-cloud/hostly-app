@@ -34,11 +34,12 @@ test("all Hostly routes receive conservative production security headers", async
 
   const permissions = headers.get("permissions-policy") ?? "";
   assert.match(permissions, /geolocation=\(self\)/);
-  assert.match(permissions, /microphone=\(\)/);
+  assert.match(permissions, /microphone=\(self\)/);
+  assert.doesNotMatch(permissions, /microphone=\(\)/);
   assert.match(permissions, /usb=\(\)/);
   assert.match(permissions, /browsing-topics=\(\)/);
 
-  // Hostly can legitimately use camera input for operational workflows, so
-  // the global policy must not accidentally disable it.
+  // Hostly can legitimately use camera and same-origin microphone input for
+  // operational workflows, while cross-origin microphone access stays blocked.
   assert.doesNotMatch(permissions, /camera=\(\)/);
 });
