@@ -1,5 +1,7 @@
 "use client";
 
+import { HostlyButton } from "@/components/ui/hostly";
+
 export type SalaEditorHistoryControlsProps = {
   canUndo: boolean;
   canRedo: boolean;
@@ -19,8 +21,9 @@ export function SalaEditorHistoryControls({
       role="group"
       aria-label="Historial de edición"
     >
-      <button
-        type="button"
+      <HostlyButton
+        variant="ghost"
+        size="compact"
         className="hostly-sala-editor-workbench__history-btn"
         disabled={!canUndo}
         aria-label="Deshacer"
@@ -31,9 +34,10 @@ export function SalaEditorHistoryControls({
           ↶
         </span>
         <span className="hostly-sala-editor-workbench__history-btn-label">Deshacer</span>
-      </button>
-      <button
-        type="button"
+      </HostlyButton>
+      <HostlyButton
+        variant="ghost"
+        size="compact"
         className="hostly-sala-editor-workbench__history-btn"
         disabled={!canRedo}
         aria-label="Rehacer"
@@ -44,7 +48,7 @@ export function SalaEditorHistoryControls({
           ↷
         </span>
         <span className="hostly-sala-editor-workbench__history-btn-label">Rehacer</span>
-      </button>
+      </HostlyButton>
     </div>
   );
 }
