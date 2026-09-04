@@ -13,32 +13,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  rbac-firestore-patch:
-    if: github.event_name == 'pull_request' && github.head_ref == 'feat/operational-rbac'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout RBAC branch
-        uses: actions/checkout@v4
-        with:
-          ref: feat/operational-rbac
-          fetch-depth: 0
-
-      - name: Apply one-shot RBAC alignment when helper exists
-        run: |
-          if [ ! -f scripts/patch-rbac-firestore-rules.mjs ]; then
-            echo "RBAC alignment already applied"
-            exit 0
-          fi
-          node scripts/patch-rbac-firestore-rules.mjs
-          rm -f scripts/patch-rbac-firestore-rules.mjs .github/workflows/rbac-firestore-rules-patch.yml
-          git config user.name "hostly-rbac-bot"
-          git config user.email "fer@hostlyapp.app"
-          git add -A
-          git commit -m "fix(rbac): align catalog APIs and table access"
-          git push origin HEAD:feat/operational-rbac
-
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -75,7 +49,9 @@ jobs:
         run: node --test tests/config/next-security-headers.test.mjs
 
       - name: Operational RBAC tests
-        run: npx tsx --test tests/lib/operational-rbac.test.ts
+        run: |
+          npx tsx --test tests/lib/operational-rbac.test.ts
+          npx firebase emulators:exec --only firestore --project demo-hostly-operational-rbac "node --import tsx --test tests/server/operational-rbac-rules.test.ts"
 
       - name: Products control UX tests
         run: npx tsx --test tests/lib/product-ui-navigation.test.ts tests/lib/product-row-hierarchy.test.ts tests/lib/product-modifier-kind.test.ts tests/lib/product-commercial-edit-intent.test.ts tests/lib/product-image-list-filter.test.ts tests/lib/catalog-image-bulk-readiness.test.ts
