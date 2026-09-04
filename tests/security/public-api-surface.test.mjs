@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-const API_ROOT = join(process.cwd(), "app", "api");
+const ROOT = process.cwd();
+const API_ROOT = join(ROOT, "app", "api");
 
 const EXPLICIT_ROUTE_CLASSIFICATION = new Map([
   ["app/api/health/route.ts", "public-health"],
   ["app/api/marketing/leads/route.ts", "public-rate-limited"],
+  ["app/api/employees/clocking/qr/route.ts", "public-tokenized"],
+  ["app/api/tpv/orders/sync-items/route.ts", "retired-410"],
   ["app/api/debug/firebase/route.ts", "production-disabled"],
   ["app/api/queues/catalog-image-bulk/route.ts", "signed-callback"],
 ]);
@@ -36,15 +39,42 @@ function walkRoutes(dir) {
       routes.push(...walkRoutes(path));
       continue;
     }
-    if (/^route\.(?:ts|tsx|js|mjs|cjs)$/.test(entry.name)) {
-      routes.push(path);
-    }
+    if (/^route\.(?:ts|tsx|js|mjs|cjs)$/.test(entry.name)) routes.push(path);
   }
   return routes.sort();
 }
 
 function repoPath(path) {
-  return relative(process.cwd(), path).split(sep).join("/");
+  return relative(ROOT, path).split(sep).join("/");
+}
+
+function resolveServerImport(specifier) {
+  if (!specifier.startsWith("@/lib/server/")) return null;
+  const base = join(ROOT, specifier.slice(2));
+  for (const candidate of [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+function importedServerFiles(source) {
+  const files = [];
+  const pattern = /from\s+["'](@\/lib\/server\/[^"']+)["']/g;
+  for (const match of source.matchAll(pattern)) {
+    const resolved = resolveServerImport(match[1]);
+    if (resolved) files.push(resolved);
+  }
+  return files;
+}
+
+function hasSecuritySignal(file, visited = new Set()) {
+  if (visited.has(file)) return false;
+  visited.add(file);
+  const source = readFileSync(file, "utf8");
+  if (SECURITY_SIGNALS.some((pattern) => pattern.test(source))) return true;
+  return importedServerFiles(source).some((dependency) =>
+    hasSecuritySignal(dependency, visited),
+  );
 }
 
 test("API routes never enable wildcard cross-origin access", () => {
@@ -60,37 +90,32 @@ test("API routes never enable wildcard cross-origin access", () => {
 
 test("every API route is authenticated/signed or explicitly classified", () => {
   const unclassified = [];
-
   for (const file of walkRoutes(API_ROOT)) {
     const path = repoPath(file);
     if (EXPLICIT_ROUTE_CLASSIFICATION.has(path)) continue;
-
-    const source = readFileSync(file, "utf8");
-    if (SECURITY_SIGNALS.some((pattern) => pattern.test(source))) continue;
-
-    // Thin route adapters are acceptable only when they delegate to a handler;
-    // the handler remains part of the route's security contract and is audited
-    // separately by focused tests/review.
-    if (/from\s+["'][^"']*handler["']/.test(source)) continue;
-
+    if (hasSecuritySignal(file)) continue;
     unclassified.push(path);
   }
 
   assert.deepEqual(
     unclassified,
     [],
-    `API routes missing an auth/signature signal or explicit public classification:\n${unclassified.join("\n")}`,
+    `API routes missing an auth/signature signal or explicit classification:\n${unclassified.join("\n")}`,
   );
 });
 
-test("the deliberately public surface stays small and explicit", () => {
-  const publicRoutes = [...EXPLICIT_ROUTE_CLASSIFICATION.entries()]
-    .filter(([, classification]) => classification.startsWith("public-"))
+test("the deliberately anonymous surface stays small and explicit", () => {
+  const anonymousRoutes = [...EXPLICIT_ROUTE_CLASSIFICATION.entries()]
+    .filter(([, classification]) =>
+      classification.startsWith("public-") || classification === "retired-410",
+    )
     .map(([path]) => path)
     .sort();
 
-  assert.deepEqual(publicRoutes, [
+  assert.deepEqual(anonymousRoutes, [
+    "app/api/employees/clocking/qr/route.ts",
     "app/api/health/route.ts",
     "app/api/marketing/leads/route.ts",
+    "app/api/tpv/orders/sync-items/route.ts",
   ]);
 });
