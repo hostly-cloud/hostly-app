@@ -33,7 +33,7 @@ test("encuentra una caña aunque la transcripción pierda la ñ", () => {
 });
 
 test("normaliza errores fonéticos comunes de caña", () => {
-  for (const query of ["kana", "canna", "cania", "cagna"]) {
+  for (const query of ["kana", "canna", "cania", "cagna", "cano", "caños"]) {
     const match = requireMatch(
       chooseTpvVoiceProductCandidate(query, [
         product("draft", "Caña", "Cervezas"),
