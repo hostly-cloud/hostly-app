@@ -19,36 +19,25 @@ function getLibraryItemMeta(item: SalaEditorLibraryItem): string {
   if (item.structuralKind != null) return "Estructura";
   if (item.landscapeKind != null) return "Paisajismo";
   if (item.zoneType != null) return "Zona";
-  if (item.surfaceMaterial != null) return item.surfaceShape ? "Superficie · forma" : "Superficie";
+  if (item.surfaceShape != null && item.surfaceMaterial == null) return "Forma de superficie";
+  if (item.surfaceMaterial != null) return "Superficie";
   if (item.baseToolId != null) return "Base del plano";
   return "Elemento";
 }
 
-export function SalaEditorLibraryItemRow({
-  item,
-  selected,
-  onSelect,
-}: SalaEditorLibraryItemProps) {
+export function SalaEditorLibraryItemRow({ item, selected, onSelect }: SalaEditorLibraryItemProps) {
   const disabled = item.status === "upcoming";
 
   return (
     <li className="hostly-sala-library__item">
       <button
         type="button"
-        className={[
-          "hostly-sala-library__item-btn",
-          selected && !disabled ? "is-selected" : "",
-          disabled ? "is-upcoming" : "",
-        ]
-          .filter(Boolean)
-          .join(" ")}
+        className={["hostly-sala-library__item-btn", selected && !disabled ? "is-selected" : "", disabled ? "is-upcoming" : ""].filter(Boolean).join(" ")}
         disabled={disabled}
         aria-pressed={disabled ? undefined : selected}
         aria-disabled={disabled}
         title={disabled ? `${item.label} — Próximamente` : item.label}
-        onClick={() => {
-          if (!disabled) onSelect(item);
-        }}
+        onClick={() => { if (!disabled) onSelect(item); }}
       >
         <span className="hostly-sala-library__item-preview" aria-hidden>
           {item.operationalType != null ? (
@@ -63,30 +52,18 @@ export function SalaEditorLibraryItemRow({
             <SalaEditorElementPreview item={item} />
           )}
         </span>
-
         <span className="hostly-sala-library__item-copy">
           <span className="hostly-sala-library__item-label">{item.label}</span>
-          <span className="hostly-sala-library__item-meta">
-            {disabled ? "Disponible próximamente" : getLibraryItemMeta(item)}
-          </span>
+          <span className="hostly-sala-library__item-meta">{disabled ? "Disponible próximamente" : getLibraryItemMeta(item)}</span>
         </span>
-
-        <span className="hostly-sala-library__item-state" aria-hidden>
-          {disabled ? "" : selected ? "✓" : "+"}
-        </span>
-
-        {disabled ? (
-          <span className="hostly-sala-library__item-badge">Próximamente</span>
-        ) : null}
+        <span className="hostly-sala-library__item-state" aria-hidden>{disabled ? "" : selected ? "✓" : "+"}</span>
+        {disabled ? <span className="hostly-sala-library__item-badge">Próximamente</span> : null}
       </button>
     </li>
   );
 }
 
-export function isLibraryItemSelected(
-  item: SalaEditorLibraryItem,
-  selection: SalaEditorLibrarySelection,
-): boolean {
+export function isLibraryItemSelected(item: SalaEditorLibraryItem, selection: SalaEditorLibrarySelection): boolean {
   if (item.status !== "available") return false;
   if (item.structuralKind != null) {
     if (selection.structuralKind !== item.structuralKind) return false;
@@ -95,24 +72,13 @@ export function isLibraryItemSelected(
   }
   if (item.operationalType != null) {
     if (selection.operationalType !== item.operationalType) return false;
-    if (item.visualVariant != null) {
-      return selection.visualVariant === item.visualVariant;
-    }
+    if (item.visualVariant != null) return selection.visualVariant === item.visualVariant;
     return selection.visualVariant == null;
   }
-  if (item.landscapeKind != null) {
-    return selection.landscapeKind === item.landscapeKind;
-  }
-  if (item.zoneType != null) {
-    return selection.zoneType === item.zoneType;
-  }
-  if (item.baseToolId != null) {
-    return selection.baseToolId === item.baseToolId;
-  }
-  if (item.surfaceMaterial != null) {
-    if (selection.surfaceMaterial !== item.surfaceMaterial) return false;
-    if (item.surfaceShape != null) return selection.surfaceShape === item.surfaceShape;
-    return selection.surfaceShape == null;
-  }
+  if (item.landscapeKind != null) return selection.landscapeKind === item.landscapeKind;
+  if (item.zoneType != null) return selection.zoneType === item.zoneType;
+  if (item.baseToolId != null) return selection.baseToolId === item.baseToolId;
+  if (item.surfaceShape != null && item.surfaceMaterial == null) return selection.surfaceShape === item.surfaceShape;
+  if (item.surfaceMaterial != null) return selection.surfaceMaterial === item.surfaceMaterial;
   return false;
 }
