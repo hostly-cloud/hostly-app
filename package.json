@@ -36,7 +36,7 @@
     "@google-cloud/vision": "^5.3.6",
     "@vercel/queue": "0.5.1",
     "ai": "^7.0.87",
-    "firebase": "^12.15.0",
+    "firebase": "^12.18.0",
     "firebase-admin": "^14.3.0",
     "geist": "1.7.2",
     "jspdf": "^4.2.1",
