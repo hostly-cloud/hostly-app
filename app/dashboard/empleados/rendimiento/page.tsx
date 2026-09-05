@@ -113,7 +113,7 @@ export default function EmployeeSalesPerformancePage() {
     }
   }, [draftGoals, month]);
 
-  const rows = snapshot?.rows ?? [];
+  const rows = useMemo(() => snapshot?.rows ?? [], [snapshot?.rows]);
   const targetRows = useMemo(() => rows.filter((row) => row.targetAmount != null), [rows]);
   const achievedCount = useMemo(() => targetRows.filter((row) => row.status === "achieved").length, [targetRows]);
 

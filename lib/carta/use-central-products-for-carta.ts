@@ -237,8 +237,8 @@ export function useCentralProductsForCarta(
 
   useEffect(() => {
     if (awaitingProfileTenant || !rid || !authReady || !isAuthReady() || !isFirebaseConfigured) {
-      setGastronomyById(new Map());
-      return;
+      const resetTask = window.setTimeout(() => setGastronomyById(new Map()), 0);
+      return () => window.clearTimeout(resetTask);
     }
     return listenProductGastronomyByRestaurant(
       rid,

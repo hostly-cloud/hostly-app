@@ -129,11 +129,9 @@ export function TpvProductInfoPlanGuard() {
     requireAuthenticatedTenant: true,
   });
   const productsRef = useRef<readonly Product[]>([]);
-  productsRef.current = catalog.products;
 
   const [access, setAccess] = useState<TpvProductInfoAccess>(CLOSED_ACCESS);
   const accessRef = useRef<TpvProductInfoAccess>(CLOSED_ACCESS);
-  accessRef.current = access;
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [sommelierSnapshot, setSommelierSnapshot] = useState<SommelierSnapshot | null>(null);
   const holdTimerRef = useRef<number | null>(null);
@@ -142,9 +140,20 @@ export function TpvProductInfoPlanGuard() {
   const suppressNextClickRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
+    productsRef.current = catalog.products;
+  }, [catalog.products]);
+
+  useEffect(() => {
+    accessRef.current = access;
+  }, [access]);
+
+  useEffect(() => {
     let cancelled = false;
-    setAccess(CLOSED_ACCESS);
-    setSommelierSnapshot(null);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setAccess(CLOSED_ACCESS);
+      setSommelierSnapshot(null);
+    });
     if (!rid) return () => {
       cancelled = true;
     };

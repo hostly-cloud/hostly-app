@@ -573,7 +573,7 @@ export async function loadPersistedSommelierSnapshot(params: {
   let model: string | null = null;
   let source: SommelierPairingSource | null = null;
   let persistedHash = "";
-  let wineProfiles: Record<string, SommelierWineProfile> = {};
+  const wineProfiles: Record<string, SommelierWineProfile> = {};
 
   for (const doc of snap.docs) {
     const data = doc.data() as Record<string, unknown>;

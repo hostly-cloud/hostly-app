@@ -56,6 +56,8 @@ jobs:
         run: npm audit
       - name: Firebase CLI stream-json security compatibility tests
         run: node --test tests/security/stream-json-compat.test.mjs
+      - name: Storage product image RBAC contract
+        run: node --test tests/security/storage-product-image-rbac-contract.test.mjs
       - name: TypeScript
         run: npx tsc --noEmit
       - name: Hostly plan contract tests
@@ -96,6 +98,17 @@ jobs:
           name: interactive-controls-audit
           path: interactive-controls-audit.json
           retention-days: 14
-      - name: Lint debt report
-        continue-on-error: true
-        run: npm run lint
+      - name: Lint
+        shell: bash
+        run: |
+          set +e
+          npm run lint 2>&1 | tee lint-report.txt
+          status=${PIPESTATUS[0]}
+          exit "$status"
+      - name: Publish lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: lint-report.txt
+          retention-days: 14
