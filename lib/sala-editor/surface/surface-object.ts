@@ -11,10 +11,13 @@ export type SurfaceMaterialKind =
   | "tile"
   | "custom";
 
+export type SurfaceShapeKind = "rectangle" | "rounded" | "ellipse" | "organic";
+
 export type SurfaceObject = {
   id: SurfaceObjectId;
   espacioId: string;
   material: SurfaceMaterialKind;
+  shape: SurfaceShapeKind;
   x: number;
   y: number;
   width: number;
@@ -23,12 +26,15 @@ export type SurfaceObject = {
   locked: boolean;
 };
 
-export type SurfaceObjectDraft = Omit<SurfaceObject, "id">;
+export type SurfaceObjectDraft = Omit<SurfaceObject, "id" | "shape"> & {
+  shape?: SurfaceShapeKind;
+};
 
 export function createSurfaceObject(draft: SurfaceObjectDraft): SurfaceObject {
   return {
     id: `surface-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     ...draft,
+    shape: draft.shape ?? "rectangle",
   };
 }
 
@@ -48,6 +54,29 @@ function isSurfaceMaterialKind(value: unknown): value is SurfaceMaterialKind {
     value === "tile" ||
     value === "custom"
   );
+}
+
+function isSurfaceShapeKind(value: unknown): value is SurfaceShapeKind {
+  return value === "rectangle" || value === "rounded" || value === "ellipse" || value === "organic";
+}
+
+export function getSurfaceShapeStyle(shape: SurfaceShapeKind): {
+  borderRadius?: string;
+  clipPath?: string;
+} {
+  switch (shape) {
+    case "rounded":
+      return { borderRadius: "26px" };
+    case "ellipse":
+      return { borderRadius: "50%" };
+    case "organic":
+      return {
+        borderRadius: "43% 57% 61% 39% / 37% 44% 56% 63%",
+        clipPath: "polygon(7% 27%, 18% 9%, 43% 3%, 68% 10%, 91% 28%, 97% 54%, 87% 80%, 62% 95%, 33% 92%, 11% 75%, 3% 51%)",
+      };
+    default:
+      return {};
+  }
 }
 
 export function normalizeSurfaceObjects(
@@ -79,6 +108,7 @@ export function normalizeSurfaceObjects(
       id: entry.id,
       espacioId: entry.espacioId,
       material: entry.material,
+      shape: isSurfaceShapeKind(entry.shape) ? entry.shape : "rectangle",
       x: entry.x,
       y: entry.y,
       width: entry.width,
