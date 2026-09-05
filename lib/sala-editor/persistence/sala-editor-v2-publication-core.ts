@@ -5,8 +5,6 @@ import {
   getDocs,
   query,
   serverTimestamp,
-  setDoc,
-  updateDoc,
   where,
   writeBatch,
   type DocumentData,
@@ -28,7 +26,6 @@ import {
 } from "@/lib/firestore/tables";
 import {
   buildBatchChunkLastOpContext,
-  buildPublicationWriteLastOpContext,
   planPublisherWriteRemember,
 } from "@/lib/sala-editor/persistence/sala-editor-v2-publisher-write-context";
 import {
@@ -558,25 +555,6 @@ function rememberLastFirestoreReadOperation(params: {
     payloadRestaurantId: null,
     existingRestaurantId: null,
     payloadKeys: [],
-  });
-}
-
-function rememberLastFirestoreWriteOperation(params: {
-  row: PublicationWriteDiagnostic;
-  operation?: string;
-}): void {
-  const { row } = params;
-  rememberLastFirestoreOperation({
-    operation: params.operation ?? row.operation,
-    documentPath: row.documentPath,
-    collectionName: row.collectionPath,
-    restaurantId: row.restaurantId,
-    uid: row.uid,
-    payloadRestaurantId: row.payloadRestaurantId,
-    existingRestaurantId: row.existingRestaurantId,
-    payloadKeys: Array.isArray(row.payload.fieldKeys)
-      ? row.payload.fieldKeys.filter((key): key is string => typeof key === "string")
-      : [],
   });
 }
 
@@ -1171,31 +1149,6 @@ function chunkDocumentDataWrites(
   return chunks;
 }
 
-function rememberPublicationWriteFromWrite(
-  write: PublicationWrite,
-  restaurantId: string,
-  operation: PublicationWriteDiagnostic["operation"],
-): void {
-  rememberLastFirestoreOperation(
-    buildPublicationWriteLastOpContext({
-      write: {
-        ref: {
-          path: write.ref.path,
-          id: write.ref.id,
-          parent: { path: write.ref.parent.path },
-        },
-        data: write.data as Record<string, unknown>,
-        mode: write.mode,
-        diagnosticLabel: write.diagnosticLabel,
-        existingRestaurantId: write.existingRestaurantId,
-      },
-      restaurantId,
-      operation,
-      uid: currentPublisherUid(),
-    }),
-  );
-}
-
 function rememberBatchChunkOperation(
   chunk: PublicationWrite[],
   restaurantId: string,
@@ -1343,68 +1296,11 @@ async function commitDecorativeWritesWithTrace(
     });
   }
 
-  const rememberPlan = planPublisherWriteRemember(SALA_EDITOR_DEV_DIAGNOSTICS);
-
   try {
-    for (const write of writes) {
-      const operation: PublicationWriteDiagnostic["operation"] =
-        write.mode === "setMerge" ? "setDoc" : "updateDoc";
-      const row = rememberPlan.buildExpensiveDiagnosticRows
-        ? describePublicationWrite({
-            write,
-            restaurantId: params.restaurantId,
-            operation,
-          })
-        : null;
-
-      try {
-        if (row) {
-          rememberLastFirestoreWriteOperation({ row });
-        } else {
-          rememberPublicationWriteFromWrite(write, params.restaurantId, operation);
-        }
-        if (write.mode === "setMerge") {
-          if (row) {
-            console.info("[SalaEditorV2][FirestoreDiag] setDoc ejecutando", {
-              operation: row.operation,
-              documentPath: row.documentPath,
-              collectionName: row.collectionPath,
-              restaurantId: row.restaurantId,
-              uid: row.uid,
-              payload: row.payload,
-            });
-          }
-          await setDoc(write.ref, write.data, { merge: true });
-        } else {
-          if (row) {
-            console.info("[SalaEditorV2][FirestoreDiag] updateDoc ejecutando", {
-              operation: row.operation,
-              documentPath: row.documentPath,
-              collectionName: row.collectionPath,
-              restaurantId: row.restaurantId,
-              uid: row.uid,
-              payload: row.payload,
-            });
-          }
-          await updateDoc(write.ref, write.data);
-        }
-        if (row) {
-          console.info("[SalaEditorV2][FirestoreDiag] decorativo OK", {
-            documentPath: row.documentPath,
-            operation: row.operation,
-          });
-        }
-      } catch (error) {
-        if (row) {
-          logPermissionDeniedWriteDiagnostics({
-            title: "[SalaEditorV2][FirestoreDiag] decorativo ERROR",
-            error,
-            rows: [row],
-          });
-        }
-        throw error;
-      }
-    }
+    // Los decorativos forman una sola proyección del mapa. Publicarlos en
+    // batches mantiene la misma atomicidad por chunk y evita un round-trip de
+    // red por elemento (decenas de segundos en planos reales).
+    await commitUpdateWrites(writes, params);
   } finally {
     if (SALA_EDITOR_DEV_DIAGNOSTICS) {
       console.groupEnd();
