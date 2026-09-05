@@ -37,13 +37,12 @@ test("sensitive fiscal ledgers remain server-only", () => {
   ];
 
   for (const collection of serverOnlyCollections) {
-    const marker = `match /${collection}/{`;
-    const start = rules.indexOf(marker);
-    assert.notEqual(start, -1, `${collection} rules must exist`);
-    const block = rules.slice(start, rules.indexOf("}", start) + 1);
+    const rule = new RegExp(
+      `match\\s+\\/${collection}\\/\\{[^}]+\\}\\s*\\{\\s*allow\\s+read,\\s*create,\\s*update,\\s*delete:\\s*if\\s+false;`,
+    );
     assert.match(
-      block,
-      /allow read, create, update, delete:\s*if false;/,
+      rules,
+      rule,
       `${collection} must remain inaccessible from the client SDK`,
     );
   }
