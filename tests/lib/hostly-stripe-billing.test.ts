@@ -123,10 +123,17 @@ test("Pro Checkout applies a 30-day trial only when eligible and forwards idempo
     },
     async () => {
       const previousFetch = globalThis.fetch;
-      let body: URLSearchParams | null = null;
+      let capturedTrialDays = "";
+      let capturedPaymentCollection = "";
+      let capturedTrialMetadata = "";
+      let capturedSuccessUrl = "";
       let idempotencyKey = "";
       globalThis.fetch = async (_input, init) => {
-        body = init?.body as URLSearchParams;
+        const requestBody = init?.body as URLSearchParams;
+        capturedTrialDays = requestBody.get("subscription_data[trial_period_days]") ?? "";
+        capturedPaymentCollection = requestBody.get("payment_method_collection") ?? "";
+        capturedTrialMetadata = requestBody.get("subscription_data[metadata][hostlyTrial]") ?? "";
+        capturedSuccessUrl = requestBody.get("success_url") ?? "";
         const headers = new Headers(init?.headers);
         idempotencyKey = headers.get("idempotency-key") ?? "";
         return new Response(JSON.stringify({ id: "cs_test", url: "https://checkout.stripe.test/session" }), {
@@ -145,11 +152,11 @@ test("Pro Checkout applies a 30-day trial only when eligible and forwards idempo
           idempotencyKey: "hostly-checkout:test:1234567890",
         });
         assert.equal(session.url, "https://checkout.stripe.test/session");
-        assert.equal(body?.get("subscription_data[trial_period_days]"), "30");
-        assert.equal(body?.get("payment_method_collection"), "always");
-        assert.equal(body?.get("subscription_data[metadata][hostlyTrial]"), "pro_30d");
+        assert.equal(capturedTrialDays, "30");
+        assert.equal(capturedPaymentCollection, "always");
+        assert.equal(capturedTrialMetadata, "pro_30d");
         assert.equal(
-          body?.get("success_url"),
+          capturedSuccessUrl,
           "https://hostlyapp.app/dashboard/configuracion/cuenta?subscription=success",
         );
         assert.equal(idempotencyKey, "hostly-checkout:test:1234567890");
