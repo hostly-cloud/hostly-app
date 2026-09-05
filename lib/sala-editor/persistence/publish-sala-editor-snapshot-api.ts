@@ -7,11 +7,13 @@ export type SalaEditorPublishedSnapshotResponse = {
   sourceDraftUpdatedAt: number | null;
   schemaVersion: typeof SALA_EDITOR_DOCUMENT_VERSION;
   snapshotVersion: number;
+  deactivatedDecoratives: number;
 };
 
 export async function publishSalaEditorSnapshotApi(params: {
   document: SalaEditorDocument;
   sourceDraftUpdatedAt?: number | null;
+  decorativeDeactivationIds?: string[];
 }): Promise<SalaEditorPublishedSnapshotResponse> {
   const user = auth.currentUser;
   if (!user) {
@@ -28,6 +30,7 @@ export async function publishSalaEditorSnapshotApi(params: {
     body: JSON.stringify({
       document: params.document,
       sourceDraftUpdatedAt: params.sourceDraftUpdatedAt ?? params.document.updatedAt,
+      decorativeDeactivationIds: params.decorativeDeactivationIds ?? [],
     }),
   });
 
@@ -40,6 +43,7 @@ export async function publishSalaEditorSnapshotApi(params: {
         sourceDraftUpdatedAt?: unknown;
         schemaVersion?: unknown;
         snapshotVersion?: unknown;
+        deactivatedDecoratives?: unknown;
       }
     | null;
 
@@ -72,5 +76,10 @@ export async function publishSalaEditorSnapshotApi(params: {
         : null,
     schemaVersion: payload.schemaVersion,
     snapshotVersion: payload.snapshotVersion,
+    deactivatedDecoratives:
+      typeof payload.deactivatedDecoratives === "number" &&
+      Number.isFinite(payload.deactivatedDecoratives)
+        ? payload.deactivatedDecoratives
+        : 0,
   };
 }
