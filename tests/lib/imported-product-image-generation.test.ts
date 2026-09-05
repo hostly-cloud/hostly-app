@@ -11,6 +11,8 @@ import {
   buildImportedProductImagePrompt,
   evaluateImportedProductImageEligibility,
   generateImageWithAiGateway,
+  generateImageWithConfiguredProviders,
+  GenerateImportedProductImageError,
   generateImportedProductImage,
   looksLikeBrandedOrBeverageProduct,
 } from "@/lib/server/product-images/generate-imported-product-image";
@@ -424,6 +426,55 @@ test("the Gemini image adapter rejects a response without image files", async ()
       error instanceof Error &&
       "code" in error &&
       error.code === "IMAGE_PROVIDER_EMPTY_RESPONSE",
+  );
+});
+
+test("configured providers fall back to OpenAI when AI Gateway is unauthorized", async () => {
+  let openAiCalls = 0;
+  const result = await generateImageWithConfiguredProviders(
+    "A plated dish",
+    "owner-1",
+    {
+      openAiConfigured: true,
+      gateway: async () => {
+        throw new GenerateImportedProductImageError(
+          "IMAGE_GENERATION_NOT_CONFIGURED",
+          "gateway unavailable",
+          503,
+        );
+      },
+      openAi: async () => {
+        openAiCalls += 1;
+        return {
+          bytes: Buffer.from([4, 5, 6]),
+          model: "gpt-image-2",
+          mediaType: "image/webp" as const,
+          provider: "openai",
+        };
+      },
+    },
+  );
+
+  assert.equal(openAiCalls, 1);
+  assert.equal(result.provider, "openai");
+  assert.deepEqual(result.bytes, Buffer.from([4, 5, 6]));
+});
+
+test("configured providers preserve gateway failures when no fallback exists", async () => {
+  await assert.rejects(
+    generateImageWithConfiguredProviders("A plated dish", "owner-1", {
+      openAiConfigured: false,
+      gateway: async () => {
+        throw new GenerateImportedProductImageError(
+          "IMAGE_GENERATION_NOT_CONFIGURED",
+          "gateway unavailable",
+          503,
+        );
+      },
+    }),
+    (error: unknown) =>
+      error instanceof GenerateImportedProductImageError &&
+      error.code === "IMAGE_GENERATION_NOT_CONFIGURED",
   );
 });
 
