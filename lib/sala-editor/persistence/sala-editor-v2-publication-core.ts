@@ -2698,10 +2698,10 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     commitOperational: () =>
       commitUpdateWrites([...zoneWrites, ...tableWrites], { restaurantId }),
     commitDeactivations: () =>
-      commitUpdateWrites(
-        [...decorativeDeactivateWrites, ...legacyTableDeactivateWrites],
-        { restaurantId },
-      ),
+      // El lifecycle de `tables.isActive` es server-owned. Los decorativos se
+      // retiran de forma atómica junto al snapshot publicado en el endpoint
+      // Admin; aquí solo permanece la retirada operativa legacy existente.
+      commitUpdateWrites(legacyTableDeactivateWrites, { restaurantId }),
   });
 
   return {

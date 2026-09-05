@@ -49,6 +49,9 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
   const publishedSnapshot = await publishSalaEditorSnapshotApi({
     document: publicationCheckpoint.document,
     sourceDraftUpdatedAt: params.document.updatedAt,
+    decorativeDeactivationIds: result.decorativeAudit
+      .filter((item) => item.action === "deactivate")
+      .map((item) => item.id),
   });
 
   return {
@@ -59,5 +62,6 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     publicationLinkedCount: publicationCheckpoint.linkedCount,
     publishedAt: publishedSnapshot.publishedAt,
     publishedSnapshotVersion: publishedSnapshot.snapshotVersion,
+    decorativeLegacyDeactivated: publishedSnapshot.deactivatedDecoratives,
   };
 }

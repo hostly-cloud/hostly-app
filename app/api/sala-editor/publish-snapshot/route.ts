@@ -10,7 +10,12 @@ import {
   parseSalaEditorDocumentForPublished,
   parseSalaEditorPublishedDocument,
 } from "@/lib/sala-editor/persistence/sala-editor-published-contract";
-import { saveSalaEditorPublishedWithAdmin } from "@/lib/server/sala-editor/save-published-snapshot";
+import {
+  UnsafePublishedDecorativeDeactivationError,
+  publishSalaEditorSnapshotWithAdmin,
+} from "@/lib/server/sala-editor/save-published-snapshot";
+
+const MAX_DECORATIVE_DEACTIVATIONS = 450;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -41,6 +46,9 @@ export async function GET(req: Request) {
     );
     return NextResponse.json({ ok: true, published });
   } catch (error) {
+    if (!(error instanceof UnsafePublishedDecorativeDeactivationError)) {
+      throw error;
+    }
     return NextResponse.json(
       {
         ok: false,
@@ -109,13 +117,55 @@ export async function POST(req: Request) {
       ? body.sourceDraftUpdatedAt
       : document.updatedAt;
 
-  const published = await saveSalaEditorPublishedWithAdmin({
-    db: authCtx.db,
-    restaurantId: authCtx.restaurantId,
-    document,
-    publishedBy: authCtx.uid,
-    sourceDraftUpdatedAt,
-  });
+  const rawDecorativeIds = body.decorativeDeactivationIds ?? [];
+  if (
+    !Array.isArray(rawDecorativeIds) ||
+    rawDecorativeIds.length > MAX_DECORATIVE_DEACTIVATIONS ||
+    rawDecorativeIds.some(
+      (value) =>
+        typeof value !== "string" ||
+        !value.trim() ||
+        value.length > 256 ||
+        value.includes("/"),
+    )
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "INVALID_DECORATIVE_DEACTIVATIONS",
+        details: "La lista de decorativos que se desea retirar no es válida.",
+      },
+      { status: 400 },
+    );
+  }
+  const decorativeDeactivationIds = [
+    ...new Set(rawDecorativeIds.map((value) => value.trim())),
+  ];
+
+  let publication;
+  try {
+    publication = await publishSalaEditorSnapshotWithAdmin({
+      db: authCtx.db,
+      restaurantId: authCtx.restaurantId,
+      document,
+      publishedBy: authCtx.uid,
+      sourceDraftUpdatedAt,
+      decorativeDeactivationIds,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "DECORATIVE_DEACTIVATION_REJECTED",
+        details:
+          error instanceof Error && error.message.trim()
+            ? error.message
+            : "No se pudo validar la retirada decorativa.",
+      },
+      { status: 409 },
+    );
+  }
+  const { published } = publication;
 
   return NextResponse.json({
     ok: true,
@@ -123,6 +173,7 @@ export async function POST(req: Request) {
     sourceDraftUpdatedAt: published.sourceDraftUpdatedAt ?? null,
     schemaVersion: published.schemaVersion,
     snapshotVersion: published.snapshotVersion,
+    deactivatedDecoratives: publication.deactivatedDecoratives,
     counts: {
       espacios: published.document.espacios.length,
       operationalElementInstances:
