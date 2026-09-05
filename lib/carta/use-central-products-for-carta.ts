@@ -10,6 +10,10 @@ import {
   publicationOnMenu,
 } from "@/lib/carta/operational-catalog-mappers";
 import { listenCentralProducts, type ProductDocument } from "@/lib/firestore/products";
+import {
+  listenProductGastronomyByRestaurant,
+  type ProductGastronomySnapshot,
+} from "@/lib/firestore/product-gastronomy";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import { useAuth } from "@/components/auth/auth-context";
@@ -24,14 +28,8 @@ export type OperationalCatalogSource =
 
 export type CentralCatalogScope = "tpv_menu" | "management";
 
-/** `management`: catálogo de carta (excluye ingredientes de stock `type === "inventory"`). */
 export type UseCentralProductsForCartaOptions = {
   scope?: CentralCatalogScope;
-  /**
-   * No suscribir a `restaurants/{id}/products` hasta auth + perfil + restaurantId del perfil.
-   * Con este contrato activo, Firestore es autoritativo incluso cuando el snapshot está vacío
-   * o el listener falla: nunca se reactiva un catálogo localStorage de otro contexto.
-   */
   requireAuthenticatedTenant?: boolean;
 };
 
@@ -42,14 +40,8 @@ export type UseCentralProductsForCartaResult = {
   source: OperationalCatalogSource | null;
   usingLegacyFallback: boolean;
   catalogDevWarning: string | null;
-  /** Snapshot central indexado por id (misma escucha que `products`). */
   productDocumentsById: ReadonlyMap<string, ProductDocument>;
-  /**
-   * Snapshot completo del listener (incluye `type === "inventory"`).
-   * Usar solo para resolución de costes/recetas, no para listados de carta.
-   */
   allProductDocumentsById: ReadonlyMap<string, ProductDocument>;
-  /** Perfil resuelto pero sin `restaurantId` (solo con `requireAuthenticatedTenant`). */
   tenantUnavailable: boolean;
 };
 
@@ -103,12 +95,38 @@ function mapToResult(
   };
 }
 
-/**
- * Firestore `restaurants/{restaurantId}/products` es la fuente primaria.
- * El fallback local solo se conserva para consumidores legacy que no exigen tenant autenticado.
- * Para `requireAuthenticatedTenant`, un catálogo central vacío sigue siendo un catálogo central
- * válido y los fallos de disponibilidad se cierran sin reutilizar localStorage.
- */
+function enrichOperationalProductWithGastronomy(
+  product: Product,
+  snapshot: ProductGastronomySnapshot | undefined,
+): Product {
+  if (!snapshot || snapshot.source === "none") return product;
+  const g = snapshot.gastronomy;
+  const wine = g.wine;
+  const enriched: Product & Record<string, unknown> = {
+    ...product,
+    gastronomy: g,
+  };
+  // Alias de lectura para la ficha rápida TPV existente; Firestore sigue guardando solo `gastronomy`.
+  if (g.ingredients) enriched.ingredients = g.ingredients;
+  if (snapshot.hasAllergenInformation) enriched.allergens = g.allergens ?? [];
+  if (g.caloriesKcal != null) enriched.caloriesKcal = g.caloriesKcal;
+  if (g.description) enriched.description = g.description;
+  if (wine) {
+    if (wine.style) enriched.wineType = wine.style;
+    if (wine.grapes?.length) {
+      enriched.grape = wine.grapes.join(", ");
+      enriched.grapes = wine.grapes;
+    }
+    if (wine.region) enriched.region = wine.region;
+    if (wine.denomination) enriched.denomination = wine.denomination;
+    if (wine.country) enriched.country = wine.country;
+    if (wine.vintage != null) enriched.vintage = wine.vintage;
+    if (wine.abv != null) enriched.abv = wine.abv;
+    if (wine.tastingNotes?.length) enriched.tastingNotes = wine.tastingNotes.join(", ");
+  }
+  return enriched;
+}
+
 export function useCentralProductsForCarta(
   restaurantId: string | null | undefined,
   options?: UseCentralProductsForCartaOptions,
@@ -124,6 +142,9 @@ export function useCentralProductsForCarta(
 
   const [platos, setPlatos] = useState<PlatoCarta[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [gastronomyById, setGastronomyById] = useState<
+    ReadonlyMap<string, ProductGastronomySnapshot>
+  >(new Map());
   const [source, setSource] = useState<OperationalCatalogSource | null>(null);
   const [usingLegacyFallback, setUsingLegacyFallback] = useState(false);
   const [catalogDevWarning, setCatalogDevWarning] = useState<string | null>(null);
@@ -190,6 +211,7 @@ export function useCentralProductsForCarta(
     hasCentralSnapshotRef.current = false;
     setCentralProductDocuments([]);
     setCentralProductDocumentsAll([]);
+    setGastronomyById(new Map());
     applyCatalog([], "central");
   }, [applyCatalog]);
 
@@ -212,6 +234,18 @@ export function useCentralProductsForCarta(
       cancelled = true;
     };
   }, [applyCentralDocs, rid]);
+
+  useEffect(() => {
+    if (awaitingProfileTenant || !rid || !authReady || !isAuthReady() || !isFirebaseConfigured) {
+      setGastronomyById(new Map());
+      return;
+    }
+    return listenProductGastronomyByRestaurant(
+      rid,
+      setGastronomyById,
+      () => setGastronomyById(new Map()),
+    );
+  }, [authReady, awaitingProfileTenant, rid]);
 
   useEffect(() => {
     if (awaitingProfileTenant || !rid) return;
@@ -304,8 +338,13 @@ export function useCentralProductsForCarta(
     for (const doc of catalogMatches ? centralProductDocumentsAll : []) {
       allProductDocumentsById.set(doc.id, doc);
     }
+    const visibleProducts = catalogMatches
+      ? products.map((product) =>
+          enrichOperationalProductWithGastronomy(product, gastronomyById.get(product.id)),
+        )
+      : [];
     return {
-      products: catalogMatches ? products : [],
+      products: visibleProducts,
       platos: catalogMatches ? platos : [],
       loading,
       source: catalogMatches ? source : null,
@@ -320,6 +359,7 @@ export function useCentralProductsForCarta(
     catalogMatches,
     centralProductDocuments,
     centralProductDocumentsAll,
+    gastronomyById,
     loading,
     platos,
     products,

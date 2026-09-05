@@ -12,6 +12,7 @@ export const HOSTLY_ENTITLEMENTS = {
     "catalog.image.ai.bulk",
     "catalog.image.catalogSearch",
   ],
+  tpvProductInfo: ["tpv.productInfo.gastronomy"],
   ai: ["ai.sommelierPairing"],
 } as const;
 
@@ -19,19 +20,25 @@ export type HostlyEntitlement =
   (typeof HOSTLY_ENTITLEMENTS)[keyof typeof HOSTLY_ENTITLEMENTS][number];
 
 /**
- * Solo contiene diferencias comerciales ya decididas y activas en Hostly.
- * Nuevos módulos deben añadirse cuando su pertenencia a un plan esté definida,
- * no por anticipación.
+ * Matriz comercial confirmada.
+ * - Básico: producto TPV solo clicable; sin ficha gastronómica ni Sommelier.
+ * - Pro: ficha gastronómica (alérgenos + perfil de vino), sin maridajes IA.
+ * - Ultra: Pro + Sommelier IA bidireccional sobre productos reales del tenant.
  */
 export const HOSTLY_PLAN_ENTITLEMENTS: Readonly<
   Record<HostlyPlan, readonly HostlyEntitlement[]>
 > = {
   basic: [],
-  pro: ["catalog.image.ai.single", "catalog.image.catalogSearch"],
+  pro: [
+    "catalog.image.ai.single",
+    "catalog.image.catalogSearch",
+    "tpv.productInfo.gastronomy",
+  ],
   ultra: [
     "catalog.image.ai.single",
     "catalog.image.ai.bulk",
     "catalog.image.catalogSearch",
+    "tpv.productInfo.gastronomy",
     "ai.sommelierPairing",
   ],
 };

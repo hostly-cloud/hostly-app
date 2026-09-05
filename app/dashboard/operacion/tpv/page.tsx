@@ -5,6 +5,7 @@ import { CartaPageContent } from "@/app/dashboard/carta/carta-page-content";
 import { useAuth } from "@/components/auth/auth-context";
 import { ActiveOperatorProvider } from "@/components/tpv/active-operator-context";
 import { ActiveOperatorGate } from "@/components/tpv/active-operator-gate";
+import { TpvProductInfoPlanGuard } from "@/components/tpv/tpv-product-info-plan-guard";
 import { useTableGroups } from "@/hooks/useTableGroups";
 import { preloadTpvEditorV2OperationalMap } from "@/lib/tpv/load-editor-v2-operational-map";
 import { OperacionModuleShell } from "../_components/operacion-module-shell";
@@ -41,6 +42,7 @@ export default function OperacionTpvPage() {
 
   return (
     <ActiveOperatorProvider restaurantId={restaurantIdTrimmed}>
+      <TpvProductInfoPlanGuard />
       <OperacionModuleShell title="TPV" hideTopBar={hideShellTopBar}>
         <ActiveOperatorGate>
           <TpvEditorV2ReadyGate restaurantId={restaurantIdTrimmed}>
