@@ -30,7 +30,9 @@ const AI_IMAGE_TIMEOUT_MS = 90_000;
 const MAX_GENERATED_IMAGE_BYTES = 8 * 1024 * 1024;
 const GENERATION_LOCK_MS = 3 * 60 * 1000;
 const IMAGE_PROVIDER = "vercel-ai-gateway";
+const OPENAI_IMAGE_PROVIDER = "openai";
 const DEFAULT_IMAGE_MODEL = "google/gemini-3.1-flash-lite-image";
+const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-2";
 
 export type ProductImageGenerationSkipReason =
   | "not_food"
@@ -377,6 +379,7 @@ export async function generateImageWithAiGateway(
   model: string;
   mediaType: "image/png" | "image/jpeg" | "image/webp";
   costUsd?: number;
+  provider?: string;
 }> {
   const model = process.env.HOSTLY_AI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
 
@@ -429,7 +432,13 @@ export async function generateImageWithAiGateway(
     }
 
     const costUsd = readGatewayCostUsd(result.providerMetadata);
-    return { bytes, model, mediaType, ...(costUsd != null ? { costUsd } : {}) };
+    return {
+      bytes,
+      model,
+      mediaType,
+      provider: IMAGE_PROVIDER,
+      ...(costUsd != null ? { costUsd } : {}),
+    };
   } catch (error) {
     if (error instanceof GenerateImportedProductImageError) throw error;
     const status = readProviderStatus(error);
@@ -470,6 +479,161 @@ export async function generateImageWithAiGateway(
       "No se pudo generar la imagen",
       502,
     );
+  }
+}
+
+function readOpenAiImageQuality(): "low" | "medium" | "high" | "auto" {
+  const raw = process.env.HOSTLY_OPENAI_IMAGE_QUALITY?.trim().toLowerCase();
+  if (raw === "medium" || raw === "high" || raw === "auto") return raw;
+  return "low";
+}
+
+export async function generateImageWithOpenAi(prompt: string): Promise<{
+  bytes: Buffer;
+  model: string;
+  mediaType: "image/webp";
+  provider?: string;
+}> {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new GenerateImportedProductImageError(
+      "IMAGE_GENERATION_NOT_CONFIGURED",
+      "No hay un proveedor de imágenes configurado",
+      503,
+    );
+  }
+
+  const model =
+    process.env.HOSTLY_OPENAI_IMAGE_MODEL?.trim() ||
+    DEFAULT_OPENAI_IMAGE_MODEL;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_IMAGE_TIMEOUT_MS);
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        prompt,
+        n: 1,
+        size: "1024x1024",
+        quality: readOpenAiImageQuality(),
+        background: "opaque",
+        output_format: "webp",
+        moderation: "auto",
+      }),
+    });
+
+    const bodyText = await response.text();
+    if (!response.ok) {
+      const status = response.status;
+      if (status === 401 || status === 403) {
+        throw new GenerateImportedProductImageError(
+          "IMAGE_GENERATION_NOT_CONFIGURED",
+          "OpenAI no está autorizado para generar imágenes",
+          503,
+        );
+      }
+      if (status === 402) {
+        throw new GenerateImportedProductImageError(
+          "IMAGE_GENERATION_BUDGET_EXCEEDED",
+          "Se ha alcanzado el presupuesto de generación de imágenes",
+          503,
+        );
+      }
+      if (status === 429) {
+        throw new GenerateImportedProductImageError(
+          "IMAGE_PROVIDER_RATE_LIMITED",
+          "El proveedor ha limitado temporalmente las generaciones",
+          429,
+        );
+      }
+      throw new GenerateImportedProductImageError(
+        "IMAGE_PROVIDER_FAILED",
+        `OpenAI image generation failed (${status})`,
+        502,
+      );
+    }
+
+    let body: unknown;
+    try {
+      body = JSON.parse(bodyText);
+    } catch {
+      throw new GenerateImportedProductImageError(
+        "IMAGE_PROVIDER_INVALID_RESPONSE",
+        "OpenAI devolvió una respuesta inválida",
+        502,
+      );
+    }
+    const base64 = (body as { data?: Array<{ b64_json?: unknown }> })?.data?.[0]
+      ?.b64_json;
+    if (typeof base64 !== "string" || !base64.trim()) {
+      throw new GenerateImportedProductImageError(
+        "IMAGE_PROVIDER_EMPTY_RESPONSE",
+        "OpenAI no devolvió ninguna imagen",
+        502,
+      );
+    }
+    const bytes = Buffer.from(base64, "base64");
+    if (bytes.length === 0 || bytes.length > MAX_GENERATED_IMAGE_BYTES) {
+      throw new GenerateImportedProductImageError(
+        "IMAGE_PROVIDER_INVALID_IMAGE",
+        "La imagen generada no tiene un tamaño válido",
+        502,
+      );
+    }
+    return {
+      bytes,
+      model,
+      mediaType: "image/webp",
+      provider: OPENAI_IMAGE_PROVIDER,
+    };
+  } catch (error) {
+    if (error instanceof GenerateImportedProductImageError) throw error;
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new GenerateImportedProductImageError(
+        "IMAGE_PROVIDER_TIMEOUT",
+        "La generación de imagen agotó el tiempo disponible",
+        504,
+      );
+    }
+    throw new GenerateImportedProductImageError(
+      "IMAGE_PROVIDER_FAILED",
+      "No se pudo generar la imagen",
+      502,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function generateImageWithConfiguredProviders(
+  prompt: string,
+  userId: string,
+  dependencies?: {
+    gateway?: typeof generateImageWithAiGateway;
+    openAi?: typeof generateImageWithOpenAi;
+    openAiConfigured?: boolean;
+  },
+): ReturnType<typeof generateImageWithAiGateway> {
+  try {
+    const gateway = dependencies?.gateway ?? generateImageWithAiGateway;
+    return await gateway(prompt, userId);
+  } catch (error) {
+    if (
+      error instanceof GenerateImportedProductImageError &&
+      error.code === "IMAGE_GENERATION_NOT_CONFIGURED" &&
+      (dependencies?.openAiConfigured ?? Boolean(process.env.OPENAI_API_KEY?.trim()))
+    ) {
+      const openAi = dependencies?.openAi ?? generateImageWithOpenAi;
+      return openAi(prompt);
+    }
+    throw error;
   }
 }
 
@@ -631,7 +795,7 @@ export async function generateImportedProductImage(
     allowCatalogFallback?: boolean;
   },
   dependencies?: {
-    generateImage?: typeof generateImageWithAiGateway;
+    generateImage?: typeof generateImageWithConfiguredProviders;
     saveImage?: typeof saveGeneratedImage;
     deleteImage?: typeof deleteStoragePathSafely;
   },
@@ -888,8 +1052,10 @@ export async function generateImportedProductImage(
 
   try {
     const prompt = buildImportedProductImagePrompt(acquisition.eligibility);
-    const generateImageForProduct = dependencies?.generateImage ?? generateImageWithAiGateway;
+    const generateImageForProduct =
+      dependencies?.generateImage ?? generateImageWithConfiguredProviders;
     const generated = await generateImageForProduct(prompt, userId);
+    const generatedProvider = generated.provider ?? IMAGE_PROVIDER;
     generatedMetadata = {
       model: generated.model,
       ...(generated.costUsd != null ? { costUsd: generated.costUsd } : {}),
@@ -1001,7 +1167,7 @@ export async function generateImportedProductImage(
         imageEnrichment: buildPendingAutomaticProductImageEnrichment({
           source: "ai_generated",
           confidence: 0.65,
-          provider: IMAGE_PROVIDER,
+          provider: generatedProvider,
           externalReference: generated.model,
           generatedAt: now,
           costUsd: generated.costUsd,
@@ -1013,6 +1179,7 @@ export async function generateImportedProductImage(
       transaction.update(usageRef, {
         status: "succeeded",
         result: "generated",
+        provider: generatedProvider,
         model: generated.model,
         ...(generated.costUsd != null ? { costUsd: generated.costUsd } : {}),
         ...(readReservedCreditCost(usageData) != null
@@ -1048,7 +1215,7 @@ export async function generateImportedProductImage(
       imageUrl: stored.imageUrl,
       imagePath: stored.imagePath,
       model: generated.model,
-      provider: IMAGE_PROVIDER,
+      provider: generatedProvider,
       idempotencyKey,
       ...(generated.costUsd != null ? { costUsd: generated.costUsd } : {}),
       ...(replacedImagePath ? { replacedImagePath } : {}),
