@@ -12,11 +12,13 @@ export type HostlyStripeSubscriptionSnapshot = {
   plan: HostlyPlan;
   interval: HostlyBillingInterval;
   currentPeriodEnd: number | null;
+  trialEnd: number | null;
   cancelAtPeriodEnd: boolean;
 };
 
 const STRIPE_API_BASE = "https://api.stripe.com/v1";
 const WEBHOOK_TOLERANCE_SECONDS = 300;
+const PRO_TRIAL_DAYS = 30;
 
 function env(name: string): string {
   return process.env[name]?.trim() ?? "";
@@ -74,7 +76,7 @@ function requireStripeReady() {
 
 async function stripeRequest<T>(
   path: string,
-  init?: { method?: "GET" | "POST"; body?: URLSearchParams },
+  init?: { method?: "GET" | "POST"; body?: URLSearchParams; idempotencyKey?: string },
 ): Promise<T> {
   const secretKey = requireStripeReady();
   const response = await fetch(`${STRIPE_API_BASE}${path}`, {
@@ -82,6 +84,7 @@ async function stripeRequest<T>(
     headers: {
       Authorization: `Bearer ${secretKey}`,
       ...(init?.body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+      ...(init?.idempotencyKey ? { "Idempotency-Key": init.idempotencyKey } : {}),
     },
     body: init?.body,
     cache: "no-store",
@@ -103,6 +106,8 @@ export async function createHostlyCheckoutSession(input: {
   plan: HostlyPlan;
   interval: HostlyBillingInterval;
   baseUrl: string;
+  proTrialEligible?: boolean;
+  idempotencyKey?: string;
 }) {
   const priceId = getHostlyStripePriceId(input.plan, input.interval);
   if (!priceId) throw new Error("STRIPE_PRICE_NOT_CONFIGURED");
@@ -115,8 +120,8 @@ export async function createHostlyCheckoutSession(input: {
   body.set("client_reference_id", input.restaurantId);
   body.set("line_items[0][price]", priceId);
   body.set("line_items[0][quantity]", "1");
-  body.set("success_url", `${input.baseUrl}/dashboard/configuracion?subscription=success`);
-  body.set("cancel_url", `${input.baseUrl}/dashboard/configuracion?subscription=cancelled`);
+  body.set("success_url", `${input.baseUrl}/dashboard/configuracion/cuenta?subscription=success`);
+  body.set("cancel_url", `${input.baseUrl}/dashboard/configuracion/cuenta?subscription=cancelled`);
   body.set("allow_promotion_codes", "true");
   body.set("metadata[restaurantId]", input.restaurantId);
   body.set("metadata[hostlyPlan]", input.plan);
@@ -125,9 +130,20 @@ export async function createHostlyCheckoutSession(input: {
   body.set("subscription_data[metadata][hostlyPlan]", input.plan);
   body.set("subscription_data[metadata][hostlyInterval]", input.interval);
 
+  if (input.plan === "pro" && input.proTrialEligible === true) {
+    body.set("payment_method_collection", "always");
+    body.set("subscription_data[trial_period_days]", String(PRO_TRIAL_DAYS));
+    body.set("subscription_data[trial_settings][end_behavior][missing_payment_method]", "cancel");
+    body.set("subscription_data[metadata][hostlyTrial]", "pro_30d");
+  }
+
   const session = await stripeRequest<{ id: string; url: string | null }>(
     "/checkout/sessions",
-    { method: "POST", body },
+    {
+      method: "POST",
+      body,
+      idempotencyKey: input.idempotencyKey,
+    },
   );
   if (!session.url) throw new Error("STRIPE_CHECKOUT_URL_MISSING");
   return session;
@@ -153,6 +169,7 @@ type StripeSubscriptionResponse = {
   status: string;
   cancel_at_period_end?: boolean;
   current_period_end?: number;
+  trial_end?: number | null;
   metadata?: Record<string, string>;
   items?: { data?: Array<{ price?: { id?: string } }> };
 };
@@ -182,6 +199,7 @@ export async function retrieveHostlyStripeSubscription(
       typeof subscription.current_period_end === "number"
         ? subscription.current_period_end
         : null,
+    trialEnd: typeof subscription.trial_end === "number" ? subscription.trial_end : null,
     cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
   };
 }
