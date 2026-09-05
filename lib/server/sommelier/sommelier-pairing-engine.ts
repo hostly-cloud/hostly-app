@@ -36,6 +36,8 @@ function normalizeSearch(value: string): string {
 const WINE_SIGNALS = [
   "vino",
   "wine",
+  "bodega",
+  "vinoteca",
   "tinto",
   "blanco",
   "rosado",
@@ -74,12 +76,30 @@ function isWine(data: Record<string, unknown>): boolean {
   return WINE_SIGNALS.some((signal) => haystack.includes(signal));
 }
 
+function isNonWineBeverage(data: Record<string, unknown>): boolean {
+  const tipoVenta = cleanText(data.tipoVenta).toLowerCase();
+  const familyType = cleanText(data.productFamilyType).toLowerCase();
+  const productKind = cleanText(data.productKind).toLowerCase();
+  if (tipoVenta === "bebida" || familyType === "drink" || productKind === "drink") return true;
+  const text = normalizeSearch(
+    [
+      cleanText(data.name),
+      cleanText(data.nombre),
+      cleanText(data.categoryName),
+      cleanText(data.categoria),
+      cleanText(data.productFamilyName),
+      cleanText(data.familyName),
+    ].join(" "),
+  );
+  return /bebida|refresco|soft drink|cerveza|beer|coctel|cocktail|agua|water|cafe|coffee|infusion|tea|licor|gin|vodka|whisk|ron|rum|destilado|zumo|juice/.test(text);
+}
+
 function isDish(data: Record<string, unknown>): boolean {
   const tipoVenta = cleanText(data.tipoVenta).toLowerCase();
   const familyType = cleanText(data.productFamilyType).toLowerCase();
   const type = cleanText(data.type).toLowerCase();
   if (tipoVenta === "plato" || familyType === "food") return true;
-  if (tipoVenta === "bebida" || familyType === "drink") return false;
+  if (isNonWineBeverage(data)) return false;
   return type !== "inventory" && !isWine(data);
 }
 
