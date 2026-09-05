@@ -10,6 +10,7 @@ import type { CatalogImageAccess } from "@/lib/productos/catalog-image-plan";
 import {
   buildImportedProductImagePrompt,
   evaluateImportedProductImageEligibility,
+  generateImageWithAiGateway,
   generateImportedProductImage,
   looksLikeBrandedOrBeverageProduct,
 } from "@/lib/server/product-images/generate-imported-product-image";
@@ -379,6 +380,51 @@ test("prompt stays generic and explicitly bans branding and text", () => {
   assert.match(prompt, /no logos/);
   assert.match(prompt, /no packaging/);
   assert.match(prompt, /Do not depict wine bottles/);
+});
+
+test("the Gemini image adapter uses multimodal generation and reads result files", async () => {
+  let received: Record<string, unknown> | undefined;
+  const result = await generateImageWithAiGateway(
+    "A plated dish",
+    "owner-1",
+    async (request) => {
+      received = request;
+      return {
+        files: [
+          { mediaType: "text/plain", uint8Array: new Uint8Array([9]) },
+          { mediaType: "image/webp", uint8Array: new Uint8Array([1, 2, 3]) },
+        ],
+        providerMetadata: { gateway: { cost: 0.03 } },
+      };
+    },
+  );
+
+  assert.equal(received?.model, "google/gemini-3.1-flash-lite-image");
+  assert.deepEqual(
+    (received?.providerOptions as Record<string, unknown>).google,
+    { responseModalities: ["TEXT", "IMAGE"] },
+  );
+  assert.deepEqual(result.bytes, Buffer.from([1, 2, 3]));
+  assert.equal(result.mediaType, "image/webp");
+  assert.equal(result.costUsd, 0.03);
+});
+
+test("the Gemini image adapter rejects a response without image files", async () => {
+  await assert.rejects(
+    generateImageWithAiGateway(
+      "A plated dish",
+      "owner-1",
+      async () => ({
+        files: [
+          { mediaType: "text/plain", uint8Array: new Uint8Array([1]) },
+        ],
+      }),
+    ),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "IMAGE_PROVIDER_EMPTY_RESPONSE",
+  );
 });
 
 test("a repeated idempotency key never starts a second provider operation", async () => {
