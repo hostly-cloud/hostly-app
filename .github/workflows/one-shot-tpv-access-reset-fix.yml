@@ -1,0 +1,34 @@
+name: One-shot TPV access reset fix
+on:
+  push:
+    branches:
+      - fix/final-hardening-2026-09-05-v2
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/final-hardening-2026-09-05-v2
+      - name: Apply exact React effect fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('components/tpv/tpv-product-info-plan-guard.tsx')
+          text = path.read_text()
+          old = '''  useEffect(() => {\n    let cancelled = false;\n    setAccess(CLOSED_ACCESS);\n    setSommelierSnapshot(null);\n    if (!rid) return () => {\n      cancelled = true;\n    };\n'''
+          new = '''  useEffect(() => {\n    let cancelled = false;\n    queueMicrotask(() => {\n      if (cancelled) return;\n      setAccess(CLOSED_ACCESS);\n      setSommelierSnapshot(null);\n    });\n    if (!rid) return () => {\n      cancelled = true;\n    };\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one TPV reset target, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit exact change
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add components/tpv/tpv-product-info-plan-guard.tsx
+          git commit -m "fix(tpv): defer plan access reset outside effect body"
+          git push origin HEAD:fix/final-hardening-2026-09-05-v2
