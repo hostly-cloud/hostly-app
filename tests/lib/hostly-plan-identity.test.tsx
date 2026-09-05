@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { HostlyPlanIdentity } from "@/components/ui/hostly/HostlyPlanIdentity";
+import { HostlyPlanIdentityBase } from "@/components/ui/hostly/HostlyPlanIdentityBase";
 
 test("renders a distinct accessible identity for every Hostly plan", () => {
   const plans = [
@@ -12,7 +12,7 @@ test("renders a distinct accessible identity for every Hostly plan", () => {
 
   for (const [plan, label] of plans) {
     const markup = renderToStaticMarkup(
-      <HostlyPlanIdentity plan={plan} label={label} />,
+      <HostlyPlanIdentityBase plan={plan} label={label} />,
     );
 
     assert.match(markup, new RegExp(`data-plan="${plan}"`));
@@ -23,7 +23,7 @@ test("renders a distinct accessible identity for every Hostly plan", () => {
 
 test("supports the compact global-header treatment", () => {
   const markup = renderToStaticMarkup(
-    <HostlyPlanIdentity plan="ultra" label="Ultra" compact />,
+    <HostlyPlanIdentityBase plan="ultra" label="Ultra" compact />,
   );
 
   assert.match(markup, /hostly-plan-identity--compact/);
