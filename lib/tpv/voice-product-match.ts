@@ -17,6 +17,7 @@ const PRODUCT_MATCH_MIN_SCORE = 0.62;
 const PRODUCT_MATCH_AMBIGUITY_GAP = 0.075;
 const PRODUCT_STRONG_UNIQUE_SCORE = 0.91;
 const PRODUCT_UNIQUE_MATCH_AMBIGUITY_GAP = 0.025;
+const CATALOG_COUNT_KEY = "__hostly_catalog_product_count__";
 
 const PRODUCT_NAME_CONNECTORS = new Set([
   "a", "al", "de", "del", "la", "el", "los", "las", "con", "di", "da", "do", "du",
@@ -48,7 +49,6 @@ const SERVICE_ALIASES: Record<string, string[]> = {
 
 const ZERO_VARIANT_TOKENS = new Set(["zero", "0", "light"]);
 const REGULAR_VARIANT_TOKENS = new Set(["normal", "regular", "clasica", "clasico", "original"]);
-
 type RequestedVariant = "zero" | "regular" | null;
 
 function editDistance(a: string, b: string): number {
@@ -114,7 +114,6 @@ function tokenSimilarity(queryToken: string, candidateToken: string): number {
   const candidate = canonicalTpvVoiceSearchText(candidateToken).replace(/\s+/g, "");
   if (!query || !candidate) return 0;
   if (query === candidate) return 1;
-
   const maxLength = Math.max(query.length, candidate.length);
   const editScore = maxLength > 0 ? 1 - editDistance(query, candidate) / maxLength : 0;
   const qPhonetic = compactPhonetic(query);
@@ -125,7 +124,6 @@ function tokenSimilarity(queryToken: string, candidateToken: string): number {
   const containment = query.includes(candidate) || candidate.includes(query)
     ? 0.8 + (Math.min(query.length, candidate.length) / maxLength) * 0.16
     : 0;
-
   return Math.max(editScore * 0.94, phoneticEdit * 0.95, bigram * 0.94, containment);
 }
 
@@ -183,6 +181,7 @@ function catalogIdentityTokens(value: string): string[] {
 
 function buildCatalogTokenFrequency(products: Product[]): ReadonlyMap<string, number> {
   const frequency = new Map<string, number>();
+  frequency.set(CATALOG_COUNT_KEY, products.length);
   for (const product of products) {
     for (const token of new Set(catalogIdentityTokens(product.nombre))) {
       frequency.set(token, (frequency.get(token) ?? 0) + 1);
@@ -196,6 +195,7 @@ function uniqueCatalogIdentityScore(
   product: Product,
   tokenFrequency: ReadonlyMap<string, number>,
 ): number {
+  if ((tokenFrequency.get(CATALOG_COUNT_KEY) ?? 0) < 2) return 0;
   const queryTokens = catalogIdentityTokens(query);
   const productTokens = catalogIdentityTokens(product.nombre).filter((token) => tokenFrequency.get(token) === 1);
   if (queryTokens.length === 0 || productTokens.length === 0) return 0;
@@ -281,7 +281,6 @@ function scoreProduct(
 ): TpvVoiceProductMatch {
   let bestScore = bestNameWindowScore(variant.value, product.nombre);
   let matchedBy: TpvVoiceProductMatch["matchedBy"] = variant.matchedBy;
-
   const contexts: Array<{ value: string; weight: number; matchedBy: TpvVoiceProductMatch["matchedBy"] }> = [];
   const category = product.categoria?.trim();
   const family = product.productFamilyName?.trim();
@@ -297,11 +296,9 @@ function scoreProduct(
     const score = bestNameWindowScore(variant.value, context.value) * context.weight;
     if (score > bestScore) { bestScore = score; matchedBy = context.matchedBy; }
   }
-
   const unique = uniqueCatalogIdentityScore(variant.value, product, tokenFrequency);
   if (unique > bestScore) { bestScore = unique; matchedBy = "catalog_unique"; }
   if (variant.matchedBy === "service_alias" && bestScore >= PRODUCT_MATCH_MIN_SCORE) matchedBy = "service_alias";
-
   return { product, score: applyVariantPreference(bestScore, variant.value, product), matchedBy };
 }
 
