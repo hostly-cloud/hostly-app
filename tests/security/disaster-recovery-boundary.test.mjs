@@ -12,7 +12,7 @@ test("one-time disaster recovery bootstrap endpoint is not shipped", () => {
 test("disaster recovery runbook preserves the admin/runtime security boundary", () => {
   assert.equal(existsSync(runbookPath), true);
   const runbook = readFileSync(runbookPath, "utf8");
-  assert.match(runbook, /no deben administrar la configuraci[oó]n de Firestore/i);
+  assert.match(runbook, /no deben\*\* administrar la configuraci[oó]n de Firestore/i);
   assert.match(runbook, /--enable-pitr/);
   assert.match(runbook, /--delete-protection/);
   assert.match(runbook, /--recurrence=daily/);
