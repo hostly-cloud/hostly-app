@@ -39,6 +39,12 @@ const STATION_LABELS = {
   cocktail: "Coctelería",
 } as const;
 
+const THRESHOLD_FIELDS = [
+  ["attentionMinutes", "Atención"],
+  ["criticalMinutes", "Crítico"],
+  ["escalationMinutes", "+ Escalado"],
+] as const;
+
 function formatMinutes(minutes: number) {
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
@@ -126,7 +132,7 @@ export default function OperationalAlertCenterPage() {
   }, [draft]);
 
   return (
-    <ModulePageShell title="Centro de operaciones" subtitle="Retrasos, escalados e historial del servicio" maxWidth={1280} compactLayout operationalFocus shellSurface="configLight">
+    <ModulePageShell title="Centro de operaciones" subtitle="Retrasos, mesas prolongadas, escalados e historial del servicio" maxWidth={1280} compactLayout operationalFocus shellSurface="configLight">
       <div className="grid gap-4">
         {error && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">{error}</div>}
 
@@ -142,46 +148,58 @@ export default function OperationalAlertCenterPage() {
             <HostlyButton variant="secondary" size="compact" onClick={() => void refresh()} disabled={busy !== null}>Actualizar</HostlyButton>
           </div>
           <div className="mt-4 grid gap-3">
-            {payload && payload.alerts.length === 0 && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">No hay retrasos operativos activos.</div>}
-            {payload?.alerts.map((alert) => (
-              <article key={alert.incidentId} className="rounded-xl border border-slate-200 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-extrabold text-slate-950">{alert.tableLabel} · {alert.stationLabel}</h3>
-                      <span className={alert.escalated ? "rounded-full bg-red-100 px-2 py-0.5 text-xs font-extrabold text-red-800" : alert.level === "critical" ? "rounded-full bg-orange-100 px-2 py-0.5 text-xs font-extrabold text-orange-800" : "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-extrabold text-amber-800"}>{alert.escalated ? "Escalada" : alert.level === "critical" ? "Crítica" : "Atención"}</span>
+            {payload && payload.alerts.length === 0 && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">No hay retrasos operativos ni mesas prolongadas activas.</div>}
+            {payload?.alerts.map((alert) => {
+              const isTableDuration = alert.kind === "table_service_duration";
+              return (
+                <article key={alert.incidentId} className="rounded-xl border border-slate-200 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-extrabold text-slate-950">{alert.tableLabel} · {isTableDuration ? "Servicio de mesa" : alert.stationLabel}</h3>
+                        <span className={alert.escalated ? "rounded-full bg-red-100 px-2 py-0.5 text-xs font-extrabold text-red-800" : alert.level === "critical" ? "rounded-full bg-orange-100 px-2 py-0.5 text-xs font-extrabold text-orange-800" : "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-extrabold text-amber-800"}>{alert.escalated ? "Escalada" : alert.level === "critical" ? "Crítica" : "Atención"}</span>
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-slate-600">{isTableDuration ? `Servicio abierto · ${formatMinutes(alert.elapsedMinutes)}` : `${alert.delayedLineCount} ${alert.delayedLineCount === 1 ? "línea retrasada" : "líneas retrasadas"} · ${formatMinutes(alert.elapsedMinutes)}`}</p>
                     </div>
-                    <p className="mt-1 text-sm font-semibold text-slate-600">{alert.delayedLineCount} {alert.delayedLineCount === 1 ? "línea retrasada" : "líneas retrasadas"} · {formatMinutes(alert.elapsedMinutes)}</p>
+                    <Link className="text-sm font-bold text-blue-700 hover:underline" href={alert.stationHref}>{isTableDuration ? "Abrir TPV" : `Abrir ${alert.stationLabel}`}</Link>
                   </div>
-                  <Link className="text-sm font-bold text-blue-700 hover:underline" href={alert.stationHref}>Abrir {alert.stationLabel}</Link>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <HostlyButton variant="secondary" size="compact" onClick={() => void mutate(alert.incidentId, "acknowledge")} disabled={busy !== null}>Atendida</HostlyButton>
-                  <HostlyButton variant="secondary" size="compact" onClick={() => void mutate(alert.incidentId, "snooze")} disabled={busy !== null}>Silenciar 5 min</HostlyButton>
-                  <HostlyButton variant="primary" size="compact" onClick={() => void mutate(alert.incidentId, "resolve")} disabled={busy !== null}>Resolver</HostlyButton>
-                </div>
-              </article>
-            ))}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <HostlyButton variant="secondary" size="compact" onClick={() => void mutate(alert.incidentId, "acknowledge")} disabled={busy !== null}>Atendida</HostlyButton>
+                    <HostlyButton variant="secondary" size="compact" onClick={() => void mutate(alert.incidentId, "snooze")} disabled={busy !== null}>Silenciar 5 min</HostlyButton>
+                    <HostlyButton variant="primary" size="compact" onClick={() => void mutate(alert.incidentId, "resolve")} disabled={busy !== null}>Resolver</HostlyButton>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
 
         {canManageSettings && draft && (
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Configuración de alertas">
             <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-extrabold text-slate-950">Tiempos de alerta</h2><p className="text-sm font-medium text-slate-600">Configura Atención, Crítico y minutos adicionales hasta Escalado.</p></div><HostlyButton variant="primary" size="compact" onClick={() => void saveSettings()} disabled={busy !== null}>Guardar</HostlyButton></div>
-            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+            <div className="mt-4 grid gap-3 lg:grid-cols-4">
               {(Object.keys(STATION_LABELS) as Array<keyof typeof STATION_LABELS>).map((station) => {
                 const stationPolicy = draft.stations[station];
                 return (
                   <fieldset key={station} className="rounded-xl border border-slate-200 p-3">
                     <legend className="px-1 text-sm font-extrabold text-slate-950">{STATION_LABELS[station]}</legend>
                     <div className="grid grid-cols-3 gap-2">
-                      {([["attentionMinutes", "Atención"], ["criticalMinutes", "Crítico"], ["escalationMinutes", "+ Escalado"]] as const).map(([field, label]) => (
+                      {THRESHOLD_FIELDS.map(([field, label]) => (
                         <label key={field} className="text-xs font-bold text-slate-600">{label}<input className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-950" type="number" min={1} max={field === "criticalMinutes" ? 240 : field === "attentionMinutes" ? 180 : 120} value={stationPolicy[field]} onChange={(event) => setDraft((current) => current ? { ...current, stations: { ...current.stations, [station]: { ...current.stations[station], [field]: Number(event.target.value) } } } : current)} /></label>
                       ))}
                     </div>
                   </fieldset>
                 );
               })}
+              <fieldset className="rounded-xl border border-blue-200 bg-blue-50/40 p-3">
+                <legend className="px-1 text-sm font-extrabold text-slate-950">Servicio de mesa</legend>
+                <div className="grid grid-cols-3 gap-2">
+                  {THRESHOLD_FIELDS.map(([field, label]) => (
+                    <label key={field} className="text-xs font-bold text-slate-600">{label}<input className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-950" type="number" min={1} max={field === "criticalMinutes" ? 240 : field === "attentionMinutes" ? 180 : 120} value={draft.tableService[field]} onChange={(event) => setDraft((current) => current ? { ...current, tableService: { ...current.tableService, [field]: Number(event.target.value) } } : current)} /></label>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] font-semibold text-slate-500">Cuenta desde la primera línea realmente enviada; un borrador del TPV no inicia el reloj.</p>
+              </fieldset>
             </div>
             <p className="mt-3 text-xs font-semibold text-slate-500">Canales externos preparados: push, email, WhatsApp y SMS permanecen desactivados hasta conectar proveedores y política comercial.</p>
           </section>
@@ -189,7 +207,7 @@ export default function OperationalAlertCenterPage() {
 
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Historial de incidencias">
           <h2 className="text-lg font-extrabold text-slate-950">Historial reciente</h2>
-          <div className="mt-3 overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-xs uppercase tracking-wide text-slate-500"><tr><th className="py-2 pr-4">Mesa</th><th className="py-2 pr-4">Estación</th><th className="py-2 pr-4">Estado</th><th className="py-2 pr-4">Inicio</th><th className="py-2">Última actualización</th></tr></thead><tbody>{payload?.history.map((incident) => <tr key={incident.id} className="border-t border-slate-100"><td className="py-2 pr-4 font-bold text-slate-900">{incident.tableLabel}</td><td className="py-2 pr-4 text-slate-700">{incident.stationLabel}</td><td className="py-2 pr-4 text-slate-700">{statusLabel(incident.status)}</td><td className="py-2 pr-4 text-slate-600">{incident.startedAtMs ? new Date(incident.startedAtMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</td><td className="py-2 text-slate-600">{incident.updatedAtMs ? new Date(incident.updatedAtMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</td></tr>)}</tbody></table></div>
+          <div className="mt-3 overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="text-xs uppercase tracking-wide text-slate-500"><tr><th className="py-2 pr-4">Mesa</th><th className="py-2 pr-4">Área</th><th className="py-2 pr-4">Estado</th><th className="py-2 pr-4">Inicio</th><th className="py-2">Última actualización</th></tr></thead><tbody>{payload?.history.map((incident) => <tr key={incident.id} className="border-t border-slate-100"><td className="py-2 pr-4 font-bold text-slate-900">{incident.tableLabel}</td><td className="py-2 pr-4 text-slate-700">{incident.stationLabel}</td><td className="py-2 pr-4 text-slate-700">{statusLabel(incident.status)}</td><td className="py-2 pr-4 text-slate-600">{incident.startedAtMs ? new Date(incident.startedAtMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</td><td className="py-2 text-slate-600">{incident.updatedAtMs ? new Date(incident.updatedAtMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</td></tr>)}</tbody></table></div>
         </section>
       </div>
     </ModulePageShell>

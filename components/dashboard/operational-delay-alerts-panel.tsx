@@ -61,12 +61,13 @@ export function OperationalDelayAlertsPanel() {
   const criticalCount = alerts.filter((alert) => alert.level === "critical").length;
   const escalatedCount = alerts.filter((alert) => alert.escalated).length;
 
-  const localizedStationLabel = (label: string) => {
-    const normalized = label.trim().toLowerCase();
+  const localizedStationLabel = (alert: CenterAlert) => {
+    if (alert.kind === "table_service_duration") return copy.stationTable;
+    const normalized = alert.stationLabel.trim().toLowerCase();
     if (normalized === "cocina" || normalized === "kitchen") return copy.stationKitchen;
     if (normalized === "barra" || normalized === "bar") return copy.stationBar;
     if (normalized === "coctelería" || normalized === "cocteleria" || normalized === "cocktails" || normalized === "cocktail") return copy.stationCocktail;
-    return label;
+    return alert.stationLabel;
   };
 
   const summary = escalatedCount > 0
@@ -111,7 +112,9 @@ export function OperationalDelayAlertsPanel() {
                 </span>
               </span>
               <span className="mt-0.5 block text-xs font-semibold text-slate-600">
-                {localizedStationLabel(alert.stationLabel)} · {alert.delayedLineCount} {alert.delayedLineCount === 1 ? copy.delayedLineOne : copy.delayedLineMany}
+                {alert.kind === "table_service_duration"
+                  ? `${localizedStationLabel(alert)} · ${copy.tableService}`
+                  : `${localizedStationLabel(alert)} · ${alert.delayedLineCount} ${alert.delayedLineCount === 1 ? copy.delayedLineOne : copy.delayedLineMany}`}
               </span>
             </span>
             <span className="shrink-0 text-right">
