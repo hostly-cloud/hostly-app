@@ -6,6 +6,7 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getMessaging, type Messaging } from "firebase-admin/messaging";
 import { getStorage, type Storage } from "firebase-admin/storage";
 import fs from "node:fs";
 
@@ -135,6 +136,24 @@ export function getHostlyFirestore(): Firestore | null {
 
 export function isFirestoreConfigured(): boolean {
   return getFirestoreAdminStatus().ok;
+}
+
+let cachedMessaging: Messaging | null | undefined;
+
+/** Firebase Cloud Messaging Admin para notificaciones web push. */
+export function getHostlyMessaging(): Messaging | null {
+  if (cachedMessaging !== undefined) return cachedMessaging;
+  if (!getHostlyFirestore()) {
+    cachedMessaging = null;
+    return null;
+  }
+  try {
+    cachedMessaging = getMessaging();
+    return cachedMessaging;
+  } catch {
+    cachedMessaging = null;
+    return null;
+  }
 }
 
 let cachedStorage: Storage | null | undefined;

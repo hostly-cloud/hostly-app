@@ -10,6 +10,7 @@ const EXPLICIT_ROUTE_CLASSIFICATION = new Map([
   ["app/api/health/route.ts", "public-health"],
   ["app/api/marketing/leads/route.ts", "public-rate-limited"],
   ["app/api/employees/clocking/qr/route.ts", "public-tokenized"],
+  ["app/api/operations/notifications/service-worker/route.ts", "public-static-firebase-config"],
   ["app/api/tpv/orders/sync-items/route.ts", "retired-410"],
   ["app/api/debug/firebase/route.ts", "production-disabled"],
   ["app/api/queues/catalog-image-bulk/route.ts", "signed-callback"],
@@ -121,6 +122,7 @@ test("the deliberately anonymous surface stays small and explicit", () => {
     "app/api/employees/clocking/qr/route.ts",
     "app/api/health/route.ts",
     "app/api/marketing/leads/route.ts",
+    "app/api/operations/notifications/service-worker/route.ts",
     "app/api/tpv/orders/sync-items/route.ts",
   ]);
 });

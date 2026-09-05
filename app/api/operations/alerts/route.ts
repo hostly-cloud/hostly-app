@@ -5,10 +5,15 @@ import {
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import {
+  forceUnsupportedOperationalChannelsOff,
+} from "@/lib/operations/operational-notifications";
+import { sanitizeOperationalAlertPolicy } from "@/lib/operations/operational-alert-policy";
+import {
   buildAndSyncOperationalAlertCenter,
   saveOperationalAlertPolicy,
   updateOperationalAlertIncident,
 } from "@/lib/server/operations/operational-alert-center";
+import { getOperationalNotificationProviderAvailability } from "@/lib/server/operations/operational-notification-dispatcher";
 
 function jsonError(status: number, error: string) {
   return NextResponse.json({ ok: false, error }, { status });
@@ -30,7 +35,11 @@ export async function GET(req: Request) {
     if (summaryOnly) {
       return NextResponse.json({ ok: true, alerts: result.alerts });
     }
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({
+      ok: true,
+      ...result,
+      notificationProviders: getOperationalNotificationProviderAvailability(),
+    });
   } catch (error) {
     console.error("[operational-alert-center] GET failed", error);
     return jsonError(500, "OPERATIONAL_ALERT_CENTER_FAILED");
@@ -49,8 +58,27 @@ export async function POST(req: Request) {
       if (!serverRoleHasCapability(authCtx.role, "settings.manage")) {
         return jsonError(403, "SETTINGS_MANAGE_REQUIRED");
       }
-      const policy = await saveOperationalAlertPolicy(authCtx.db, authCtx.restaurantId, body.policy, authCtx.uid);
-      return NextResponse.json({ ok: true, policy });
+      const availability = getOperationalNotificationProviderAvailability();
+      const sanitized = forceUnsupportedOperationalChannelsOff(
+        sanitizeOperationalAlertPolicy(body.policy),
+      );
+      const safePolicy = {
+        ...sanitized,
+        notificationChannels: {
+          ...sanitized.notificationChannels,
+          push: sanitized.notificationChannels.push && availability.push,
+          email: sanitized.notificationChannels.email && availability.email,
+          whatsapp: false,
+          sms: false,
+        },
+      };
+      const policy = await saveOperationalAlertPolicy(
+        authCtx.db,
+        authCtx.restaurantId,
+        safePolicy,
+        authCtx.uid,
+      );
+      return NextResponse.json({ ok: true, policy, notificationProviders: availability });
     }
 
     if (!serverRoleHasCapability(authCtx.role, "operations.audit")) {

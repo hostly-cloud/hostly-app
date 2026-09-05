@@ -4,6 +4,12 @@
   "env": {
     "HOSTLY_AI_IMAGE_MODEL": "google/gemini-2.5-flash-image"
   },
+  "crons": [
+    {
+      "path": "/api/cron/operational-alert-notifications",
+      "schedule": "* * * * *"
+    }
+  ],
   "functions": {
     "app/api/queues/catalog-image-bulk/route.ts": {
       "experimentalTriggers": [
