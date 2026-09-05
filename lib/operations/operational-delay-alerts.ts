@@ -7,18 +7,23 @@ import type { KdsSlaLevel, KdsStationKind } from "@/lib/kds/kds-sla";
 import {
   DEFAULT_OPERATIONAL_ALERT_POLICY,
   isOperationalAlertEscalated,
+  isTableServiceAlertEscalated,
   resolveOperationalAlertLevel,
+  resolveTableServiceAlertLevel,
   type OperationalAlertPolicy,
 } from "@/lib/operations/operational-alert-policy";
 
 export type OperationalDelayAlertLevel = Exclude<KdsSlaLevel, "normal">;
+export type OperationalAlertKind = "production_delay" | "table_service_duration";
+export type OperationalAlertStation = KdsStationKind | "table";
 
 export type OperationalDelayAlert = {
   id: string;
+  kind: OperationalAlertKind;
   orderId: string;
   restaurantId: string;
   tableLabel: string;
-  station: KdsStationKind;
+  station: OperationalAlertStation;
   stationLabel: string;
   stationHref: string;
   level: OperationalDelayAlertLevel;
@@ -39,11 +44,13 @@ export type OperationalOrderRecord = {
   tableName?: unknown;
   tableId?: unknown;
   status?: unknown;
+  sentAt?: unknown;
   items?: unknown;
 };
 
 const TERMINAL_ORDER_STATUSES = new Set(["closed", "paid", "cancelled", "canceled", "merged"]);
 const ACTIVE_PRODUCTION_LINE_STATUSES = new Set(["sent", "preparing"]);
+const TABLE_SERVICE_LINE_STATUSES = new Set(["sent", "preparing", "prepared", "ready", "served"]);
 
 const STATION_META: Record<KdsStationKind, { label: string; href: string }> = {
   kitchen: { label: "Cocina", href: "/dashboard/operacion/cocina" },
@@ -66,6 +73,10 @@ function isOrderActive(status: unknown): boolean {
 
 function isProductionLineActive(status: unknown): boolean {
   return ACTIVE_PRODUCTION_LINE_STATUSES.has(normalizedStatus(status));
+}
+
+function isTableServiceLine(status: unknown): boolean {
+  return TABLE_SERVICE_LINE_STATUSES.has(normalizedStatus(status));
 }
 
 function hasExplicitNoProductionDestination(item: Record<string, unknown>): boolean {
@@ -108,6 +119,56 @@ function levelScore(level: OperationalDelayAlertLevel): number {
   return level === "critical" ? 2 : 1;
 }
 
+function firstRealServiceSentAtMs(order: OperationalOrderRecord): number | null {
+  const orderSentAtMs = readOperationalTimestampMs(order.sentAt);
+  if (orderSentAtMs != null) return orderSentAtMs;
+  if (!Array.isArray(order.items)) return null;
+  let firstSentAtMs: number | null = null;
+  for (const rawItem of order.items) {
+    if (!rawItem || typeof rawItem !== "object") continue;
+    const item = rawItem as Record<string, unknown>;
+    if (!isTableServiceLine(item.status)) continue;
+    const sentAtMs = readOperationalTimestampMs(item.sentAt);
+    if (sentAtMs == null) continue;
+    if (firstSentAtMs == null || sentAtMs < firstSentAtMs) firstSentAtMs = sentAtMs;
+  }
+  return firstSentAtMs;
+}
+
+function buildTableServiceAlert(
+  order: OperationalOrderRecord,
+  tenantId: string,
+  nowMs: number,
+  policy: OperationalAlertPolicy,
+): OperationalDelayAlert | null {
+  if (!isOrderActive(order.status)) return null;
+  const serviceStartedAtMs = firstRealServiceSentAtMs(order);
+  if (serviceStartedAtMs == null || serviceStartedAtMs > nowMs) return null;
+  const elapsedMs = nowMs - serviceStartedAtMs;
+  const level = resolveTableServiceAlertLevel(elapsedMs, policy);
+  if (level === "normal") return null;
+  const thresholds = policy.tableService;
+  return {
+    id: `${order.id}:table`,
+    kind: "table_service_duration",
+    orderId: order.id,
+    restaurantId: tenantId,
+    tableLabel: tableLabel(order),
+    station: "table",
+    stationLabel: "Mesa",
+    stationHref: "/dashboard/operacion/tpv",
+    level,
+    escalated: isTableServiceAlertEscalated(elapsedMs, policy),
+    elapsedMs,
+    elapsedMinutes: Math.floor(elapsedMs / 60_000),
+    oldestSentAtMs: serviceStartedAtMs,
+    delayedLineCount: 0,
+    thresholdMinutes: level === "critical" ? thresholds.criticalMinutes : thresholds.attentionMinutes,
+    criticalThresholdMinutes: thresholds.criticalMinutes,
+    escalationAfterMinutes: thresholds.criticalMinutes + thresholds.escalationMinutes,
+  };
+}
+
 export function buildOperationalDelayAlerts({
   orders,
   restaurantId,
@@ -125,6 +186,10 @@ export function buildOperationalDelayAlerts({
   const alerts = new Map<string, OperationalDelayAlert>();
   for (const order of orders) {
     if (text(order.restaurantId) !== tenantId) continue;
+
+    const tableAlert = buildTableServiceAlert(order, tenantId, nowMs, policy);
+    if (tableAlert) alerts.set(tableAlert.id, tableAlert);
+
     if (!isOrderActive(order.status) || !Array.isArray(order.items)) continue;
 
     for (const rawItem of order.items) {
@@ -148,6 +213,7 @@ export function buildOperationalDelayAlerts({
       if (!existing) {
         alerts.set(key, {
           id: key,
+          kind: "production_delay",
           orderId: order.id,
           restaurantId: tenantId,
           tableLabel: tableLabel(order),
