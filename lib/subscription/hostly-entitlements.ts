@@ -12,6 +12,7 @@ export const HOSTLY_ENTITLEMENTS = {
     "catalog.image.ai.bulk",
     "catalog.image.catalogSearch",
   ],
+  ai: ["ai.sommelierPairing"],
 } as const;
 
 export type HostlyEntitlement =
@@ -31,6 +32,7 @@ export const HOSTLY_PLAN_ENTITLEMENTS: Readonly<
     "catalog.image.ai.single",
     "catalog.image.ai.bulk",
     "catalog.image.catalogSearch",
+    "ai.sommelierPairing",
   ],
 };
 

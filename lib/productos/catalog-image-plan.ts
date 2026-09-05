@@ -67,13 +67,27 @@ export type CatalogImageCreditDecision =
       creditBalance: number;
     };
 
+function isCatalogImageCapability(value: string): value is CatalogImageCapability {
+  return (CATALOG_IMAGE_CAPABILITIES as readonly string[]).includes(value);
+}
+
+function imageCapabilitiesForPlan(plan: HostlyPlan): CatalogImageCapability[] {
+  return HOSTLY_PLAN_ENTITLEMENTS[plan].filter(isCatalogImageCapability);
+}
+
 /**
  * Alias de compatibilidad del módulo de imágenes. La fuente comercial global
- * vive en `lib/subscription/hostly-entitlements.ts`.
+ * vive en `lib/subscription/hostly-entitlements.ts`. Filtramos explícitamente
+ * porque el catálogo global también contiene prestaciones no relacionadas con
+ * imágenes (por ejemplo Sommelier IA).
  */
 export const HOSTLY_CATALOG_IMAGE_PLAN_POLICY: Readonly<
   Record<HostlyCatalogImagePlan, readonly CatalogImageCapability[]>
-> = HOSTLY_PLAN_ENTITLEMENTS;
+> = {
+  basic: imageCapabilitiesForPlan("basic"),
+  pro: imageCapabilitiesForPlan("pro"),
+  ultra: imageCapabilitiesForPlan("ultra"),
+};
 
 /**
  * Configuración operativa y comercial centralizada para trabajos masivos.

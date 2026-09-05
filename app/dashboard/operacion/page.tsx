@@ -41,6 +41,9 @@ function IconSala() {
 function IconReservas() {
   return <LauncherIcon><svg viewBox="0 0 24 24" fill="none" aria-hidden><path d="M7 4v2M17 4v2M5 8h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /><path d="M6 6h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /></svg></LauncherIcon>;
 }
+function IconSommelier() {
+  return <LauncherIcon><svg viewBox="0 0 24 24" fill="none" aria-hidden><path d="M8 4h8c0 4-1.5 7-4 8-2.5-1-4-4-4-8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /><path d="M12 12v6M8 20h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /><path d="M18.5 5.5l.45 1.05 1.05.45-1.05.45-.45 1.05-.45-1.05L17 7l1.05-.45.45-1.05z" fill="currentColor" /></svg></LauncherIcon>;
+}
 function IconActivity() {
   return <LauncherIcon><svg viewBox="0 0 24 24" fill="none" aria-hidden><path d="M6 6h12v12H6V6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /><path d="M9 10h6M9 14h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg></LauncherIcon>;
 }
@@ -56,6 +59,7 @@ const MODULE_ICONS: Record<OperacionModuleSlug, () => ReactNode> = {
   cocteleria: IconCocteleria,
   sala: IconSala,
   reservas: IconReservas,
+  sommelier: IconSommelier,
   centro: IconActivity,
   activity: IconActivity,
   sesiones: IconSesiones,

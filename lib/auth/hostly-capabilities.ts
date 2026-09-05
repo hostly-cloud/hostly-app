@@ -189,6 +189,7 @@ const DASHBOARD_ACCESS: readonly { prefix: string; capability: HostlyCapability 
   { prefix: "/dashboard/operacion/cocina", capability: "kds.manage" },
   { prefix: "/dashboard/operacion/barra", capability: "kds.manage" },
   { prefix: "/dashboard/cocina", capability: "kds.manage" },
+  { prefix: "/dashboard/operacion/sommelier", capability: "tpv.sell" },
   { prefix: "/dashboard/operacion/tpv", capability: "tpv.sell" },
   { prefix: "/dashboard/operacion/sala", capability: "tpv.sell" },
   { prefix: "/dashboard/sala", capability: "tpv.sell" },

@@ -10,6 +10,7 @@ export type OperacionModuleSlug =
   | "cocteleria"
   | "sala"
   | "reservas"
+  | "sommelier"
   | "centro"
   | "activity"
   | "sesiones";
@@ -29,6 +30,7 @@ export const OPERACION_LAUNCHER_MODULES: readonly OperacionLauncherModule[] = [
   { slug: "cocteleria", label: "Coctelería", subtitle: "Cócteles y preparación" },
   { slug: "sala", label: "Sala", subtitle: "Entrega y servicio" },
   { slug: "reservas", label: "Reservas", subtitle: "Gestión de mesas" },
+  { slug: "sommelier", label: "Sommelier IA", subtitle: "Maridajes de tu carta" },
   { slug: "centro", label: "Centro de operaciones", subtitle: "Alertas, escalados e incidencias" },
   { slug: "activity", label: "Actividad", subtitle: "Historial del servicio" },
   { slug: "sesiones", label: "Sesiones", subtitle: "Turnos y cierre" },
@@ -48,7 +50,7 @@ export function operacionModuleHref(slug: OperacionModuleSlug): string {
 }
 
 /** Marcador de build — comprobar en consola/DOM tras deploy. */
-export const OPERACION_LAUNCHER_BUILD_ID = "launcher-10-alert-center-v1";
+export const OPERACION_LAUNCHER_BUILD_ID = "launcher-11-sommelier-v1";
 
 export function getOperacionLauncherDiagnostic() {
   return {
