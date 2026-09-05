@@ -18,9 +18,12 @@ import {
   type TpvVoiceLanguage,
 } from "@/lib/tpv/voice-language";
 
-type SpeechRecognitionResultLike = {
-  0?: { transcript?: string; confidence?: number };
+type SpeechRecognitionAlternativeLike = {
+  transcript?: string;
+  confidence?: number;
 };
+
+type SpeechRecognitionResultLike = ArrayLike<SpeechRecognitionAlternativeLike>;
 
 type SpeechRecognitionEventLike = {
   results?: ArrayLike<SpeechRecognitionResultLike>;
@@ -55,6 +58,7 @@ type VoicePreviewDetail = {
 
 const TPV_VOICE_PREVIEW_REQUEST_EVENT = "hostly:tpv-voice-preview-request";
 const TPV_VOICE_PREVIEW_EVENT = "hostly:tpv-voice-preview";
+const MAX_SPEECH_ALTERNATIVES = 5;
 
 declare global {
   interface Window {
@@ -83,6 +87,47 @@ function joinTranscriptParts(...parts: string[]): string {
   return parts.map((part) => part.trim()).filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 }
 
+function dedupeTranscripts(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = value.trim().replace(/\s+/g, " ");
+    const key = normalized.toLocaleLowerCase();
+    if (!normalized || seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
+  }
+  return result;
+}
+
+function mergeTranscriptCandidates(prefixes: string[], suffixes: string[]): string[] {
+  if (prefixes.length === 0) return dedupeTranscripts(suffixes);
+  if (suffixes.length === 0) return dedupeTranscripts(prefixes);
+  const count = Math.max(prefixes.length, suffixes.length);
+  const merged: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    merged.push(joinTranscriptParts(prefixes[index] ?? prefixes[0] ?? "", suffixes[index] ?? suffixes[0] ?? ""));
+  }
+  return dedupeTranscripts(merged);
+}
+
+function extractSpeechCandidates(results: ArrayLike<SpeechRecognitionResultLike> | undefined): string[] {
+  if (!results?.length) return [];
+  const candidates: string[] = [];
+  for (let rank = 0; rank < MAX_SPEECH_ALTERNATIVES; rank += 1) {
+    const parts: string[] = [];
+    for (let resultIndex = 0; resultIndex < results.length; resultIndex += 1) {
+      const result = results[resultIndex];
+      const alternative = result?.[rank] ?? result?.[0];
+      const transcript = alternative?.transcript?.trim() ?? "";
+      if (transcript) parts.push(transcript);
+    }
+    const candidate = joinTranscriptParts(...parts);
+    if (candidate) candidates.push(candidate);
+  }
+  return dedupeTranscripts(candidates);
+}
+
 export function TpvVoiceCommandButton() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const messageTimerRef = useRef<number | null>(null);
@@ -91,6 +136,10 @@ export function TpvVoiceCommandButton() {
   const suppressFinalizeRef = useRef(false);
   const accumulatedTranscriptRef = useRef("");
   const currentCycleTranscriptRef = useRef("");
+  const accumulatedCandidatesRef = useRef<string[]>([]);
+  const currentCycleCandidatesRef = useRef<string[]>([]);
+  const probingAlternativesRef = useRef(false);
+  const probeResultsRef = useRef<VoicePreviewDetail[]>([]);
   const rawTranscriptRef = useRef("");
   const canonicalTranscriptRef = useRef("");
   const [language, setLanguage] = useState<TpvVoiceLanguage>("es");
@@ -132,23 +181,57 @@ export function TpvVoiceCommandButton() {
     }, 3200);
   }, [clearMessageTimer]);
 
+  const probeCatalogAlternatives = useCallback((rawCandidates: string[]) => {
+    const canonicalCandidates = dedupeTranscripts(
+      rawCandidates.map((candidate) => canonicalizeTpvVoiceTranscript(candidate, language)),
+    );
+    if (canonicalCandidates.length === 0) return null;
+
+    probingAlternativesRef.current = true;
+    probeResultsRef.current = [];
+    for (const transcript of canonicalCandidates) {
+      window.dispatchEvent(new CustomEvent(TPV_VOICE_PREVIEW_REQUEST_EVENT, {
+        detail: { transcript, source: "tpv" as const },
+      }));
+    }
+    probingAlternativesRef.current = false;
+
+    return (
+      probeResultsRef.current.find((result) => result.canConfirm) ??
+      probeResultsRef.current[0] ??
+      null
+    );
+  }, [language]);
+
   const finalizeCapturedSpeech = useCallback(() => {
-    const transcript = joinTranscriptParts(accumulatedTranscriptRef.current, currentCycleTranscriptRef.current);
+    const primaryTranscript = joinTranscriptParts(accumulatedTranscriptRef.current, currentCycleTranscriptRef.current);
+    const candidateTranscripts = dedupeTranscripts([
+      primaryTranscript,
+      ...mergeTranscriptCandidates(accumulatedCandidatesRef.current, currentCycleCandidatesRef.current),
+    ]);
+
     accumulatedTranscriptRef.current = "";
     currentCycleTranscriptRef.current = "";
-    if (!transcript) {
+    accumulatedCandidatesRef.current = [];
+    currentCycleCandidatesRef.current = [];
+
+    if (!primaryTranscript) {
       showMessage(copy.noSpeechError, "error");
       return;
     }
-    const canonicalTranscript = canonicalizeTpvVoiceTranscript(transcript, language);
-    rawTranscriptRef.current = transcript;
-    canonicalTranscriptRef.current = canonicalTranscript;
-    setMessage(copy.interpreting(transcript));
-    setMessageTone("info");
-    window.dispatchEvent(new CustomEvent(TPV_VOICE_PREVIEW_REQUEST_EVENT, {
-      detail: { transcript: canonicalTranscript, source: "tpv" as const },
-    }));
-  }, [copy, language, showMessage]);
+
+    rawTranscriptRef.current = primaryTranscript;
+    setMessage(null);
+    clearMessageTimer();
+    const selectedPreview = probeCatalogAlternatives(candidateTranscripts);
+    if (!selectedPreview) {
+      showMessage(copy.genericListenError, "error");
+      return;
+    }
+
+    canonicalTranscriptRef.current = selectedPreview.transcript;
+    setPreview({ ...selectedPreview, transcript: primaryTranscript });
+  }, [clearMessageTimer, copy, probeCatalogAlternatives, showMessage]);
 
   useEffect(() => {
     const feedbackHandler = (event: Event) => {
@@ -166,8 +249,13 @@ export function TpvVoiceCommandButton() {
     const previewHandler = (event: Event) => {
       const detail = (event as CustomEvent<VoicePreviewDetail>).detail;
       if (!detail?.transcript?.trim() || !detail?.summary?.trim()) return;
+      if (probingAlternativesRef.current) {
+        probeResultsRef.current.push(detail);
+        return;
+      }
       clearMessageTimer();
       setMessage(null);
+      canonicalTranscriptRef.current = detail.transcript;
       setPreview({ ...detail, transcript: rawTranscriptRef.current || detail.transcript });
     };
     window.addEventListener(TPV_VOICE_PREVIEW_EVENT, previewHandler);
@@ -181,12 +269,13 @@ export function TpvVoiceCommandButton() {
     recognition.continuous = true;
     recognition.interimResults = false;
     recognition.lang = resolveTpvVoiceSpeechLocale();
-    recognition.maxAlternatives = 5;
+    recognition.maxAlternatives = MAX_SPEECH_ALTERNATIVES;
 
     const startCycle = () => {
       if (!captureRequestedRef.current) return;
       recognition.lang = resolveTpvVoiceSpeechLocale();
       currentCycleTranscriptRef.current = "";
+      currentCycleCandidatesRef.current = [];
       try {
         recognition.start();
       } catch {
@@ -204,14 +293,9 @@ export function TpvVoiceCommandButton() {
     };
 
     recognition.onresult = (event) => {
-      const results = event.results;
-      if (!results?.length) return;
-      const parts: string[] = [];
-      for (let index = 0; index < results.length; index += 1) {
-        const transcript = results[index]?.[0]?.transcript?.trim() ?? "";
-        if (transcript) parts.push(transcript);
-      }
-      currentCycleTranscriptRef.current = joinTranscriptParts(...parts);
+      const candidates = extractSpeechCandidates(event.results);
+      currentCycleCandidatesRef.current = candidates;
+      currentCycleTranscriptRef.current = candidates[0] ?? "";
     };
 
     recognition.onerror = (event) => {
@@ -228,7 +312,13 @@ export function TpvVoiceCommandButton() {
         accumulatedTranscriptRef.current,
         currentCycleTranscriptRef.current,
       );
+      accumulatedCandidatesRef.current = mergeTranscriptCandidates(
+        accumulatedCandidatesRef.current,
+        currentCycleCandidatesRef.current,
+      );
       currentCycleTranscriptRef.current = "";
+      currentCycleCandidatesRef.current = [];
+
       if (captureRequestedRef.current) {
         restartTimerRef.current = window.setTimeout(() => {
           restartTimerRef.current = null;
@@ -236,10 +326,12 @@ export function TpvVoiceCommandButton() {
         }, 120);
         return;
       }
+
       setListening(false);
       if (suppressFinalizeRef.current) {
         suppressFinalizeRef.current = false;
         accumulatedTranscriptRef.current = "";
+        accumulatedCandidatesRef.current = [];
         return;
       }
       finalizeCapturedSpeech();
@@ -285,6 +377,8 @@ export function TpvVoiceCommandButton() {
 
     accumulatedTranscriptRef.current = "";
     currentCycleTranscriptRef.current = "";
+    accumulatedCandidatesRef.current = [];
+    currentCycleCandidatesRef.current = [];
     rawTranscriptRef.current = "";
     canonicalTranscriptRef.current = "";
     suppressFinalizeRef.current = false;
