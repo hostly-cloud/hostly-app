@@ -1759,6 +1759,110 @@ body {
   justify-content: flex-end;
 }
 
+/* Identidad de suscripción — marca visible, sin conceder capacidades. */
+.hostly-plan-identity {
+  box-sizing: border-box;
+  display: inline-flex;
+  min-height: var(--hostly-op-tab-min-h);
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--hostly-op-gap-xs);
+  border: 1px solid var(--hostly-table-divider-soft);
+  border-radius: var(--hostly-radius-sm);
+  background: var(--hostly-surface-card-solid);
+  padding: 4px 9px 4px 5px;
+  color: var(--hostly-ink-muted);
+  box-shadow: var(--hostly-shadow-hairline);
+  font-family: var(--hostly-font-family);
+  line-height: 1;
+  user-select: none;
+}
+
+.hostly-plan-identity__emblem {
+  box-sizing: border-box;
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hostly-table-divider-soft);
+  border-radius: 9px;
+  background: var(--hostly-surface-soft);
+  color: currentColor;
+}
+
+.hostly-plan-identity__emblem svg {
+  width: var(--hostly-icon-sm);
+  height: var(--hostly-icon-sm);
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hostly-plan-identity__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hostly-plan-identity__brand {
+  font-size: 8px;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-soft);
+}
+
+.hostly-plan-identity__name {
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-plan-identity[data-plan="pro"] {
+  border-color: color-mix(in srgb, var(--hostly-accent) 34%, var(--hostly-table-divider-soft));
+  background: color-mix(in srgb, var(--hostly-accent-soft) 72%, white);
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-plan-identity[data-plan="pro"] .hostly-plan-identity__emblem {
+  border-color: color-mix(in srgb, var(--hostly-navy-deep) 26%, transparent);
+  background: var(--hostly-navy-deep);
+  color: white;
+}
+
+.hostly-plan-identity[data-plan="ultra"] {
+  border-color: color-mix(in srgb, var(--hostly-accent) 58%, var(--hostly-navy-deep));
+  background: var(--hostly-navy-deep);
+  color: white;
+  box-shadow: var(--hostly-shadow-card);
+}
+
+.hostly-plan-identity[data-plan="ultra"] .hostly-plan-identity__emblem {
+  border-color: color-mix(in srgb, white 24%, transparent);
+  background: var(--hostly-accent);
+  color: white;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 34%, transparent);
+}
+
+.hostly-plan-identity[data-plan="ultra"] .hostly-plan-identity__brand {
+  color: color-mix(in srgb, var(--hostly-ice-100) 72%, white);
+}
+
+.hostly-plan-identity[data-plan="ultra"] .hostly-plan-identity__name {
+  color: white;
+  letter-spacing: 0.11em;
+}
+
+.hostly-plan-identity--compact {
+  min-height: 34px;
+}
+
 .hostly-module-header-below__content {
   margin-top: var(--hostly-op-gap-xs);
 }
@@ -1956,6 +2060,12 @@ body {
 [data-hostly-config-shell] .hostly-page-header--dashboard-module {
   padding-top: 4px !important;
   padding-bottom: 4px !important;
+}
+
+[data-hostly-config-shell]:not(.hostly-config-shell--hub)
+  .hostly-module-header-actions__secondary
+  > .hostly-plan-identity {
+  display: none;
 }
 
 [data-hostly-config-shell] .hostly-page-subtitle--dashboard-module {
@@ -4580,6 +4690,17 @@ body {
     flex-wrap: nowrap;
     justify-content: flex-end;
     gap: var(--hostly-op-gap-xs);
+  }
+
+  .hostly-mobile-page-actions .hostly-plan-identity,
+  .hostly-config-context-selector__utilities .hostly-plan-identity {
+    min-height: var(--hostly-op-button-compact-min-h);
+    padding-right: 7px;
+  }
+
+  .hostly-mobile-page-actions .hostly-plan-identity__brand,
+  .hostly-config-context-selector__utilities .hostly-plan-identity__brand {
+    display: none;
   }
 
   .hostly-mobile-page-actions .hostly-language-switch {
@@ -7712,6 +7833,13 @@ body {
 
 .hostly-config-context-selector__language {
   flex: 0 0 auto;
+}
+
+.hostly-config-context-selector__utilities {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--hostly-op-gap-xs);
 }
 
 .hostly-config-context-selector__hub {
@@ -17141,9 +17269,13 @@ main:has(.hostly-productos-v3--operations) .hostly-productos-carta-header-inline
     width: 100%;
   }
 
+  .hostly-config-context-selector__main {
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
   .hostly-config-context-selector__hub {
-    min-height: 32px;
-    font-size: 11px;
+    display: none;
   }
 
   .hostly-config-context-selector__trigger {
@@ -17155,8 +17287,22 @@ main:has(.hostly-productos-v3--operations) .hostly-productos-carta-header-inline
   }
 
   .hostly-config-context-selector__label {
-    max-width: min(48vw, 220px);
+    max-width: min(27vw, 180px);
     font-size: 13px;
+  }
+
+  .hostly-config-context-selector__utilities {
+    gap: 3px;
+  }
+
+  .hostly-config-context-selector__utilities .hostly-language-switch {
+    gap: 2px;
+  }
+
+  .hostly-config-context-selector__utilities .hostly-language-switch__button {
+    min-width: 1.65rem;
+    min-height: var(--hostly-op-button-compact-min-h);
+    padding: 5px 6px;
   }
 
   .hostly-config-context-selector__overlay {

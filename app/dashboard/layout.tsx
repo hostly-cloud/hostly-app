@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { HostlyHelpAssistant } from "@/components/assistant/hostly-help-assistant";
+import { HostlySubscriptionProvider } from "@/components/subscription/hostly-subscription-context";
 import "./dashboard-mobile-overrides.css";
 import "./mobile-horizontal-hardening.css";
 import "./dashboard-visual-overrides-v2.css";
@@ -91,10 +92,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 </HostlySurface>
               </HostlySection>
             ) : (
-              <>
+              <HostlySubscriptionProvider>
                 {children}
                 <HostlyHelpAssistant />
-              </>
+              </HostlySubscriptionProvider>
             )}
           </ConnectivityProvider>
         </DashboardGate>

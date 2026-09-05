@@ -11,6 +11,7 @@ desde ahora el contrato de producto es **Hostly Design System v1**.
 - Filtros métricos: `HostlyFilterCard` (selección neutra y tonos semánticos discretos).
 - Formularios: `HostlyField`, `HostlyInput`, `HostlySelect`, `HostlyTextarea` y `HostlyFormToggle`.
 - Estados: `HostlyAlert`, `HostlyLoadingState`, `HostlyPermissionState`, `HostlyOperationalEmptyState`.
+- Identidad de plan: `HostlyPlanIdentity` (`basic`, `pro`, `ultra`), siempre informativa y sin conceder permisos.
 - Overlays: `HostlyDrawer`, siempre con header, body desplazable y footer estable.
 - Tablas: familia `HostlyDataTable`, `HostlyMobileList`, `HostlyStatusBadge` y `HostlyRowActions`.
 
@@ -25,6 +26,7 @@ No se deben crear variantes locales cuando una de estas familias cubra el caso.
 | Superficies | `HostlyCard`, `HostlySurface`, `HostlyKpiCard` |
 | Formularios | `HostlyField`, controles `Hostly*`, `HostlyFormToggle` |
 | Estados | `HostlyAlert`, `HostlyLoadingState`, `HostlyPermissionState`, `HostlyOperationalEmptyState` |
+| Identidad de suscripción | `HostlyPlanIdentity` |
 | Listados | `HostlyDataTable`, `HostlyMobileList`, `HostlyStatusBadge` |
 | Overlays | `HostlyDrawer` |
 

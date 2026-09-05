@@ -35,6 +35,12 @@ export const es: MessageTree = {
     emDash: "—",
     emptyCell: "-",
   },
+  subscription: {
+    planBasic: "Básico",
+    planPro: "Pro",
+    planUltra: "Ultra",
+    planIdentityAria: "Plan Hostly {{plan}}",
+  },
   activeOperator: {
     title: "¿Quién usa este TPV?",
     subtitle: "Selecciona el camarero antes de abrir el mapa.",

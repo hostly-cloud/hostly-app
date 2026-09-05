@@ -35,6 +35,12 @@ export const en: MessageTree = {
     emDash: "—",
     emptyCell: "-",
   },
+  subscription: {
+    planBasic: "Basic",
+    planPro: "Pro",
+    planUltra: "Ultra",
+    planIdentityAria: "Hostly {{plan}} plan",
+  },
   activeOperator: {
     title: "Who is using this POS?",
     subtitle: "Select the server before opening the table map.",
