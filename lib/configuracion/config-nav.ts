@@ -84,6 +84,7 @@ export const CONFIG_NAV_GROUPS: ConfigNavGroup[] = [
     label: "Empresa",
     children: [
       { href: "/dashboard/configuracion/empresa", label: "Empresa" },
+      { href: "/dashboard/configuracion/cuenta", label: "Plan y facturación" },
       {
         href: "/dashboard/configuracion/integraciones",
         label: "Integraciones",
