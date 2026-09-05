@@ -24,7 +24,7 @@ jobs:
         run: npm run eval:menu-import:photos
 
       - name: Upload report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: menu-import-photo-vision-eval
           path: artifacts/menu-import-photo-vision-eval

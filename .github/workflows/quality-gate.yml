@@ -29,7 +29,7 @@ jobs:
       - name: Prepare i18n source snapshot
         run: tar -czf i18n-source-snapshot.tar.gz app components locales lib hooks context package.json tsconfig.json
       - name: Publish i18n source snapshot
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: i18n-source-snapshot
           path: i18n-source-snapshot.tar.gz
@@ -37,7 +37,7 @@ jobs:
       - name: Hardcoded Spanish UI audit
         run: node scripts/audit-i18n-hardcoded.mjs
       - name: Publish i18n hardcoded audit
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: i18n-hardcoded-audit
           path: i18n-hardcoded-audit.json
@@ -45,7 +45,7 @@ jobs:
       - name: Locale catalog coverage audit
         run: node scripts/audit-i18n-catalog-coverage.mjs
       - name: Publish locale catalog coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: i18n-catalog-coverage
           path: i18n-catalog-coverage.json
@@ -95,7 +95,7 @@ jobs:
       - name: Interactive controls audit
         run: npm run audit:interactive-controls -- --json > interactive-controls-audit.json
       - name: Publish interactive controls audit
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: interactive-controls-audit
           path: interactive-controls-audit.json
@@ -109,7 +109,7 @@ jobs:
           exit "$status"
       - name: Publish lint report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lint-report
           path: lint-report.txt
