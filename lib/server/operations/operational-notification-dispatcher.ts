@@ -230,7 +230,7 @@ async function sendPushToRecipient(input: {
     successCount += result.successCount;
     result.responses.forEach((response, index) => {
       if (response.success) {
-        lastMessageId = response.messageId;
+        lastMessageId = response.messageId ?? lastMessageId;
         return;
       }
       const code = response.error?.code ?? "PUSH_SEND_FAILED";
