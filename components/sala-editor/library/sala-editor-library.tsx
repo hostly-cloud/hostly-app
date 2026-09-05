@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   SalaEditorLibraryItem,
   SalaEditorLibraryPhase,
@@ -36,12 +36,10 @@ export function SalaEditorLibrary({ phase, selection, onSelectItem }: SalaEditor
       .filter(({ items }) => items.length > 0),
     [categories],
   );
-  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(availableCategories[0]?.category.id ?? null);
-
-  useEffect(() => {
-    const stillExists = availableCategories.some(({ category }) => category.id === activeCategoryId);
-    if (!stillExists) setActiveCategoryId(availableCategories[0]?.category.id ?? null);
-  }, [activeCategoryId, availableCategories, phase]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(availableCategories[0]?.category.id ?? null);
+  const activeCategoryId = availableCategories.some(({ category }) => category.id === selectedCategoryId)
+    ? selectedCategoryId
+    : availableCategories[0]?.category.id ?? null;
 
   const visibleCategories = isSearching
     ? filteredCategories
@@ -85,7 +83,7 @@ export function SalaEditorLibrary({ phase, selection, onSelectItem }: SalaEditor
                       ? "border-sky-300 bg-sky-50 text-sky-900 shadow-sm"
                       : "border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50/60",
                   ].join(" ")}
-                  onClick={() => setActiveCategoryId(category.id)}
+                  onClick={() => setSelectedCategoryId(category.id)}
                 >
                   <span aria-hidden>{category.icon}</span>
                   <span>{category.label}</span>
