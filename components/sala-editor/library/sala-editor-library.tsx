@@ -29,36 +29,18 @@ const PHASE_COPY: Record<SalaEditorLibraryPhase, string> = {
 };
 
 export function SalaEditorLibrary({ phase, selection, onSelectItem }: SalaEditorLibraryProps) {
-  const {
-    categories,
-    filteredCategories,
-    searchQuery,
-    setSearchQuery,
-    isSearching,
-    hasSearchResults,
-  } = useSalaEditorLibraryState(phase);
-
+  const { categories, filteredCategories, searchQuery, setSearchQuery, isSearching, hasSearchResults } = useSalaEditorLibraryState(phase);
   const availableCategories = useMemo(
-    () =>
-      categories
-        .map((category) => ({
-          category,
-          items: category.items.filter((item) => item.status === "available"),
-        }))
-        .filter(({ items }) => items.length > 0),
+    () => categories
+      .map((category) => ({ category, items: category.items.filter((item) => item.status === "available") }))
+      .filter(({ items }) => items.length > 0),
     [categories],
   );
-  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(
-    availableCategories[0]?.category.id ?? null,
-  );
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(availableCategories[0]?.category.id ?? null);
 
   useEffect(() => {
-    const stillExists = availableCategories.some(
-      ({ category }) => category.id === activeCategoryId,
-    );
-    if (!stillExists) {
-      setActiveCategoryId(availableCategories[0]?.category.id ?? null);
-    }
+    const stillExists = availableCategories.some(({ category }) => category.id === activeCategoryId);
+    if (!stillExists) setActiveCategoryId(availableCategories[0]?.category.id ?? null);
   }, [activeCategoryId, availableCategories, phase]);
 
   const visibleCategories = isSearching
@@ -73,7 +55,6 @@ export function SalaEditorLibrary({ phase, selection, onSelectItem }: SalaEditor
           <h2 className="hostly-sala-library__title">Elementos</h2>
           <p className="hostly-sala-library__subtitle">{PHASE_COPY[phase]}</p>
         </div>
-
         <label className="hostly-sala-library__search">
           <span className="hostly-sala-library__search-icon" aria-hidden>⌕</span>
           <input
@@ -89,7 +70,7 @@ export function SalaEditorLibrary({ phase, selection, onSelectItem }: SalaEditor
         </label>
 
         {!isSearching && availableCategories.length > 1 ? (
-          <div className="hostly-sala-library__tabs" role="tablist" aria-label="Tipos de elementos">
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Tipos de elementos">
             {availableCategories.map(({ category, items }) => {
               const active = category.id === activeCategoryId;
               return (
@@ -98,12 +79,20 @@ export function SalaEditorLibrary({ phase, selection, onSelectItem }: SalaEditor
                   type="button"
                   role="tab"
                   aria-selected={active}
-                  className={["hostly-sala-library__tab", active ? "is-active" : ""].filter(Boolean).join(" ")}
+                  className={[
+                    "inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-bold transition",
+                    active
+                      ? "border-sky-300 bg-sky-50 text-sky-900 shadow-sm"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50/60",
+                  ].join(" ")}
                   onClick={() => setActiveCategoryId(category.id)}
                 >
                   <span aria-hidden>{category.icon}</span>
                   <span>{category.label}</span>
-                  <span className="hostly-sala-library__tab-count">{items.length}</span>
+                  <span className={[
+                    "inline-grid h-5 min-w-5 place-items-center rounded-full px-1 text-[9px]",
+                    active ? "bg-sky-100 text-sky-800" : "bg-slate-100 text-slate-500",
+                  ].join(" ")}>{items.length}</span>
                 </button>
               );
             })}
@@ -121,12 +110,7 @@ export function SalaEditorLibrary({ phase, selection, onSelectItem }: SalaEditor
         ) : (
           <div className="hostly-sala-library__catalog" aria-label="Elementos disponibles">
             {visibleCategories.map(({ category, items }) => (
-              <SalaEditorLibraryCategorySection
-                key={category.id}
-                category={category}
-                expanded
-                onToggle={() => undefined}
-              >
+              <SalaEditorLibraryCategorySection key={category.id} category={category} expanded onToggle={() => undefined}>
                 <ul className="hostly-sala-library__items">
                   {items.map((item) => (
                     <SalaEditorLibraryItemRow
