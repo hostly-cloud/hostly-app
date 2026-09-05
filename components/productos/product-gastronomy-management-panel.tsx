@@ -176,13 +176,17 @@ export function ProductGastronomyManagementPanel() {
 
   return (
     <>
-      <button
-        type="button"
-        className="fixed bottom-5 right-5 z-40 rounded-full border border-sky-200 bg-white px-4 py-2 text-sm font-extrabold text-sky-800 shadow-lg hover:bg-sky-50"
+      <HostlyButton
+        variant="secondary"
+        size="touch"
+        className="fixed right-4 bottom-[calc(1rem+var(--hostly-mobile-cta-min-h)+var(--hostly-op-gap-sm)+env(safe-area-inset-bottom))] z-[70] shadow-[var(--hostly-shadow-float)] sm:right-6 sm:bottom-[calc(1.5rem+var(--hostly-mobile-cta-min-h)+var(--hostly-op-gap-sm)+env(safe-area-inset-bottom))]"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        data-hostly-gastronomy-trigger
         onClick={() => setOpen(true)}
       >
         Info gastronómica
-      </button>
+      </HostlyButton>
 
       {open ? (
         <div
