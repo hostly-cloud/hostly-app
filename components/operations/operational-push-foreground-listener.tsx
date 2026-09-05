@@ -21,7 +21,6 @@ export function OperationalPushForegroundListener() {
         void navigator.serviceWorker.ready.then((registration) => registration.showNotification(title, {
           body,
           tag: data.incidentId ? `hostly-alert-${data.incidentId}-${data.stage || "active"}` : "hostly-operational-alert",
-          renotify: true,
           data: { url: data.url || "/dashboard/operacion/activity/alerts" },
         })).catch(() => undefined);
       });
