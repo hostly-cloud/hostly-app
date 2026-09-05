@@ -96,6 +96,5 @@ jobs:
           name: interactive-controls-audit
           path: interactive-controls-audit.json
           retention-days: 14
-      - name: Lint debt report
-        continue-on-error: true
+      - name: Lint
         run: npm run lint
