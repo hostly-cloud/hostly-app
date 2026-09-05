@@ -212,7 +212,12 @@
   height: 72px;
   border-radius: 7px;
   background: #eef3f8;
-  object-fit: cover;
+}
+
+.resultImage {
+  object-fit: contain;
+  padding: 4px;
+  background: #fff;
 }
 
 .resultContent {
