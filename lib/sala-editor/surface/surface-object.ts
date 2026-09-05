@@ -17,7 +17,8 @@ export type SurfaceObject = {
   id: SurfaceObjectId;
   espacioId: string;
   material: SurfaceMaterialKind;
-  shape: SurfaceShapeKind;
+  /** Opcional para compatibilidad con planos V2 ya guardados. */
+  shape?: SurfaceShapeKind;
   x: number;
   y: number;
   width: number;
@@ -26,9 +27,7 @@ export type SurfaceObject = {
   locked: boolean;
 };
 
-export type SurfaceObjectDraft = Omit<SurfaceObject, "id" | "shape"> & {
-  shape?: SurfaceShapeKind;
-};
+export type SurfaceObjectDraft = Omit<SurfaceObject, "id">;
 
 export function createSurfaceObject(draft: SurfaceObjectDraft): SurfaceObject {
   return {
@@ -44,15 +43,8 @@ function isFiniteNumber(value: unknown): value is number {
 
 function isSurfaceMaterialKind(value: unknown): value is SurfaceMaterialKind {
   return (
-    value === "wood" ||
-    value === "stone" ||
-    value === "grass" ||
-    value === "sand" ||
-    value === "water" ||
-    value === "deck" ||
-    value === "carpet" ||
-    value === "tile" ||
-    value === "custom"
+    value === "wood" || value === "stone" || value === "grass" || value === "sand" ||
+    value === "water" || value === "deck" || value === "carpet" || value === "tile" || value === "custom"
   );
 }
 
@@ -60,7 +52,7 @@ function isSurfaceShapeKind(value: unknown): value is SurfaceShapeKind {
   return value === "rectangle" || value === "rounded" || value === "ellipse" || value === "organic";
 }
 
-export function getSurfaceShapeStyle(shape: SurfaceShapeKind): {
+export function getSurfaceShapeStyle(shape: SurfaceShapeKind | null | undefined): {
   borderRadius?: string;
   clipPath?: string;
 } {
@@ -89,20 +81,12 @@ export function normalizeSurfaceObjects(
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
     const entry = raw as Partial<SurfaceObject>;
     if (typeof entry.id !== "string" || entry.id.trim() === "") continue;
-    if (typeof entry.espacioId !== "string" || !validEspacioIds.has(entry.espacioId)) {
-      continue;
-    }
+    if (typeof entry.espacioId !== "string" || !validEspacioIds.has(entry.espacioId)) continue;
     if (!isSurfaceMaterialKind(entry.material)) continue;
     if (
-      !isFiniteNumber(entry.x) ||
-      !isFiniteNumber(entry.y) ||
-      !isFiniteNumber(entry.width) ||
-      !isFiniteNumber(entry.height) ||
-      entry.width <= 0 ||
-      entry.height <= 0
-    ) {
-      continue;
-    }
+      !isFiniteNumber(entry.x) || !isFiniteNumber(entry.y) || !isFiniteNumber(entry.width) ||
+      !isFiniteNumber(entry.height) || entry.width <= 0 || entry.height <= 0
+    ) continue;
 
     normalized.push({
       id: entry.id,
