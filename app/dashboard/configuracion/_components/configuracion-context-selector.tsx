@@ -28,6 +28,7 @@ import {
   type ConfigNavLeaf,
 } from "@/lib/configuracion/config-nav";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { CurrentHostlyPlanIdentity } from "@/components/subscription/current-hostly-plan-identity";
 import { HostlyButton } from "@/components/ui/hostly";
 
 type ConfigContextItem = ConfigNavLeaf & {
@@ -157,7 +158,10 @@ export function ConfiguracionContextSelector() {
             />
           </HostlyButton>
         </div>
-        <LanguageSwitcher className="hostly-config-context-selector__language" />
+        <div className="flex shrink-0 items-center gap-[var(--hostly-op-gap-sm)]">
+          <CurrentHostlyPlanIdentity compact />
+          <LanguageSwitcher className="hostly-config-context-selector__language" />
+        </div>
       </div>
 
       {open ? (
