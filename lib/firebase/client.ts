@@ -1,4 +1,10 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
+import {
+  getToken as getAppCheckToken,
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+  type AppCheck,
+} from "firebase/app-check";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
@@ -29,6 +35,10 @@ const envInput = {
   ),
   appId: trimFirebaseEnvValue(process.env.NEXT_PUBLIC_FIREBASE_APP_ID),
 };
+
+const appCheckSiteKey = trimFirebaseEnvValue(
+  process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY,
+);
 
 const ENV_DEBUG: readonly [string, string][] = [
   ["NEXT_PUBLIC_FIREBASE_API_KEY", envInput.apiKey],
@@ -71,11 +81,61 @@ export const firebaseEnvDebug = {
 /** True only when real NEXT_PUBLIC Firebase web env is present — never for the local stub. */
 export const isFirebaseConfigured = resolved.isFirebaseConfigured;
 
-const app =
+export const firebaseApp =
   getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+/**
+ * Firebase App Check (web).
+ *
+ * The Enterprise site key is public by design. Hostly only initializes App Check
+ * when the real Firebase client and a site key are both configured. This keeps
+ * local/dev stubs and unconfigured previews working while production can roll
+ * out App Check gradually before enforcement is enabled in Firebase Console.
+ */
+type HostlyBrowserGlobal = typeof globalThis & {
+  __hostlyFirebaseAppCheck?: AppCheck;
+};
+
+const hostlyBrowserGlobal = globalThis as HostlyBrowserGlobal;
+let appCheck: AppCheck | null = hostlyBrowserGlobal.__hostlyFirebaseAppCheck ?? null;
+
+if (
+  typeof window !== "undefined" &&
+  isFirebaseConfigured &&
+  appCheckSiteKey &&
+  !appCheck
+) {
+  try {
+    appCheck = initializeAppCheck(firebaseApp, {
+      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+    hostlyBrowserGlobal.__hostlyFirebaseAppCheck = appCheck;
+  } catch (error) {
+    // Never take the TPV down because attestation bootstrap failed. Firebase
+    // enforcement is enabled only after monitor metrics are healthy.
+    console.warn("[Firebase] App Check initialization failed", error);
+  }
+}
+
+export const firebaseAppCheck = appCheck;
+export const isFirebaseAppCheckConfigured = Boolean(
+  isFirebaseConfigured && appCheckSiteKey,
+);
+
+/** Token for Hostly-owned API calls that opt into App Check verification. */
+export async function getHostlyAppCheckToken(): Promise<string | null> {
+  if (!firebaseAppCheck) return null;
+  try {
+    const result = await getAppCheckToken(firebaseAppCheck, false);
+    return result.token || null;
+  } catch {
+    return null;
+  }
+}
+
+export const auth = getAuth(firebaseApp);
+export const db = getFirestore(firebaseApp);
 
 /** Misma `app` que Auth/Firestore. Bucket explícito `gs://…` para evitar desajuste con el proyecto real. */
 const storageBucketGs =
@@ -85,8 +145,8 @@ if (storageBucketGs && !isProd && !resolved.usedDevStub) {
 }
 
 export const storage: FirebaseStorage = storageBucketGs
-  ? getStorage(app, storageBucketGs)
-  : getStorage(app);
+  ? getStorage(firebaseApp, storageBucketGs)
+  : getStorage(firebaseApp);
 
 if (!isProd && !resolved.usedDevStub) {
   console.log("[Firebase] storage ready");
