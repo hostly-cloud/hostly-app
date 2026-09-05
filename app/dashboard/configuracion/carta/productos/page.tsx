@@ -1,6 +1,7 @@
 "use client";
 
 import ProductosManagementPage from "@/components/productos/productos-management-page";
+import { ProductGastronomyManagementPanel } from "@/components/productos/product-gastronomy-management-panel";
 import styles from "./productos-experience.module.css";
 
 export default function ConfigCartaProductosPage() {
@@ -11,6 +12,7 @@ export default function ConfigCartaProductosPage() {
         embedConfigVisual
         dashboardListIceVisual
       />
+      <ProductGastronomyManagementPanel />
     </div>
   );
 }
