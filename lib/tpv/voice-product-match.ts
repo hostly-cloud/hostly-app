@@ -26,10 +26,14 @@ const SERVICE_PRESENTATION_WORDS = new Set([
   "botella", "botellas", "copa", "copas", "vaso", "vasos", "jarra", "jarras",
   "racion", "raciones", "unidad", "unidades", "plato", "platos",
 ]);
+const ZERO_VARIANT_TOKENS = new Set(["zero", "0", "light"]);
+const REGULAR_VARIANT_TOKENS = new Set(["normal", "regular", "clasica", "clasico", "original"]);
 const NON_DISTINCTIVE_CATALOG_WORDS = new Set([
   ...PRODUCT_NAME_CONNECTORS,
   ...SERVICE_PRESENTATION_WORDS,
-  "comida", "bebida", "bebidas", "producto", "productos",
+  ...ZERO_VARIANT_TOKENS,
+  ...REGULAR_VARIANT_TOKENS,
+  "sin", "azucar", "comida", "bebida", "bebidas", "producto", "productos",
 ]);
 
 const SERVICE_ALIASES: Record<string, string[]> = {
@@ -47,8 +51,6 @@ const SERVICE_ALIASES: Record<string, string[]> = {
   soda: ["refresco", "refrescos"],
 };
 
-const ZERO_VARIANT_TOKENS = new Set(["zero", "0", "light"]);
-const REGULAR_VARIANT_TOKENS = new Set(["normal", "regular", "clasica", "clasico", "original"]);
 type RequestedVariant = "zero" | "regular" | null;
 
 function editDistance(a: string, b: string): number {
