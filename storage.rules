@@ -142,9 +142,18 @@ service firebase.storage {
         : 'denied';
     }
 
-    // Equivalente Storage de `settings.manage`.
+    // Equivalente Storage de `settings.manage`: activos globales/configuración.
     function canManageStoredAssets() {
       return normalizedRole() == 'owner' || normalizedRole() == 'admin';
+    }
+
+    // Catálogo central: Firestore permite gestión de producto a manager+.
+    // Mantener la misma frontera evita que un encargado pueda editar un producto
+    // pero falle al adjuntar o sustituir su imagen manual.
+    function canManageCatalogAssets() {
+      return normalizedRole() == 'owner'
+        || normalizedRole() == 'admin'
+        || normalizedRole() == 'manager';
     }
 
     function isAllowedRasterImageContentType() {
@@ -199,9 +208,9 @@ service firebase.storage {
     match /restaurants/{restaurantId}/products/{productId}/{fileName} {
       allow read: if sameRestaurant(restaurantId);
       allow create, update: if sameRestaurant(restaurantId)
-        && canManageStoredAssets()
+        && canManageCatalogAssets()
         && isValidImageUpload();
-      allow delete: if sameRestaurant(restaurantId) && canManageStoredAssets();
+      allow delete: if sameRestaurant(restaurantId) && canManageCatalogAssets();
     }
 
     // Logo del restaurante — Configuración → Empresa.
