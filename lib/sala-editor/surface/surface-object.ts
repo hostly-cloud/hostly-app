@@ -13,6 +13,9 @@ export type SurfaceMaterialKind =
 
 export type SurfaceShapeKind = "rectangle" | "rounded" | "ellipse" | "organic";
 
+export const SALA_SURFACE_SHAPE_EVENT = "hostly:sala-surface-shape";
+export type SalaSurfaceShapeEventDetail = { shape: SurfaceShapeKind };
+
 export type SurfaceObject = {
   id: SurfaceObjectId;
   espacioId: string;
