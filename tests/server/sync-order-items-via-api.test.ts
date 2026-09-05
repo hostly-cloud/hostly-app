@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { before, describe, test } from "node:test";
 import type { ModifierStockConsumptionWarning } from "@/lib/inventory/stock-movement-types";
 import type {
+  SyncOrderItemsViaApiDeps,
   SyncOrderItemsViaApiResult,
   SyncOrderItemsViaApiSuccess,
 } from "@/lib/firestore/sync-order-items-via-api";
@@ -347,5 +348,86 @@ describe("syncOrderItemsViaApi draft persist filters non-pending", () => {
       },
     );
     assert.deepEqual(sendIds, ["rel-1"]);
+  });
+});
+
+describe("syncOrderItemsViaApi create_open idempotency", () => {
+  before(async () => {
+    const mod = await import("@/lib/firestore/sync-order-items-via-api");
+    syncOrderItemsViaApi = mod.syncOrderItemsViaApi;
+  });
+
+  type CreateOpen = NonNullable<SyncOrderItemsViaApiDeps["createOpenOrderViaApi"]>;
+  const line = {
+    id: "line-race",
+    productId: "product-race",
+    quantity: 1,
+    status: "pending",
+  };
+
+  function recorder(keys: string[]): CreateOpen {
+    return async (params) => {
+      keys.push(params.idempotencyKey ?? "");
+      return {
+        ok: true,
+        orderId: "order-race",
+        total: 10,
+        inventoryWarnings: [],
+      };
+    };
+  }
+
+  test("autosave pending y envío inmediato no comparten clave", async () => {
+    const keys: string[] = [];
+    const deps: SyncOrderItemsViaApiDeps = {
+      createOpenOrderViaApi: recorder(keys),
+    };
+
+    await syncOrderItemsViaApi(
+      {
+        operation: "create_open",
+        tableId: "mesa-race",
+        items: [line],
+        markSent: false,
+      },
+      deps,
+    );
+    await syncOrderItemsViaApi(
+      {
+        operation: "create_open",
+        tableId: "mesa-race",
+        items: [line],
+        markSent: true,
+      },
+      deps,
+    );
+
+    assert.equal(keys.length, 2);
+    assert.notEqual(keys[0], keys[1]);
+    assert.match(keys[0]!, /:pending:/);
+    assert.match(keys[1]!, /:sent:/);
+  });
+
+  test("reintentos equivalentes conservan la misma clave", async () => {
+    const keys: string[] = [];
+    const deps: SyncOrderItemsViaApiDeps = {
+      createOpenOrderViaApi: recorder(keys),
+    };
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await syncOrderItemsViaApi(
+        {
+          operation: "create_open",
+          tableId: " mesa-race ",
+          items: [line],
+          markSent: true,
+        },
+        deps,
+      );
+    }
+
+    assert.equal(keys.length, 2);
+    assert.equal(keys[0], keys[1]);
+    assert.match(keys[0]!, /^sync-create-open:mesa-race:sent:/);
   });
 });
