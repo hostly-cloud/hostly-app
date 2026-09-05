@@ -50,11 +50,16 @@ export async function POST(req: Request) {
   if (linkedSubscriptionId) {
     return jsonError(409, "STRIPE_SUBSCRIPTION_ALREADY_LINKED");
   }
+  const linkedCustomerId =
+    typeof subscription?.stripeCustomerId === "string"
+      ? subscription.stripeCustomerId.trim()
+      : "";
 
   try {
     const session = await createHostlyCheckoutSession({
       restaurantId: authCtx.restaurantId,
       email: authCtx.email,
+      customerId: linkedCustomerId || null,
       plan,
       interval,
       baseUrl: requestBaseUrl(req),
