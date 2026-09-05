@@ -1,6 +1,60 @@
 import type { ProductFamilyType } from "@/lib/carta/product-family-types";
 import type { OperationStationType } from "@/lib/operacion/operation-station-types";
 
+export type ProductAllergen =
+  | "gluten"
+  | "crustaceans"
+  | "eggs"
+  | "fish"
+  | "peanuts"
+  | "soybeans"
+  | "milk"
+  | "nuts"
+  | "celery"
+  | "mustard"
+  | "sesame"
+  | "sulphites"
+  | "lupin"
+  | "molluscs";
+
+export type ProductWineStyle =
+  | "red"
+  | "white"
+  | "rose"
+  | "sparkling"
+  | "sweet"
+  | "fortified"
+  | "unknown";
+
+export type ProductWineBody = "light" | "medium" | "full" | "unknown";
+export type ProductWineSweetness = "dry" | "off_dry" | "sweet" | "unknown";
+
+export type ProductWineProfile = {
+  style?: ProductWineStyle;
+  body?: ProductWineBody;
+  sweetness?: ProductWineSweetness;
+  grapes?: string[];
+  region?: string;
+  denomination?: string;
+  country?: string;
+  vintage?: number | null;
+  abv?: number | null;
+  tastingNotes?: string[];
+};
+
+export type ProductGastronomy = {
+  /** Descripción gastronómica visible para sala/TPV/Sommelier. */
+  description?: string;
+  /** Ingredientes confirmados por el restaurante. */
+  ingredients?: string[];
+  /** Alérgenos UE confirmados. Ausencia del campo significa "sin información", no "sin alérgenos". */
+  allergens?: ProductAllergen[];
+  /** Energía aproximada/confirmada por ración. */
+  caloriesKcal?: number | null;
+  /** Perfil enológico canónico cuando el producto es un vino. */
+  wine?: ProductWineProfile;
+};
+
 export type Product = {
   id: string;
   nombre: string;
@@ -28,6 +82,8 @@ export type Product = {
   operationStationId?: string;
   operationStationName?: string;
   operationStationType?: OperationStationType;
+  /** Metadatos gastronómicos canónicos; opcionales para compatibilidad con productos existentes. */
+  gastronomy?: ProductGastronomy;
   createdAt?: number;
   /** Dueño del documento en Firestore (Firebase Auth uid). */
   userId?: string;
