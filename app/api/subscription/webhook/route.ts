@@ -88,7 +88,12 @@ export async function POST(req: Request) {
     return jsonError(400, "INVALID_STRIPE_SIGNATURE");
   }
 
-  const event = JSON.parse(rawBody) as StripeEvent;
+  let event: StripeEvent;
+  try {
+    event = JSON.parse(rawBody) as StripeEvent;
+  } catch {
+    return jsonError(400, "INVALID_STRIPE_EVENT");
+  }
   const object = event.data?.object;
   if (!object || !event.type) return jsonError(400, "INVALID_STRIPE_EVENT");
 
