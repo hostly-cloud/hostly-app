@@ -1,3 +1,5 @@
+import type { ProductAllergen, ProductWineProfile } from "@/types/product";
+
 export type SommelierPairingSource = "ai" | "heuristic";
 
 export type SommelierCatalogItem = {
@@ -8,6 +10,13 @@ export type SommelierCatalogItem = {
   price: number | null;
   description: string | null;
   kind: "wine" | "dish";
+  /** Canonical restaurant-confirmed product context. */
+  ingredients?: string[];
+  allergens?: ProductAllergen[];
+  /** Distinguishes explicit [] from unknown/missing allergen information. */
+  hasAllergenInformation?: boolean;
+  caloriesKcal?: number | null;
+  wine?: ProductWineProfile;
 };
 
 export type SommelierWineProfile = {
