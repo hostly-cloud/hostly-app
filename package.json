@@ -2,6 +2,15 @@
   "name": "hostly-app",
   "version": "0.1.0",
   "private": true,
+  "allowScripts": {
+    "@firebase/util@1.15.1": true,
+    "core-js@3.49.0": true,
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true,
+    "protobufjs@7.6.5": true,
+    "re2@1.26.1": true,
+    "unrs-resolver@1.11.1": true
+  },
   "scripts": {
     "dev": "next dev --webpack --hostname 0.0.0.0 --port 3000",
     "build": "next build",
