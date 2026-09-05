@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, type ReactNode } from "react";
 import { useAuth } from "@/components/auth/auth-context";
+import { useI18n } from "@/components/i18n-provider";
 import { OperationalDelayAlertsPanel } from "@/components/dashboard/operational-delay-alerts-panel";
 import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import type { HostlyCapability } from "@/lib/auth/hostly-capabilities";
@@ -13,6 +14,7 @@ import {
   type DashboardArtworkKind,
 } from "@/components/dashboard/dashboard-module-artwork";
 import { DEFAULT_RESTAURANT_NAME } from "@/lib/firestore/user-restaurant-profile";
+import { DASHBOARD_COPY } from "@/locales/dashboard-copy";
 
 function LauncherIcon({ children }: { children: ReactNode }) {
   return <span className="hostly-op-launcher-icon">{children}</span>;
@@ -110,71 +112,67 @@ function SmallIcon({
   );
 }
 
+type OperationKey = "kitchen" | "bar" | "cocktail" | "reservations";
+type ManagementKey = "products" | "settings" | "analytics";
+
 type Action = {
   href: string;
-  label: string;
-  kind: "tpv" | "kitchen" | "bar" | "cocktail" | "reservations";
+  kind: "tpv" | OperationKey;
+  copyKey?: OperationKey;
   visible: (can: (c: HostlyCapability) => boolean) => boolean;
 };
+
 const PRIMARY: Action[] = [
   {
     href: "/dashboard/operacion/tpv",
-    label: "TPV",
     kind: "tpv",
     visible: (can) => can("tpv.sell"),
   },
 ];
+
 const OPERATION: Action[] = [
   {
     href: "/dashboard/operacion/cocina",
-    label: "Cocina",
     kind: "kitchen",
+    copyKey: "kitchen",
     visible: (can) => can("kds.manage"),
   },
   {
     href: "/dashboard/operacion/barra",
-    label: "Barra",
     kind: "bar",
+    copyKey: "bar",
     visible: (can) => can("kds.manage"),
   },
   {
     href: "/dashboard/operacion/cocteleria",
-    label: "Coctelería",
     kind: "cocktail",
+    copyKey: "cocktail",
     visible: (can) => can("kds.manage"),
   },
   {
     href: "/dashboard/operacion/reservas",
-    label: "Reservas",
     kind: "reservations",
+    copyKey: "reservations",
     visible: (can) => can("reservations.manage"),
   },
 ];
-const SUBTITLES: Record<string, string> = {
-  Cocina: "Pedidos en preparación",
-  Barra: "Bebidas y cafés",
-  Coctelería: "Cócteles y combinados",
-  Reservas: "Llegadas de hoy",
-};
+
 const MANAGEMENT = [
   {
     path: "/dashboard/configuracion/carta/productos",
-    label: "Productos",
-    subtitle: "Carta y catálogo",
+    copyKey: "products" as ManagementKey,
     kind: "products" as const,
     capability: "catalog.manage" as HostlyCapability,
   },
   {
     path: "/dashboard/configuracion",
-    label: "Configuración",
-    subtitle: "Restaurante y equipo",
+    copyKey: "settings" as ManagementKey,
     kind: "settings" as const,
     capability: "settings.manage" as HostlyCapability,
   },
   {
     path: "/dashboard/analisis",
-    label: "Análisis",
-    subtitle: "Ventas y rendimiento",
+    copyKey: "analytics" as ManagementKey,
     kind: "analytics" as const,
     capability: "analytics.view" as HostlyCapability,
   },
@@ -182,7 +180,9 @@ const MANAGEMENT = [
 
 export default function DashboardPage() {
   const { restaurantName } = useAuth();
+  const { locale } = useI18n();
   const { can } = useHostlyCapabilities();
+  const copy = DASHBOARD_COPY[locale];
   const primary = useMemo(() => PRIMARY.filter((x) => x.visible(can)), [can]);
   const operation = useMemo(
     () => OPERATION.filter((x) => x.visible(can)),
@@ -194,6 +194,30 @@ export default function DashboardPage() {
   );
   const title = restaurantName?.trim() || DEFAULT_RESTAURANT_NAME;
   const canSeeOperationalAlerts = can("kds.manage") || can("tpv.sell");
+
+  const getOperationCopy = (key: OperationKey) => {
+    switch (key) {
+      case "kitchen":
+        return { label: copy.kitchen, subtitle: copy.kitchenSubtitle };
+      case "bar":
+        return { label: copy.bar, subtitle: copy.barSubtitle };
+      case "cocktail":
+        return { label: copy.cocktail, subtitle: copy.cocktailSubtitle };
+      case "reservations":
+        return { label: copy.reservations, subtitle: copy.reservationsSubtitle };
+    }
+  };
+
+  const getManagementCopy = (key: ManagementKey) => {
+    switch (key) {
+      case "products":
+        return { label: copy.products, subtitle: copy.productsSubtitle };
+      case "settings":
+        return { label: copy.settings, subtitle: copy.settingsSubtitle };
+      case "analytics":
+        return { label: copy.analytics, subtitle: copy.analyticsSubtitle };
+    }
+  };
 
   return (
     <ModulePageShell
@@ -217,7 +241,7 @@ export default function DashboardPage() {
               <div className="min-w-0">
                 <p className="hostly-dashboard-command-eyebrow">{title}</p>
                 <h1 className="hostly-dashboard-command-title">
-                  Todo listo para empezar el servicio.
+                  {copy.readyForService}
                 </h1>
               </div>
             </div>
@@ -225,11 +249,11 @@ export default function DashboardPage() {
           {canSeeOperationalAlerts && <OperationalDelayAlertsPanel />}
           <section
             className="hostly-dashboard-command-main"
-            aria-label="Acciones operativas"
+            aria-label={copy.operationalActions}
           >
             {primary.length > 0 && (
               <nav
-                aria-label="Acción principal"
+                aria-label={copy.primaryAction}
                 className="hostly-dashboard-command-hero-wrap"
               >
                 {primary.map((a) => (
@@ -246,10 +270,10 @@ export default function DashboardPage() {
                     </span>
                     <span className="hostly-dashboard-command-hero__copy">
                       <span className="hostly-dashboard-command-hero__label">
-                        Abrir TPV
+                        {copy.openTpv}
                       </span>
                       <span className="hostly-dashboard-command-hero__sub">
-                        Mesas, pedidos y cobro
+                        {copy.tpvSubtitle}
                       </span>
                     </span>
                   </Link>
@@ -258,80 +282,86 @@ export default function DashboardPage() {
             )}
             {operation.length > 0 && (
               <section
-                aria-label="Operación"
+                aria-label={copy.operation}
                 className="hostly-dashboard-command-operation"
               >
                 <h2 className="hostly-dashboard-command-section-title">
-                  Operación
+                  {copy.operation}
                 </h2>
                 <nav className="hostly-dashboard-command-stations">
-                  {operation.map((a) => (
-                    <Link
-                      key={a.href}
-                      href={a.href}
-                      className="hostly-dashboard-command-station"
-                      data-visual={a.kind}
-                    >
-                      <span className="hostly-dashboard-command-station__art">
-                        <DashboardModuleArtwork
-                          kind={a.kind as DashboardArtworkKind}
-                        />
-                      </span>
-                      <span className="hostly-dashboard-command-station__icon">
-                        <StationIcon kind={a.kind} />
-                      </span>
-                      <span className="hostly-dashboard-command-station__copy">
-                        <span className="hostly-dashboard-command-station__label">
-                          {a.label}
+                  {operation.map((a) => {
+                    const itemCopy = getOperationCopy(a.copyKey ?? "kitchen");
+                    return (
+                      <Link
+                        key={a.href}
+                        href={a.href}
+                        className="hostly-dashboard-command-station"
+                        data-visual={a.kind}
+                      >
+                        <span className="hostly-dashboard-command-station__art">
+                          <DashboardModuleArtwork
+                            kind={a.kind as DashboardArtworkKind}
+                          />
                         </span>
-                        <span className="hostly-dashboard-command-station__sub">
-                          {SUBTITLES[a.label]}
+                        <span className="hostly-dashboard-command-station__icon">
+                          <StationIcon kind={a.kind} />
                         </span>
-                      </span>
-                    </Link>
-                  ))}
+                        <span className="hostly-dashboard-command-station__copy">
+                          <span className="hostly-dashboard-command-station__label">
+                            {itemCopy.label}
+                          </span>
+                          <span className="hostly-dashboard-command-station__sub">
+                            {itemCopy.subtitle}
+                          </span>
+                        </span>
+                      </Link>
+                    );
+                  })}
                 </nav>
               </section>
             )}
           </section>
           {management.length > 0 && (
             <section
-              aria-label="Gestión"
+              aria-label={copy.management}
               className="hostly-dashboard-command-management"
             >
               <h2 className="hostly-dashboard-command-section-title">
-                Gestión
+                {copy.management}
               </h2>
               <div className="hostly-dashboard-command-dock">
-                {management.map((m) => (
-                  <Link
-                    key={m.path}
-                    href={m.path}
-                    className="hostly-dashboard-command-dock-item"
-                    data-visual={m.kind}
-                  >
-                    <span className="hostly-dashboard-command-dock-item__art">
-                      <DashboardModuleArtwork kind={m.kind} />
-                    </span>
-                    <span className="hostly-dashboard-command-dock-item__icon">
-                      <SmallIcon kind={m.kind} size={18} />
-                    </span>
-                    <span className="hostly-dashboard-command-dock-item__copy">
-                      <span className="hostly-dashboard-command-dock-item__label">
-                        {m.label}
-                      </span>
-                      <span className="hostly-dashboard-command-dock-item__sub">
-                        {m.subtitle}
-                      </span>
-                    </span>
-                    <span
-                      className="hostly-dashboard-command-dock-item__arrow"
-                      aria-hidden
+                {management.map((m) => {
+                  const itemCopy = getManagementCopy(m.copyKey);
+                  return (
+                    <Link
+                      key={m.path}
+                      href={m.path}
+                      className="hostly-dashboard-command-dock-item"
+                      data-visual={m.kind}
                     >
-                      →
-                    </span>
-                  </Link>
-                ))}
+                      <span className="hostly-dashboard-command-dock-item__art">
+                        <DashboardModuleArtwork kind={m.kind} />
+                      </span>
+                      <span className="hostly-dashboard-command-dock-item__icon">
+                        <SmallIcon kind={m.kind} size={18} />
+                      </span>
+                      <span className="hostly-dashboard-command-dock-item__copy">
+                        <span className="hostly-dashboard-command-dock-item__label">
+                          {itemCopy.label}
+                        </span>
+                        <span className="hostly-dashboard-command-dock-item__sub">
+                          {itemCopy.subtitle}
+                        </span>
+                      </span>
+                      <span
+                        className="hostly-dashboard-command-dock-item__arrow"
+                        aria-hidden
+                      >
+                        →
+                      </span>
+                    </Link>
+                  );
+                })}
               </div>
             </section>
           )}

@@ -4,7 +4,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExte
 import {
   createTranslator,
   DEFAULT_LOCALE,
+  FALLBACK_LOCALE,
   isLocale,
+  LOCALE_META,
   LOCALE_STORAGE_KEY,
   type Locale,
   type MessageTree,
@@ -12,16 +14,31 @@ import {
 } from "@/lib/i18n";
 import { en } from "@/locales/en";
 import { es } from "@/locales/es";
+import { fr } from "@/locales/fr";
+import { de } from "@/locales/de";
+import { it } from "@/locales/it";
+import { pt } from "@/locales/pt";
+import { nl } from "@/locales/nl";
+import { getMultilingualOverrides } from "@/locales/multilingual-overrides";
 
 const CATALOG: Record<Locale, MessageTree> = {
   es,
   en,
+  fr,
+  de,
+  it,
+  pt,
+  nl,
+  "de-CH": de,
+  "fr-CH": fr,
+  "it-CH": it,
 };
 
 type I18nContextValue = {
   locale: Locale;
   setLocale: (locale: Locale) => void;
   t: TranslateFn;
+  intlLocale: string;
 };
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -55,7 +72,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (typeof document !== "undefined") {
-      document.documentElement.lang = locale === "en" ? "en" : "es";
+      document.documentElement.lang = LOCALE_META[locale].htmlLang;
     }
   }, [locale]);
 
@@ -68,9 +85,28 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const t = useMemo(() => createTranslator(CATALOG[locale]), [locale]);
+  const effectiveCatalog = useMemo<MessageTree>(
+    () => ({
+      ...CATALOG[locale],
+      ...getMultilingualOverrides(locale),
+    }),
+    [locale],
+  );
 
-  const value = useMemo(() => ({ locale, setLocale, t }), [locale, setLocale, t]);
+  const t = useMemo(
+    () => createTranslator(effectiveCatalog, CATALOG[FALLBACK_LOCALE]),
+    [effectiveCatalog],
+  );
+
+  const value = useMemo(
+    () => ({
+      locale,
+      setLocale,
+      t,
+      intlLocale: LOCALE_META[locale].intlLocale,
+    }),
+    [locale, setLocale, t],
+  );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

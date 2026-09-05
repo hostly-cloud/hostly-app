@@ -36,6 +36,39 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Prepare i18n source snapshot
+        run: tar -czf i18n-source-snapshot.tar.gz app components locales lib hooks context package.json tsconfig.json
+
+      - name: Publish i18n source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-source-snapshot
+          path: i18n-source-snapshot.tar.gz
+          retention-days: 2
+
+      - name: Hardcoded Spanish UI audit
+        run: node scripts/audit-i18n-hardcoded.mjs
+
+      - name: Publish i18n hardcoded audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-hardcoded-audit
+          path: i18n-hardcoded-audit.json
+          retention-days: 14
+
+      - name: Locale catalog coverage audit
+        run: node scripts/audit-i18n-catalog-coverage.mjs
+
+      - name: Publish locale catalog coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-catalog-coverage
+          path: i18n-catalog-coverage.json
+          retention-days: 14
+
+      - name: Locale overlay integrity audit
+        run: node scripts/audit-i18n-overlay-integrity.mjs
+
       - name: Dependency security audit
         run: npm audit
 
