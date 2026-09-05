@@ -1,10 +1,12 @@
 import { kdsSlaThresholds, type KdsStationKind } from "@/lib/kds/kds-sla";
 
-export type OperationalAlertStationPolicy = {
+export type OperationalAlertThresholdPolicy = {
   attentionMinutes: number;
   criticalMinutes: number;
   escalationMinutes: number;
 };
+
+export type OperationalAlertStationPolicy = OperationalAlertThresholdPolicy;
 
 export type OperationalAlertNotificationChannels = {
   inApp: boolean;
@@ -17,6 +19,7 @@ export type OperationalAlertNotificationChannels = {
 export type OperationalAlertPolicy = {
   enabled: boolean;
   stations: Record<KdsStationKind, OperationalAlertStationPolicy>;
+  tableService: OperationalAlertThresholdPolicy;
   notificationChannels: OperationalAlertNotificationChannels;
 };
 
@@ -38,6 +41,11 @@ export const DEFAULT_OPERATIONAL_ALERT_POLICY: OperationalAlertPolicy = {
     bar: defaultStationPolicy("bar", 3),
     cocktail: defaultStationPolicy("cocktail", 3),
   },
+  tableService: {
+    attentionMinutes: 20,
+    criticalMinutes: 30,
+    escalationMinutes: 10,
+  },
   notificationChannels: {
     inApp: true,
     push: false,
@@ -53,6 +61,24 @@ function finiteMinutes(value: unknown, fallback: number, min: number, max: numbe
   return Math.min(max, Math.max(min, Math.round(parsed)));
 }
 
+function sanitizeThresholdPolicy(
+  value: unknown,
+  defaults: OperationalAlertThresholdPolicy,
+): OperationalAlertThresholdPolicy {
+  const candidate = value && typeof value === "object"
+    ? value as Record<string, unknown>
+    : {};
+  const attentionMinutes = finiteMinutes(candidate.attentionMinutes, defaults.attentionMinutes, 1, 180);
+  const criticalMinutes = finiteMinutes(
+    candidate.criticalMinutes,
+    defaults.criticalMinutes,
+    attentionMinutes + 1,
+    240,
+  );
+  const escalationMinutes = finiteMinutes(candidate.escalationMinutes, defaults.escalationMinutes, 1, 120);
+  return { attentionMinutes, criticalMinutes, escalationMinutes };
+}
+
 export function sanitizeOperationalAlertPolicy(value: unknown): OperationalAlertPolicy {
   const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};
   const rawStations = raw.stations && typeof raw.stations === "object"
@@ -61,19 +87,10 @@ export function sanitizeOperationalAlertPolicy(value: unknown): OperationalAlert
   const stations = {} as Record<KdsStationKind, OperationalAlertStationPolicy>;
 
   for (const station of STATIONS) {
-    const defaults = DEFAULT_OPERATIONAL_ALERT_POLICY.stations[station];
-    const candidate = rawStations[station] && typeof rawStations[station] === "object"
-      ? rawStations[station] as Record<string, unknown>
-      : {};
-    const attentionMinutes = finiteMinutes(candidate.attentionMinutes, defaults.attentionMinutes, 1, 180);
-    const criticalMinutes = finiteMinutes(
-      candidate.criticalMinutes,
-      defaults.criticalMinutes,
-      attentionMinutes + 1,
-      240,
+    stations[station] = sanitizeThresholdPolicy(
+      rawStations[station],
+      DEFAULT_OPERATIONAL_ALERT_POLICY.stations[station],
     );
-    const escalationMinutes = finiteMinutes(candidate.escalationMinutes, defaults.escalationMinutes, 1, 120);
-    stations[station] = { attentionMinutes, criticalMinutes, escalationMinutes };
   }
 
   const rawChannels = raw.notificationChannels && typeof raw.notificationChannels === "object"
@@ -83,6 +100,10 @@ export function sanitizeOperationalAlertPolicy(value: unknown): OperationalAlert
   return {
     enabled: raw.enabled !== false,
     stations,
+    tableService: sanitizeThresholdPolicy(
+      raw.tableService,
+      DEFAULT_OPERATIONAL_ALERT_POLICY.tableService,
+    ),
     notificationChannels: {
       inApp: true,
       push: rawChannels.push === true,
@@ -93,17 +114,32 @@ export function sanitizeOperationalAlertPolicy(value: unknown): OperationalAlert
   };
 }
 
+function resolveThresholdLevel(
+  elapsedMs: number,
+  thresholds: OperationalAlertThresholdPolicy,
+): "normal" | "attention" | "critical" {
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return "normal";
+  const minutes = elapsedMs / 60_000;
+  if (minutes >= thresholds.criticalMinutes) return "critical";
+  if (minutes >= thresholds.attentionMinutes) return "attention";
+  return "normal";
+}
+
+function isThresholdEscalated(
+  elapsedMs: number,
+  thresholds: OperationalAlertThresholdPolicy,
+): boolean {
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return false;
+  return elapsedMs / 60_000 >= thresholds.criticalMinutes + thresholds.escalationMinutes;
+}
+
 export function resolveOperationalAlertLevel(
   elapsedMs: number,
   station: KdsStationKind,
   policy: OperationalAlertPolicy,
 ): "normal" | "attention" | "critical" {
-  if (!policy.enabled || !Number.isFinite(elapsedMs) || elapsedMs < 0) return "normal";
-  const minutes = elapsedMs / 60_000;
-  const thresholds = policy.stations[station];
-  if (minutes >= thresholds.criticalMinutes) return "critical";
-  if (minutes >= thresholds.attentionMinutes) return "attention";
-  return "normal";
+  if (!policy.enabled) return "normal";
+  return resolveThresholdLevel(elapsedMs, policy.stations[station]);
 }
 
 export function isOperationalAlertEscalated(
@@ -111,7 +147,22 @@ export function isOperationalAlertEscalated(
   station: KdsStationKind,
   policy: OperationalAlertPolicy,
 ): boolean {
-  if (!policy.enabled || !Number.isFinite(elapsedMs) || elapsedMs < 0) return false;
-  const thresholds = policy.stations[station];
-  return elapsedMs / 60_000 >= thresholds.criticalMinutes + thresholds.escalationMinutes;
+  if (!policy.enabled) return false;
+  return isThresholdEscalated(elapsedMs, policy.stations[station]);
+}
+
+export function resolveTableServiceAlertLevel(
+  elapsedMs: number,
+  policy: OperationalAlertPolicy,
+): "normal" | "attention" | "critical" {
+  if (!policy.enabled) return "normal";
+  return resolveThresholdLevel(elapsedMs, policy.tableService);
+}
+
+export function isTableServiceAlertEscalated(
+  elapsedMs: number,
+  policy: OperationalAlertPolicy,
+): boolean {
+  if (!policy.enabled) return false;
+  return isThresholdEscalated(elapsedMs, policy.tableService);
 }
