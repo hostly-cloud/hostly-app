@@ -570,7 +570,9 @@ La imagen generada es una **propuesta**, no una fuente operativa autónoma:
 El modelo por defecto debe priorizar coste controlado y puede cambiarse mediante
 `HOSTLY_AI_IMAGE_MODEL`, siempre usando un identificador vigente del Gateway. Los
 modelos Gemini de imagen son multimodales: se invocan con `generateText`, solicitan
-las modalidades `TEXT` e `IMAGE` y entregan la imagen en `result.files`.
+las modalidades `TEXT` e `IMAGE` y entregan la imagen en `result.files`. Si el
+Gateway no dispone de autorización, Hostly usa la `OPENAI_API_KEY` ya configurada
+como respaldo y genera una imagen cuadrada de baja calidad con `gpt-image-2`.
 
 ---
 
