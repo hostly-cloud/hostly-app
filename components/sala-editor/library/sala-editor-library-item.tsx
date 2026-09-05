@@ -15,10 +15,11 @@ export type SalaEditorLibraryItemProps = {
 
 function getLibraryItemMeta(item: SalaEditorLibraryItem): string {
   if (item.operationalType != null) return "Operación";
+  if (item.wallPreset != null) return "Pared";
   if (item.structuralKind != null) return "Estructura";
   if (item.landscapeKind != null) return "Paisajismo";
   if (item.zoneType != null) return "Zona";
-  if (item.surfaceMaterial != null) return "Superficie";
+  if (item.surfaceMaterial != null) return item.surfaceShape ? "Superficie · forma" : "Superficie";
   if (item.baseToolId != null) return "Base del plano";
   return "Elemento";
 }
@@ -88,7 +89,9 @@ export function isLibraryItemSelected(
 ): boolean {
   if (item.status !== "available") return false;
   if (item.structuralKind != null) {
-    return selection.structuralKind === item.structuralKind;
+    if (selection.structuralKind !== item.structuralKind) return false;
+    if (item.wallPreset != null) return selection.wallPreset === item.wallPreset;
+    return selection.wallPreset == null;
   }
   if (item.operationalType != null) {
     if (selection.operationalType !== item.operationalType) return false;
@@ -107,7 +110,9 @@ export function isLibraryItemSelected(
     return selection.baseToolId === item.baseToolId;
   }
   if (item.surfaceMaterial != null) {
-    return selection.surfaceMaterial === item.surfaceMaterial;
+    if (selection.surfaceMaterial !== item.surfaceMaterial) return false;
+    if (item.surfaceShape != null) return selection.surfaceShape === item.surfaceShape;
+    return selection.surfaceShape == null;
   }
   return false;
 }
