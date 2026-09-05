@@ -99,6 +99,7 @@ async function stripeRequest<T>(
 export async function createHostlyCheckoutSession(input: {
   restaurantId: string;
   email: string;
+  customerId?: string | null;
   plan: HostlyPlan;
   interval: HostlyBillingInterval;
   baseUrl: string;
@@ -108,7 +109,9 @@ export async function createHostlyCheckoutSession(input: {
 
   const body = new URLSearchParams();
   body.set("mode", "subscription");
-  body.set("customer_email", input.email);
+  const customerId = input.customerId?.trim();
+  if (customerId) body.set("customer", customerId);
+  else body.set("customer_email", input.email);
   body.set("client_reference_id", input.restaurantId);
   body.set("line_items[0][price]", priceId);
   body.set("line_items[0][quantity]", "1");
