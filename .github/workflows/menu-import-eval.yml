@@ -51,6 +51,7 @@ on:
       - "tests/lib/imported-product-image-generation.test.ts"
       - "tests/lib/product-image-review-state.test.ts"
       - "tests/lib/catalog-product-image-matching.test.ts"
+      - "tests/lib/catalog-product-image-search-query.test.ts"
       - "tests/lib/catalog-product-image-provenance.test.ts"
       - "tests/lib/catalog-product-image-exact-suggestion.test.ts"
       - "tests/lib/wine-catalog-identity.test.ts"
@@ -129,7 +130,7 @@ jobs:
         run: npx tsx --test tests/server/product-image-review-request.test.ts
 
       - name: Run catalog product image matching tests
-        run: npx tsx --test tests/lib/catalog-product-image-matching.test.ts
+        run: npx tsx --test tests/lib/catalog-product-image-matching.test.ts tests/lib/catalog-product-image-search-query.test.ts
 
       - name: Run catalog product image provenance tests
         run: npx tsx --test tests/lib/catalog-product-image-provenance.test.ts
