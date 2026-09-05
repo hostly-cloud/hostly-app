@@ -6,6 +6,7 @@ import {
   readAuthorizedProfile,
 } from "@/lib/server/auth/authorized-profile";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
+import { verifyHostlyAppCheck } from "@/lib/server/security/app-check";
 
 export type AuthenticatedRestaurantContext = {
   uid: string;
@@ -45,13 +46,16 @@ export function isAuthErrorResponse(value: unknown): value is NextResponse {
 }
 
 /**
- * Verifica ID token Firebase y resuelve restaurantId desde perfil (servidor).
- * No acepta restaurantId del cliente.
+ * Verifica App Check (cuando el rollout esta activo), ID token Firebase y
+ * resuelve restaurantId desde perfil (servidor). No acepta restaurantId del cliente.
  */
 export async function requireAuthenticatedRestaurant(
   req: Request,
   dependencies?: AuthenticatedRestaurantDependencies,
 ): Promise<AuthenticatedRestaurantContext | NextResponse> {
+  const appCheck = await verifyHostlyAppCheck(req);
+  if (appCheck instanceof NextResponse) return appCheck;
+
   const token = parseBearerToken(req);
   if (!token) {
     return NextResponse.json(
