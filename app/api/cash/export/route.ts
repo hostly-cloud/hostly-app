@@ -1,0 +1,5 @@
+import { NextResponse } from "next/server";
+import { isAuthErrorResponse, requireAuthenticatedRestaurant } from "@/lib/server/auth/require-authenticated-restaurant";
+import { CashRegisterV2Error, getCashExportV2 } from "@/lib/server/cash/cash-register-v2";
+const jsonError=(status:number,error:string)=>NextResponse.json({ok:false,error},{status});
+export async function GET(req:Request){try{const auth=await requireAuthenticatedRestaurant(req);if(isAuthErrorResponse(auth))return auth;const url=new URL(req.url),result=await getCashExportV2({db:auth.db,restaurantId:auth.restaurantId,actorRole:auth.role,kind:url.searchParams.get("kind"),id:url.searchParams.get("id")});return new Response(`\uFEFF${result.content}`,{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":`attachment; filename="${result.filename}"`,"Cache-Control":"private, no-store"}});}catch(error){if(error instanceof CashRegisterV2Error)return jsonError(error.httpStatus,error.code);console.error("[cash:export]",error);return jsonError(500,"CASH_EXPORT_FAILED");}}

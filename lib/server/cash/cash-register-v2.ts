@@ -1,375 +1,55 @@
+import { createHash } from "node:crypto";
 import { FieldValue, Timestamp, type Firestore } from "firebase-admin/firestore";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
-import type {
-  CashMovementType,
-  CashMovementView,
-  CashSessionView,
-  CashTotals,
-  CashWorkspaceSnapshot,
-} from "@/lib/cash/types";
+import { businessDateForMs, resolveCashTimezone } from "@/lib/cash/business-day";
+import { cashDayReportRows, cashSessionReportRows, normalizeCashTotals, rowsToCsv, sumCashTotals } from "@/lib/cash/report";
+import type { CashDayCloseView, CashIntegrityStatus, CashMovementType, CashMovementView, CashSessionView, CashTotals, CashWorkspaceSnapshot, CashZReport } from "@/lib/cash/types";
 
 const REGISTER_ID = "main";
 const REGISTER_NAME = "Caja principal";
 const EPS = 0.01;
+export class CashRegisterV2Error extends Error { constructor(readonly code: string, readonly httpStatus = 400) { super(code); this.name = "CashRegisterV2Error"; } }
+const round=(v:number)=>Math.round((v+Number.EPSILON)*100)/100;
+const num=(v:unknown,fallback=0)=>{const n=typeof v==="number"?v:Number(v);return Number.isFinite(n)?round(n):fallback;};
+const str=(v:unknown,max=240)=>typeof v==="string"?v.trim().slice(0,max):"";
+const ms=(v:unknown)=>typeof v==="number"&&Number.isFinite(v)?v:v instanceof Timestamp?v.toMillis():0;
+function root(db:Firestore,rid:string){return db.collection("restaurants").doc(rid);}
+function sessions(db:Firestore,rid:string){return root(db,rid).collection("cashSessions");}
+function state(db:Firestore,rid:string){return root(db,rid).collection("cashRegisterState").doc(REGISTER_ID);}
+function movements(db:Firestore,rid:string,sid:string){return sessions(db,rid).doc(sid).collection("movements");}
+function audits(db:Firestore,rid:string,sid:string){return sessions(db,rid).doc(sid).collection("audit");}
+function days(db:Firestore,rid:string){return root(db,rid).collection("cashDayClosures");}
+function dayAudits(db:Firestore,rid:string,did:string){return days(db,rid).doc(did).collection("audit");}
+export function cashV2Permissions(role:unknown){return {canOperate:serverRoleHasCapability(role,"tpv.charge"),canSupervise:serverRoleHasCapability(role,"tpv.refund")||serverRoleHasCapability(role,"users.manage")};}
+function method(data:Record<string,unknown>){const v=str(data.paymentMethod,32).toLowerCase();return v==="cash"||v==="card"||v==="voucher"?v:"other";}
+function lineAmount(data:Record<string,unknown>){return round(Math.max(0,num(data.price)+num(data.modifierTotal))*Math.max(1,num(data.quantity??data.qty,1)));}
+function hash(value:unknown){return createHash("sha256").update(JSON.stringify(value)).digest("hex");}
+async function restaurantTimezone(db:Firestore,rid:string){const snap=await root(db,rid).get();const data=(snap.data()??{}) as Record<string,unknown>;const settings=data.settings&&typeof data.settings==="object"?data.settings as Record<string,unknown>:{};return resolveCashTimezone(data.timezone??data.timeZone??settings.timezone??settings.timeZone);}
 
-export class CashRegisterV2Error extends Error {
-  constructor(readonly code: string, readonly httpStatus = 400) {
-    super(code);
-    this.name = "CashRegisterV2Error";
-  }
+async function ledgerTotals(input:{db:Firestore;restaurantId:string;sessionId:string;openedAtMs:number;endAtMs?:number|null;openingFloat:number;}):Promise<CashTotals>{
+  const [paymentsSnap,movementsSnap,itemsSnap]=await Promise.all([input.db.collection("payments").where("restaurantId","==",input.restaurantId).get(),movements(input.db,input.restaurantId,input.sessionId).get(),input.db.collection("orderItems").where("restaurantId","==",input.restaurantId).get()]);
+  const end=input.endAtMs&&input.endAtMs>0?input.endAtMs:Date.now(); let gross=0,cash=0,card=0,voucher=0,other=0,refunds=0,cashRefunds=0,tips=0,taxes=0,payments=0,refundCount=0; const orders=new Set<string>(), discounts=new Map<string,number>();
+  for(const doc of paymentsSnap.docs){const d=doc.data() as Record<string,unknown>;const created=ms(d.createdAt);const amount=num(d.amount??d.total);const pm=method(d);const status=str(d.status,32).toLowerCase();const oid=str(d.orderId,160);if(created>=input.openedAtMs&&created<=end){gross+=amount;payments++;tips+=num(d.tip);taxes+=num(d.taxAmount??d.vatAmount??d.ivaAmount);if(oid){orders.add(oid);discounts.set(oid,Math.max(discounts.get(oid)??0,num(d.discountTotal)));}if(pm==="cash")cash+=amount;else if(pm==="card")card+=amount;else if(pm==="voucher")voucher+=amount;else other+=amount;}const reversed=ms(d.refundedAt??d.cancelledAt);if((status==="refunded"||status==="cancelled")&&reversed>=input.openedAtMs&&reversed<=end){const amt=num(d.refundAmount)||amount;refunds+=amt;refundCount++;if(pm==="cash")cashRefunds+=amt;}}
+  let cashIn=0,cashOut=0;for(const doc of movementsSnap.docs){const d=doc.data() as Record<string,unknown>;const at=ms(d.createdAtMs??d.createdAt);if(at<input.openedAtMs||at>end)continue;if(d.type==="cash_in")cashIn+=num(d.amount);if(d.type==="cash_out")cashOut+=num(d.amount);}
+  let voidCount=0,voidAmount=0,compCount=0,compAmount=0;for(const doc of itemsSnap.docs){const d=doc.data() as Record<string,unknown>;const status=str(d.status,32).toLowerCase();const cancelled=ms(d.cancelledAt)||(status==="cancelled"||status==="canceled"?ms(d.updatedAt):0);const comped=ms(d.compedAt);if(cancelled>=input.openedAtMs&&cancelled<=end){voidCount++;voidAmount+=lineAmount(d);}if((d.isComped===true||comped>0)&&comped>=input.openedAtMs&&comped<=end){compCount++;compAmount+=lineAmount(d);}}
+  return normalizeCashTotals({grossSales:gross,netSales:gross-refunds,cashSales:cash,cardSales:card,voucherSales:voucher,otherSales:other,refunds,cashRefunds,tips,discounts:[...discounts.values()].reduce((a,b)=>a+b,0),taxesRecorded:taxes,cashIn,cashOut,expectedCash:input.openingFloat+cash+cashIn-cashOut-cashRefunds,paymentCount:payments,refundCount,orderCount:orders.size,voidedLineCount:voidCount,voidedLineAmount:voidAmount,compedLineCount:compCount,compedLineAmount:compAmount});
 }
+async function movementViews(db:Firestore,rid:string,sid:string):Promise<CashMovementView[]>{const snap=await movements(db,rid,sid).get();return snap.docs.map(doc=>{const d=doc.data() as Record<string,unknown>;return{id:doc.id,type:d.type==="cash_out"?"cash_out":"cash_in",amount:num(d.amount),reason:str(d.reason,500),createdAtMs:ms(d.createdAtMs??d.createdAt),createdBy:str(d.createdBy,128),createdByEmail:str(d.createdByEmail,180)||undefined} satisfies CashMovementView;}).sort((a,b)=>b.createdAtMs-a.createdAtMs);}
+function parseZ(raw:unknown):CashZReport|null{if(!raw||typeof raw!=="object"||Array.isArray(raw))return null;const d=raw as Record<string,unknown>;if(d.version!==1||d.reportType!=="session_z")return null;const restaurantId=str(d.restaurantId,128),sessionId=str(d.sessionId,128);if(!restaurantId||!sessionId)return null;return{version:1,reportType:"session_z",restaurantId,sessionId,registerId:str(d.registerId,80)||REGISTER_ID,registerName:str(d.registerName,120)||REGISTER_NAME,operatorUid:str(d.operatorUid,128),operatorEmail:str(d.operatorEmail,180),openedAtMs:ms(d.openedAtMs),closedAtMs:ms(d.closedAtMs),openingFloat:num(d.openingFloat),countedCash:num(d.countedCash),difference:num(d.difference),discrepancyReason:str(d.discrepancyReason,500)||null,totals:normalizeCashTotals(d.totals as Partial<CashTotals>|undefined),generatedAtMs:ms(d.generatedAtMs),generatedBy:str(d.generatedBy,128)};}
+function zPayload(z:CashZReport){return{...z,totals:normalizeCashTotals(z.totals)};}
+function zIntegrity(z:CashZReport|null,stored:unknown):CashIntegrityStatus{const h=str(stored,128);if(!z||!h)return"missing";return hash(zPayload(z))===h?"verified":"mismatch";}
+async function viewSession(input:{db:Firestore;restaurantId:string;id:string;data:Record<string,unknown>;canSupervise:boolean;}):Promise<CashSessionView>{const status=input.data.status==="closed"?"closed":input.data.status==="counted"?"counted":"open";const openingFloat=num(input.data.openingFloat),openedAtMs=ms(input.data.openedAtMs??input.data.openedAt),closedAtMs=ms(input.data.closedAtMs??input.data.closedAt)||null,countedCash=typeof input.data.countedCash==="number"?num(input.data.countedCash):null,show=input.canSupervise||status==="closed";const totals=status==="closed"&&input.data.closedTotals?normalizeCashTotals(input.data.closedTotals as Partial<CashTotals>):show?await ledgerTotals({db:input.db,restaurantId:input.restaurantId,sessionId:input.id,openedAtMs,endAtMs:closedAtMs,openingFloat}):null;const z=status==="closed"?parseZ(input.data.zReport):null;return{id:input.id,registerId:str(input.data.registerId,80)||REGISTER_ID,registerName:str(input.data.registerName,120)||REGISTER_NAME,operatorUid:str(input.data.operatorUid,128),operatorEmail:str(input.data.operatorEmail,180),status,openedAtMs,closedAtMs,openingFloat,countedCash,difference:countedCash!=null&&totals?round(countedCash-totals.expectedCash):typeof input.data.difference==="number"?num(input.data.difference):null,discrepancyReason:show?str(input.data.discrepancyReason,500)||null:null,countedBy:str(input.data.countedBy,128)||null,closedBy:str(input.data.closedBy,128)||null,totals,movements:await movementViews(input.db,input.restaurantId,input.id),zReport:z,integrityStatus:status==="closed"?zIntegrity(z,input.data.integrityHash):null,canSeeExpected:show,canClose:input.canSupervise&&status==="counted"};}
+function dayBase(id:string,d:Record<string,unknown>):Omit<CashDayCloseView,"integrityStatus">{return{id,businessDate:str(d.businessDate,16)||id,timezone:resolveCashTimezone(d.timezone),openedAtMs:ms(d.openedAtMs),closedAtMs:ms(d.closedAtMs??d.closedAt),sessionIds:Array.isArray(d.sessionIds)?d.sessionIds.map(v=>str(v,128)).filter(Boolean):[],sessionCount:Math.max(0,Math.trunc(num(d.sessionCount))),operatorEmails:Array.isArray(d.operatorEmails)?d.operatorEmails.map(v=>str(v,180)).filter(Boolean):[],totals:normalizeCashTotals(d.totals as Partial<CashTotals>|undefined),totalOpeningFloat:num(d.totalOpeningFloat),totalCountedCash:num(d.totalCountedCash),totalDifference:num(d.totalDifference),discrepancySessionCount:Math.max(0,Math.trunc(num(d.discrepancySessionCount))),closedBy:str(d.closedBy,128),closedByEmail:str(d.closedByEmail,180),note:str(d.note,500)||null};}
+function parseDay(id:string,d:Record<string,unknown>):CashDayCloseView{const base=dayBase(id,d),h=str(d.integrityHash,128);return{...base,integrityStatus:!h?"missing":hash(base)===h?"verified":"mismatch"};}
+async function listDays(db:Firestore,rid:string){const snap=await days(db,rid).get();return snap.docs.map(doc=>parseDay(doc.id,doc.data() as Record<string,unknown>)).sort((a,b)=>b.closedAtMs-a.closedAtMs).slice(0,30);}
 
-const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-const num = (v: unknown, fallback = 0) => {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? round(n) : fallback;
-};
-const str = (v: unknown, max = 240) => (typeof v === "string" ? v.trim().slice(0, max) : "");
-const ms = (v: unknown) =>
-  typeof v === "number" && Number.isFinite(v)
-    ? v
-    : v instanceof Timestamp
-      ? v.toMillis()
-      : 0;
+export async function getCashWorkspaceV2(input:{db:Firestore;restaurantId:string;actorRole:unknown;}):Promise<CashWorkspaceSnapshot>{const p=cashV2Permissions(input.actorRole);if(!p.canOperate&&!p.canSupervise)throw new CashRegisterV2Error("CASH_REGISTER_ACCESS_REQUIRED",403);const [snap,tz,dayClosures]=await Promise.all([sessions(input.db,input.restaurantId).get(),restaurantTimezone(input.db,input.restaurantId),listDays(input.db,input.restaurantId)]);const ordered=snap.docs.map(doc=>({id:doc.id,data:doc.data() as Record<string,unknown>})).sort((a,b)=>ms(b.data.openedAtMs??b.data.openedAt)-ms(a.data.openedAtMs??a.data.openedAt));const raw=ordered.find(x=>x.data.status!=="closed")??null;const activeSession=raw?await viewSession({db:input.db,restaurantId:input.restaurantId,id:raw.id,data:raw.data,canSupervise:p.canSupervise}):null;const history=await Promise.all(ordered.filter(x=>x.data.status==="closed").slice(0,30).map(x=>viewSession({db:input.db,restaurantId:input.restaurantId,id:x.id,data:x.data,canSupervise:p.canSupervise})));const currentBusinessDate=businessDateForMs(Date.now(),tz),sealed=dayClosures.some(d=>d.businessDate===currentBusinessDate),hasToday=history.some(s=>s.closedAtMs!=null&&businessDateForMs(s.closedAtMs,tz)===currentBusinessDate);return{activeSession,history,dayClosures,currentBusinessDate,timezone:tz,...p,canCloseDay:p.canSupervise&&!activeSession&&hasToday&&!sealed};}
 
-function root(db: Firestore, restaurantId: string) {
-  return db.collection("restaurants").doc(restaurantId);
-}
-function sessions(db: Firestore, restaurantId: string) {
-  return root(db, restaurantId).collection("cashSessions");
-}
-function state(db: Firestore, restaurantId: string) {
-  return root(db, restaurantId).collection("cashRegisterState").doc(REGISTER_ID);
-}
-function movements(db: Firestore, restaurantId: string, sessionId: string) {
-  return sessions(db, restaurantId).doc(sessionId).collection("movements");
-}
+export async function openCashSessionV2(input:{db:Firestore;restaurantId:string;actorUid:string;actorEmail:string;actorRole:unknown;openingFloat:unknown;}){if(!cashV2Permissions(input.actorRole).canOperate)throw new CashRegisterV2Error("CASH_REGISTER_OPERATE_REQUIRED",403);const openingFloat=num(input.openingFloat,Number.NaN);if(!Number.isFinite(openingFloat)||openingFloat<0||openingFloat>100000)throw new CashRegisterV2Error("INVALID_OPENING_FLOAT");const tz=await restaurantTimezone(input.db,input.restaurantId),now=Date.now(),businessDate=businessDateForMs(now,tz),stateRef=state(input.db,input.restaurantId),sessionRef=sessions(input.db,input.restaurantId).doc(),auditRef=audits(input.db,input.restaurantId,sessionRef.id).doc(),dayRef=days(input.db,input.restaurantId).doc(businessDate);await input.db.runTransaction(async tx=>{const [currentState,sealed]=await Promise.all([tx.get(stateRef),tx.get(dayRef)]);if(sealed.exists)throw new CashRegisterV2Error("CASH_DAY_ALREADY_CLOSED",409);const currentId=str(currentState.data()?.activeSessionId,128);if(currentId){const current=await tx.get(sessions(input.db,input.restaurantId).doc(currentId));if(current.exists&&current.data()?.status!=="closed")throw new CashRegisterV2Error("CASH_SESSION_ALREADY_OPEN",409);}tx.set(sessionRef,{restaurantId:input.restaurantId,registerId:REGISTER_ID,registerName:REGISTER_NAME,operatorUid:input.actorUid,operatorEmail:input.actorEmail,businessDate,timezone:tz,status:"open",openingFloat,openedAt:FieldValue.serverTimestamp(),openedAtMs:now,createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});tx.set(auditRef,{restaurantId:input.restaurantId,sessionId:sessionRef.id,event:"session.opened",actorUid:input.actorUid,actorEmail:input.actorEmail,atMs:now,openingFloat,createdAt:FieldValue.serverTimestamp()});tx.set(stateRef,{activeSessionId:sessionRef.id,registerId:REGISTER_ID,registerName:REGISTER_NAME,updatedAt:FieldValue.serverTimestamp()},{merge:true});});return sessionRef.id;}
+export async function addCashMovementV2(input:{db:Firestore;restaurantId:string;actorUid:string;actorEmail:string;actorRole:unknown;sessionId:unknown;type:unknown;amount:unknown;reason:unknown;}){if(!cashV2Permissions(input.actorRole).canOperate)throw new CashRegisterV2Error("CASH_REGISTER_OPERATE_REQUIRED",403);const sid=str(input.sessionId,128),amount=num(input.amount,Number.NaN),reason=str(input.reason,500),type:CashMovementType=input.type==="cash_out"?"cash_out":"cash_in";if(!sid)throw new CashRegisterV2Error("CASH_SESSION_REQUIRED");if(!Number.isFinite(amount)||amount<=0||amount>100000)throw new CashRegisterV2Error("INVALID_CASH_MOVEMENT_AMOUNT");if(reason.length<3)throw new CashRegisterV2Error("CASH_MOVEMENT_REASON_REQUIRED");const ref=sessions(input.db,input.restaurantId).doc(sid),mov=movements(input.db,input.restaurantId,sid).doc(),audit=audits(input.db,input.restaurantId,sid).doc(),now=Date.now();await input.db.runTransaction(async tx=>{const current=await tx.get(ref);if(!current.exists)throw new CashRegisterV2Error("CASH_SESSION_NOT_FOUND",404);if(current.data()?.status!=="open")throw new CashRegisterV2Error("CASH_SESSION_NOT_OPEN",409);tx.set(mov,{restaurantId:input.restaurantId,sessionId:sid,type,amount,reason,createdBy:input.actorUid,createdByEmail:input.actorEmail,createdAt:FieldValue.serverTimestamp(),createdAtMs:now});tx.set(audit,{restaurantId:input.restaurantId,sessionId:sid,event:"movement.added",actorUid:input.actorUid,actorEmail:input.actorEmail,type,amount,reason,atMs:now,createdAt:FieldValue.serverTimestamp()});tx.update(ref,{updatedAt:FieldValue.serverTimestamp()});});}
+export async function countCashBlindV2(input:{db:Firestore;restaurantId:string;actorUid:string;actorEmail?:string;actorRole:unknown;sessionId:unknown;countedCash:unknown;}){if(!cashV2Permissions(input.actorRole).canOperate)throw new CashRegisterV2Error("CASH_REGISTER_OPERATE_REQUIRED",403);const sid=str(input.sessionId,128),countedCash=num(input.countedCash,Number.NaN);if(!sid)throw new CashRegisterV2Error("CASH_SESSION_REQUIRED");if(!Number.isFinite(countedCash)||countedCash<0||countedCash>1000000)throw new CashRegisterV2Error("INVALID_COUNTED_CASH");const ref=sessions(input.db,input.restaurantId).doc(sid),audit=audits(input.db,input.restaurantId,sid).doc(),now=Date.now();await input.db.runTransaction(async tx=>{const current=await tx.get(ref);if(!current.exists)throw new CashRegisterV2Error("CASH_SESSION_NOT_FOUND",404);if(current.data()?.status!=="open")throw new CashRegisterV2Error("CASH_SESSION_NOT_OPEN",409);tx.update(ref,{status:"counted",countedCash,countedBy:input.actorUid,countedAt:FieldValue.serverTimestamp(),countedAtMs:now,updatedAt:FieldValue.serverTimestamp()});tx.set(audit,{restaurantId:input.restaurantId,sessionId:sid,event:"count.submitted",actorUid:input.actorUid,actorEmail:str(input.actorEmail,180)||null,countedCash,atMs:now,createdAt:FieldValue.serverTimestamp()});});}
+export async function reopenCashCountV2(input:{db:Firestore;restaurantId:string;actorUid:string;actorEmail?:string;actorRole:unknown;sessionId:unknown;reason:unknown;}){if(!cashV2Permissions(input.actorRole).canSupervise)throw new CashRegisterV2Error("CASH_REGISTER_SUPERVISE_REQUIRED",403);const sid=str(input.sessionId,128),reason=str(input.reason,500);if(reason.length<3)throw new CashRegisterV2Error("REOPEN_REASON_REQUIRED");const ref=sessions(input.db,input.restaurantId).doc(sid),audit=audits(input.db,input.restaurantId,sid).doc(),now=Date.now();await input.db.runTransaction(async tx=>{const current=await tx.get(ref);if(!current.exists)throw new CashRegisterV2Error("CASH_SESSION_NOT_FOUND",404);if(current.data()?.status!=="counted")throw new CashRegisterV2Error("CASH_SESSION_NOT_COUNTED",409);tx.update(ref,{status:"open",previousCountedCash:current.data()?.countedCash??null,countedCash:FieldValue.delete(),countedBy:FieldValue.delete(),countedAt:FieldValue.delete(),countedAtMs:FieldValue.delete(),reopenReason:reason,reopenedBy:input.actorUid,reopenedAt:FieldValue.serverTimestamp(),reopenedAtMs:now,updatedAt:FieldValue.serverTimestamp()});tx.set(audit,{restaurantId:input.restaurantId,sessionId:sid,event:"count.reopened",actorUid:input.actorUid,actorEmail:str(input.actorEmail,180)||null,reason,previousCountedCash:current.data()?.countedCash??null,atMs:now,createdAt:FieldValue.serverTimestamp()});});}
+export async function closeCashSessionV2(input:{db:Firestore;restaurantId:string;actorUid:string;actorEmail?:string;actorRole:unknown;sessionId:unknown;discrepancyReason?:unknown;}){if(!cashV2Permissions(input.actorRole).canSupervise)throw new CashRegisterV2Error("CASH_REGISTER_SUPERVISE_REQUIRED",403);const sid=str(input.sessionId,128),reason=str(input.discrepancyReason,500),ref=sessions(input.db,input.restaurantId).doc(sid),current=await ref.get();if(!current.exists)throw new CashRegisterV2Error("CASH_SESSION_NOT_FOUND",404);const data=current.data() as Record<string,unknown>;if(data.status!=="counted")throw new CashRegisterV2Error("CASH_SESSION_NOT_COUNTED",409);const counted=num(data.countedCash,Number.NaN),closeAtMs=Date.now(),totals=await ledgerTotals({db:input.db,restaurantId:input.restaurantId,sessionId:sid,openedAtMs:ms(data.openedAtMs??data.openedAt),endAtMs:closeAtMs,openingFloat:num(data.openingFloat)}),difference=round(counted-totals.expectedCash);if(Math.abs(difference)>EPS&&reason.length<3)throw new CashRegisterV2Error("DISCREPANCY_REASON_REQUIRED");const z:CashZReport={version:1,reportType:"session_z",restaurantId:input.restaurantId,sessionId:sid,registerId:str(data.registerId,80)||REGISTER_ID,registerName:str(data.registerName,120)||REGISTER_NAME,operatorUid:str(data.operatorUid,128),operatorEmail:str(data.operatorEmail,180),openedAtMs:ms(data.openedAtMs??data.openedAt),closedAtMs:closeAtMs,openingFloat:num(data.openingFloat),countedCash:counted,difference,discrepancyReason:reason||null,totals,generatedAtMs:closeAtMs,generatedBy:input.actorUid},integrityHash=hash(zPayload(z)),stateRef=state(input.db,input.restaurantId),audit=audits(input.db,input.restaurantId,sid).doc();await input.db.runTransaction(async tx=>{const [fresh,currentState]=await Promise.all([tx.get(ref),tx.get(stateRef)]);if(!fresh.exists)throw new CashRegisterV2Error("CASH_SESSION_NOT_FOUND",404);if(fresh.data()?.status!=="counted")throw new CashRegisterV2Error("CASH_SESSION_NOT_COUNTED",409);if(str(currentState.data()?.activeSessionId,128)!==sid)throw new CashRegisterV2Error("CASH_SESSION_NOT_ACTIVE",409);tx.update(ref,{status:"closed",difference,discrepancyReason:reason||null,closedTotals:totals,zReport:z,integrityHash,integrityVersion:1,closedBy:input.actorUid,closedAt:FieldValue.serverTimestamp(),closedAtMs:closeAtMs,updatedAt:FieldValue.serverTimestamp()});tx.set(audit,{restaurantId:input.restaurantId,sessionId:sid,event:"session.closed",actorUid:input.actorUid,actorEmail:str(input.actorEmail,180)||null,difference,integrityHash,atMs:closeAtMs,createdAt:FieldValue.serverTimestamp()});tx.set(stateRef,{activeSessionId:null,lastClosedSessionId:sid,updatedAt:FieldValue.serverTimestamp()},{merge:true});});return{difference,totals,zReport:z,integrityHash};}
 
-export function cashV2Permissions(role: unknown) {
-  return {
-    canOperate: serverRoleHasCapability(role, "tpv.charge"),
-    canSupervise:
-      serverRoleHasCapability(role, "tpv.refund") ||
-      serverRoleHasCapability(role, "users.manage"),
-  };
-}
-
-function method(data: Record<string, unknown>) {
-  const value = str(data.paymentMethod, 32).toLowerCase();
-  return value === "cash" || value === "card" || value === "voucher" ? value : "other";
-}
-
-async function ledgerTotals(input: {
-  db: Firestore;
-  restaurantId: string;
-  sessionId: string;
-  openedAtMs: number;
-  endAtMs?: number | null;
-  openingFloat: number;
-}): Promise<CashTotals> {
-  const [paymentsSnap, movementsSnap] = await Promise.all([
-    input.db.collection("payments").where("restaurantId", "==", input.restaurantId).get(),
-    movements(input.db, input.restaurantId, input.sessionId).get(),
-  ]);
-  const end = input.endAtMs && input.endAtMs > 0 ? input.endAtMs : Date.now();
-  let grossSales = 0;
-  let cashSales = 0;
-  let cardSales = 0;
-  let voucherSales = 0;
-  let otherSales = 0;
-  let refunds = 0;
-  let cashRefunds = 0;
-  let tips = 0;
-  let paymentCount = 0;
-  let refundCount = 0;
-
-  for (const doc of paymentsSnap.docs) {
-    const data = doc.data() as Record<string, unknown>;
-    const createdAt = ms(data.createdAt);
-    const status = str(data.status, 32).toLowerCase();
-    const paymentAmount = num(data.amount ?? data.total);
-    const paymentMethod = method(data);
-    if (createdAt >= input.openedAtMs && createdAt <= end) {
-      grossSales += paymentAmount;
-      paymentCount += 1;
-      tips += num(data.tip);
-      if (paymentMethod === "cash") cashSales += paymentAmount;
-      else if (paymentMethod === "card") cardSales += paymentAmount;
-      else if (paymentMethod === "voucher") voucherSales += paymentAmount;
-      else otherSales += paymentAmount;
-    }
-    const reversedAt = ms(data.refundedAt ?? data.cancelledAt);
-    if ((status === "refunded" || status === "cancelled") && reversedAt >= input.openedAtMs && reversedAt <= end) {
-      const reversed = num(data.refundAmount) || paymentAmount;
-      refunds += reversed;
-      refundCount += 1;
-      if (paymentMethod === "cash") cashRefunds += reversed;
-    }
-  }
-
-  let cashIn = 0;
-  let cashOut = 0;
-  for (const doc of movementsSnap.docs) {
-    const data = doc.data() as Record<string, unknown>;
-    if (data.type === "cash_in") cashIn += num(data.amount);
-    if (data.type === "cash_out") cashOut += num(data.amount);
-  }
-
-  return {
-    grossSales: round(grossSales),
-    cashSales: round(cashSales),
-    cardSales: round(cardSales),
-    voucherSales: round(voucherSales),
-    otherSales: round(otherSales),
-    refunds: round(refunds),
-    cashRefunds: round(cashRefunds),
-    tips: round(tips),
-    cashIn: round(cashIn),
-    cashOut: round(cashOut),
-    expectedCash: round(input.openingFloat + cashSales + cashIn - cashOut - cashRefunds),
-    paymentCount,
-    refundCount,
-  };
-}
-
-async function movementViews(db: Firestore, restaurantId: string, sessionId: string) {
-  const snap = await movements(db, restaurantId, sessionId).get();
-  return snap.docs
-    .map((doc) => {
-      const data = doc.data() as Record<string, unknown>;
-      return {
-        id: doc.id,
-        type: data.type === "cash_out" ? "cash_out" : "cash_in",
-        amount: num(data.amount),
-        reason: str(data.reason, 500),
-        createdAtMs: ms(data.createdAtMs ?? data.createdAt),
-        createdBy: str(data.createdBy, 128),
-        createdByEmail: str(data.createdByEmail, 180) || undefined,
-      } satisfies CashMovementView;
-    })
-    .sort((a, b) => b.createdAtMs - a.createdAtMs);
-}
-
-async function viewSession(input: {
-  db: Firestore;
-  restaurantId: string;
-  id: string;
-  data: Record<string, unknown>;
-  canSupervise: boolean;
-}): Promise<CashSessionView> {
-  const status = input.data.status === "closed" ? "closed" : input.data.status === "counted" ? "counted" : "open";
-  const openingFloat = num(input.data.openingFloat);
-  const openedAtMs = ms(input.data.openedAtMs ?? input.data.openedAt);
-  const closedAtMs = ms(input.data.closedAtMs ?? input.data.closedAt) || null;
-  const countedCash = typeof input.data.countedCash === "number" ? num(input.data.countedCash) : null;
-  const showExpected = input.canSupervise || status === "closed";
-  const totals =
-    status === "closed" && input.data.closedTotals
-      ? (input.data.closedTotals as CashTotals)
-      : showExpected
-        ? await ledgerTotals({
-            db: input.db,
-            restaurantId: input.restaurantId,
-            sessionId: input.id,
-            openedAtMs,
-            endAtMs: closedAtMs,
-            openingFloat,
-          })
-        : null;
-  return {
-    id: input.id,
-    registerId: str(input.data.registerId, 80) || REGISTER_ID,
-    registerName: str(input.data.registerName, 120) || REGISTER_NAME,
-    operatorUid: str(input.data.operatorUid, 128),
-    operatorEmail: str(input.data.operatorEmail, 180),
-    status,
-    openedAtMs,
-    closedAtMs,
-    openingFloat,
-    countedCash,
-    difference: countedCash != null && totals ? round(countedCash - totals.expectedCash) : typeof input.data.difference === "number" ? num(input.data.difference) : null,
-    discrepancyReason: showExpected ? str(input.data.discrepancyReason, 500) || null : null,
-    countedBy: str(input.data.countedBy, 128) || null,
-    closedBy: str(input.data.closedBy, 128) || null,
-    totals,
-    movements: await movementViews(input.db, input.restaurantId, input.id),
-    canSeeExpected: showExpected,
-    canClose: input.canSupervise && status === "counted",
-  };
-}
-
-export async function getCashWorkspaceV2(input: {
-  db: Firestore;
-  restaurantId: string;
-  actorRole: unknown;
-}): Promise<CashWorkspaceSnapshot> {
-  const permissions = cashV2Permissions(input.actorRole);
-  if (!permissions.canOperate && !permissions.canSupervise) throw new CashRegisterV2Error("CASH_REGISTER_ACCESS_REQUIRED", 403);
-  const snap = await sessions(input.db, input.restaurantId).get();
-  const ordered = snap.docs
-    .map((doc) => ({ id: doc.id, data: doc.data() as Record<string, unknown> }))
-    .sort((a, b) => ms(b.data.openedAtMs ?? b.data.openedAt) - ms(a.data.openedAtMs ?? a.data.openedAt));
-  const activeRaw = ordered.find((item) => item.data.status !== "closed") ?? null;
-  const activeSession = activeRaw
-    ? await viewSession({ db: input.db, restaurantId: input.restaurantId, id: activeRaw.id, data: activeRaw.data, canSupervise: permissions.canSupervise })
-    : null;
-  const history = await Promise.all(
-    ordered
-      .filter((item) => item.data.status === "closed")
-      .slice(0, 30)
-      .map((item) => viewSession({ db: input.db, restaurantId: input.restaurantId, id: item.id, data: item.data, canSupervise: permissions.canSupervise })),
-  );
-  return { activeSession, history, ...permissions };
-}
-
-export async function openCashSessionV2(input: {
-  db: Firestore;
-  restaurantId: string;
-  actorUid: string;
-  actorEmail: string;
-  actorRole: unknown;
-  openingFloat: unknown;
-}) {
-  if (!cashV2Permissions(input.actorRole).canOperate) throw new CashRegisterV2Error("CASH_REGISTER_OPERATE_REQUIRED", 403);
-  const openingFloat = num(input.openingFloat, Number.NaN);
-  if (!Number.isFinite(openingFloat) || openingFloat < 0 || openingFloat > 100000) throw new CashRegisterV2Error("INVALID_OPENING_FLOAT");
-  const stateRef = state(input.db, input.restaurantId);
-  const sessionRef = sessions(input.db, input.restaurantId).doc();
-  const now = Date.now();
-  await input.db.runTransaction(async (tx) => {
-    const currentState = await tx.get(stateRef);
-    const currentId = str(currentState.data()?.activeSessionId, 128);
-    if (currentId) {
-      const current = await tx.get(sessions(input.db, input.restaurantId).doc(currentId));
-      if (current.exists && current.data()?.status !== "closed") throw new CashRegisterV2Error("CASH_SESSION_ALREADY_OPEN", 409);
-    }
-    tx.set(sessionRef, {
-      restaurantId: input.restaurantId,
-      registerId: REGISTER_ID,
-      registerName: REGISTER_NAME,
-      operatorUid: input.actorUid,
-      operatorEmail: input.actorEmail,
-      status: "open",
-      openingFloat,
-      openedAt: FieldValue.serverTimestamp(),
-      openedAtMs: now,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    tx.set(stateRef, { activeSessionId: sessionRef.id, registerId: REGISTER_ID, registerName: REGISTER_NAME, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  });
-  return sessionRef.id;
-}
-
-export async function addCashMovementV2(input: {
-  db: Firestore;
-  restaurantId: string;
-  actorUid: string;
-  actorEmail: string;
-  actorRole: unknown;
-  sessionId: unknown;
-  type: unknown;
-  amount: unknown;
-  reason: unknown;
-}) {
-  if (!cashV2Permissions(input.actorRole).canOperate) throw new CashRegisterV2Error("CASH_REGISTER_OPERATE_REQUIRED", 403);
-  const sessionId = str(input.sessionId, 128);
-  const amount = num(input.amount, Number.NaN);
-  const reason = str(input.reason, 500);
-  const type: CashMovementType = input.type === "cash_out" ? "cash_out" : "cash_in";
-  if (!sessionId) throw new CashRegisterV2Error("CASH_SESSION_REQUIRED");
-  if (!Number.isFinite(amount) || amount <= 0 || amount > 100000) throw new CashRegisterV2Error("INVALID_CASH_MOVEMENT_AMOUNT");
-  if (reason.length < 3) throw new CashRegisterV2Error("CASH_MOVEMENT_REASON_REQUIRED");
-  const sessionRef = sessions(input.db, input.restaurantId).doc(sessionId);
-  const movementRef = movements(input.db, input.restaurantId, sessionId).doc();
-  await input.db.runTransaction(async (tx) => {
-    const current = await tx.get(sessionRef);
-    if (!current.exists) throw new CashRegisterV2Error("CASH_SESSION_NOT_FOUND", 404);
-    if (current.data()?.status !== "open") throw new CashRegisterV2Error("CASH_SESSION_NOT_OPEN", 409);
-    tx.set(movementRef, { restaurantId: input.restaurantId, sessionId, type, amount, reason, createdBy: input.actorUid, createdByEmail: input.actorEmail, createdAt: FieldValue.serverTimestamp(), createdAtMs: Date.now() });
-    tx.update(sessionRef, { updatedAt: FieldValue.serverTimestamp() });
-  });
-}
-
-export async function countCashBlindV2(input: {
-  db: Firestore;
-  restaurantId: string;
-  actorUid: string;
-  actorRole: unknown;
-  sessionId: unknown;
-  countedCash: unknown;
-}) {
-  if (!cashV2Permissions(input.actorRole).canOperate) throw new CashRegisterV2Error("CASH_REGISTER_OPERATE_REQUIRED", 403);
-  const sessionId = str(input.sessionId, 128);
-  const countedCash = num(input.countedCash, Number.NaN);
-  if (!sessionId) throw new CashRegisterV2Error("CASH_SESSION_REQUIRED");
-  if (!Number.isFinite(countedCash) || countedCash < 0 || countedCash > 1000000) throw new CashRegisterV2Error("INVALID_COUNTED_CASH");
-  const ref = sessions(input.db, input.restaurantId).doc(sessionId);
-  await input.db.runTransaction(async (tx) => {
-    const current = await tx.get(ref);
-    if (!current.exists) throw new CashRegisterV2Error("CASH_SESSION_NOT_FOUND", 404);
-    if (current.data()?.status !== "open") throw new CashRegisterV2Error("CASH_SESSION_NOT_OPEN", 409);
-    tx.update(ref, { status: "counted", countedCash, countedBy: input.actorUid, countedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-  });
-}
-
-export async function reopenCashCountV2(input: {
-  db: Firestore;
-  restaurantId: string;
-  actorUid: string;
-  actorRole: unknown;
-  sessionId: unknown;
-  reason: unknown;
-}) {
-  if (!cashV2Permissions(input.actorRole).canSupervise) throw new CashRegisterV2Error("CASH_REGISTER_SUPERVISE_REQUIRED", 403);
-  const sessionId = str(input.sessionId, 128);
-  const reason = str(input.reason, 500);
-  if (reason.length < 3) throw new CashRegisterV2Error("REOPEN_REASON_REQUIRED");
-  const ref = sessions(input.db, input.restaurantId).doc(sessionId);
-  await input.db.runTransaction(async (tx) => {
-    const current = await tx.get(ref);
-    if (!current.exists) throw new CashRegisterV2Error("CASH_SESSION_NOT_FOUND", 404);
-    if (current.data()?.status !== "counted") throw new CashRegisterV2Error("CASH_SESSION_NOT_COUNTED", 409);
-    tx.update(ref, { status: "open", previousCountedCash: current.data()?.countedCash ?? null, countedCash: FieldValue.delete(), countedBy: FieldValue.delete(), countedAt: FieldValue.delete(), reopenReason: reason, reopenedBy: input.actorUid, reopenedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-  });
-}
-
-export async function closeCashSessionV2(input: {
-  db: Firestore;
-  restaurantId: string;
-  actorUid: string;
-  actorRole: unknown;
-  sessionId: unknown;
-  discrepancyReason?: unknown;
-}) {
-  if (!cashV2Permissions(input.actorRole).canSupervise) throw new CashRegisterV2Error("CASH_REGISTER_SUPERVISE_REQUIRED", 403);
-  const sessionId = str(input.sessionId, 128);
-  const reason = str(input.discrepancyReason, 500);
-  const ref = sessions(input.db, input.restaurantId).doc(sessionId);
-  const current = await ref.get();
-  if (!current.exists) throw new CashRegisterV2Error("CASH_SESSION_NOT_FOUND", 404);
-  const data = current.data() as Record<string, unknown>;
-  if (data.status !== "counted") throw new CashRegisterV2Error("CASH_SESSION_NOT_COUNTED", 409);
-  const countedCash = num(data.countedCash, Number.NaN);
-  const closeAtMs = Date.now();
-  const totals = await ledgerTotals({
-    db: input.db,
-    restaurantId: input.restaurantId,
-    sessionId,
-    openedAtMs: ms(data.openedAtMs ?? data.openedAt),
-    endAtMs: closeAtMs,
-    openingFloat: num(data.openingFloat),
-  });
-  const difference = round(countedCash - totals.expectedCash);
-  if (Math.abs(difference) > EPS && reason.length < 3) throw new CashRegisterV2Error("DISCREPANCY_REASON_REQUIRED");
-  const stateRef = state(input.db, input.restaurantId);
-  await input.db.runTransaction(async (tx) => {
-    const [fresh, currentState] = await Promise.all([tx.get(ref), tx.get(stateRef)]);
-    if (!fresh.exists) throw new CashRegisterV2Error("CASH_SESSION_NOT_FOUND", 404);
-    if (fresh.data()?.status !== "counted") throw new CashRegisterV2Error("CASH_SESSION_NOT_COUNTED", 409);
-    if (str(currentState.data()?.activeSessionId, 128) !== sessionId) throw new CashRegisterV2Error("CASH_SESSION_NOT_ACTIVE", 409);
-    tx.update(ref, { status: "closed", difference, discrepancyReason: reason || null, closedTotals: totals, closedBy: input.actorUid, closedAt: FieldValue.serverTimestamp(), closedAtMs: closeAtMs, updatedAt: FieldValue.serverTimestamp() });
-    tx.set(stateRef, { activeSessionId: null, lastClosedSessionId: sessionId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  });
-  return { difference, totals };
-}
+export async function closeCashDayV2(input:{db:Firestore;restaurantId:string;actorUid:string;actorEmail?:string;actorRole:unknown;note?:unknown;}){if(!cashV2Permissions(input.actorRole).canSupervise)throw new CashRegisterV2Error("CASH_REGISTER_SUPERVISE_REQUIRED",403);const tz=await restaurantTimezone(input.db,input.restaurantId),now=Date.now(),businessDate=businessDateForMs(now,tz),note=str(input.note,500),[sessionSnap,stateSnap]=await Promise.all([sessions(input.db,input.restaurantId).get(),state(input.db,input.restaurantId).get()]);const activeId=str(stateSnap.data()?.activeSessionId,128);if(activeId){const active=await sessions(input.db,input.restaurantId).doc(activeId).get();if(active.exists&&active.data()?.status!=="closed")throw new CashRegisterV2Error("CASH_DAY_ACTIVE_SESSION",409);}const closed=sessionSnap.docs.map(doc=>({id:doc.id,data:doc.data() as Record<string,unknown>})).filter(x=>x.data.status==="closed").filter(x=>{const at=ms(x.data.closedAtMs??x.data.closedAt);return at>0&&businessDateForMs(at,tz)===businessDate;}).sort((a,b)=>ms(a.data.closedAtMs??a.data.closedAt)-ms(b.data.closedAtMs??b.data.closedAt));if(!closed.length)throw new CashRegisterV2Error("CASH_DAY_NO_SESSIONS",409);const sessionIds=closed.map(x=>x.id),operatorEmails=[...new Set(closed.map(x=>str(x.data.operatorEmail,180)).filter(Boolean))],totals=sumCashTotals(closed.map(x=>x.data.closedTotals as Partial<CashTotals>|undefined)),base:Omit<CashDayCloseView,"integrityStatus">={id:businessDate,businessDate,timezone:tz,openedAtMs:Math.min(...closed.map(x=>ms(x.data.openedAtMs??x.data.openedAt))),closedAtMs:now,sessionIds,sessionCount:sessionIds.length,operatorEmails,totals,totalOpeningFloat:round(closed.reduce((s,x)=>s+num(x.data.openingFloat),0)),totalCountedCash:round(closed.reduce((s,x)=>s+num(x.data.countedCash),0)),totalDifference:round(closed.reduce((s,x)=>s+num(x.data.difference),0)),discrepancySessionCount:closed.filter(x=>Math.abs(num(x.data.difference))>EPS).length,closedBy:input.actorUid,closedByEmail:str(input.actorEmail,180),note:note||null},integrityHash=hash(base),dayRef=days(input.db,input.restaurantId).doc(businessDate),stateRef=state(input.db,input.restaurantId),audit=dayAudits(input.db,input.restaurantId,businessDate).doc();await input.db.runTransaction(async tx=>{const [existing,freshState]=await Promise.all([tx.get(dayRef),tx.get(stateRef)]);if(existing.exists)throw new CashRegisterV2Error("CASH_DAY_ALREADY_CLOSED",409);if(str(freshState.data()?.activeSessionId,128))throw new CashRegisterV2Error("CASH_DAY_ACTIVE_SESSION",409);tx.set(dayRef,{restaurantId:input.restaurantId,...base,integrityHash,integrityVersion:1,closedAt:FieldValue.serverTimestamp(),createdAt:FieldValue.serverTimestamp()});tx.set(audit,{restaurantId:input.restaurantId,dayId:businessDate,event:"day.closed",actorUid:input.actorUid,actorEmail:str(input.actorEmail,180)||null,sessionIds,totalDifference:base.totalDifference,integrityHash,atMs:now,createdAt:FieldValue.serverTimestamp()});tx.set(stateRef,{lastDayCloseId:businessDate,lastDayCloseAtMs:now,updatedAt:FieldValue.serverTimestamp()},{merge:true});});return{...base,integrityStatus:"verified" as const};}
+export async function getCashExportV2(input:{db:Firestore;restaurantId:string;actorRole:unknown;kind:unknown;id:unknown;}){if(!cashV2Permissions(input.actorRole).canSupervise)throw new CashRegisterV2Error("CASH_REGISTER_SUPERVISE_REQUIRED",403);const id=str(input.id,128);if(!id)throw new CashRegisterV2Error("CASH_REPORT_ID_REQUIRED");if(input.kind==="day"){const snap=await days(input.db,input.restaurantId).doc(id).get();if(!snap.exists)throw new CashRegisterV2Error("CASH_DAY_NOT_FOUND",404);const day=parseDay(snap.id,snap.data() as Record<string,unknown>);if(day.integrityStatus==="mismatch")throw new CashRegisterV2Error("CASH_REPORT_INTEGRITY_MISMATCH",409);return{filename:`hostly-cierre-dia-${day.businessDate}.csv`,content:rowsToCsv(cashDayReportRows(day))};}const snap=await sessions(input.db,input.restaurantId).doc(id).get();if(!snap.exists)throw new CashRegisterV2Error("CASH_SESSION_NOT_FOUND",404);const d=snap.data() as Record<string,unknown>;if(d.status!=="closed")throw new CashRegisterV2Error("CASH_SESSION_NOT_CLOSED",409);const z=parseZ(d.zReport),integrity=zIntegrity(z,d.integrityHash);if(!z)throw new CashRegisterV2Error("CASH_Z_REPORT_UNAVAILABLE",409);if(integrity==="mismatch")throw new CashRegisterV2Error("CASH_REPORT_INTEGRITY_MISMATCH",409);return{filename:`hostly-z-${z.sessionId}.csv`,content:rowsToCsv(cashSessionReportRows(z))};}

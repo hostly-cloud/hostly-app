@@ -1,6 +1,7 @@
 export type CashSessionStatus = "open" | "counted" | "closed";
 export type CashMovementType = "cash_in" | "cash_out";
 export type CashPaymentMethod = "cash" | "card" | "voucher" | "other";
+export type CashIntegrityStatus = "verified" | "missing" | "mismatch";
 
 export type CashTotals = {
   grossSales: number;
@@ -16,42 +17,17 @@ export type CashTotals = {
   expectedCash: number;
   paymentCount: number;
   refundCount: number;
+  netSales?: number;
+  discounts?: number;
+  taxesRecorded?: number;
+  orderCount?: number;
+  voidedLineCount?: number;
+  voidedLineAmount?: number;
+  compedLineCount?: number;
+  compedLineAmount?: number;
 };
-
-export type CashMovementView = {
-  id: string;
-  type: CashMovementType;
-  amount: number;
-  reason: string;
-  createdAtMs: number;
-  createdBy: string;
-  createdByEmail?: string;
-};
-
-export type CashSessionView = {
-  id: string;
-  registerId: string;
-  registerName: string;
-  operatorUid: string;
-  operatorEmail: string;
-  status: CashSessionStatus;
-  openedAtMs: number;
-  closedAtMs: number | null;
-  openingFloat: number;
-  countedCash: number | null;
-  difference: number | null;
-  discrepancyReason: string | null;
-  countedBy: string | null;
-  closedBy: string | null;
-  totals: CashTotals | null;
-  movements: CashMovementView[];
-  canSeeExpected: boolean;
-  canClose: boolean;
-};
-
-export type CashWorkspaceSnapshot = {
-  activeSession: CashSessionView | null;
-  history: CashSessionView[];
-  canOperate: boolean;
-  canSupervise: boolean;
-};
+export type CashMovementView = { id:string;type:CashMovementType;amount:number;reason:string;createdAtMs:number;createdBy:string;createdByEmail?:string };
+export type CashZReport = { version:1;reportType:"session_z";restaurantId:string;sessionId:string;registerId:string;registerName:string;operatorUid:string;operatorEmail:string;openedAtMs:number;closedAtMs:number;openingFloat:number;countedCash:number;difference:number;discrepancyReason:string|null;totals:CashTotals;generatedAtMs:number;generatedBy:string };
+export type CashSessionView = { id:string;registerId:string;registerName:string;operatorUid:string;operatorEmail:string;status:CashSessionStatus;openedAtMs:number;closedAtMs:number|null;openingFloat:number;countedCash:number|null;difference:number|null;discrepancyReason:string|null;countedBy:string|null;closedBy:string|null;totals:CashTotals|null;movements:CashMovementView[];canSeeExpected:boolean;canClose:boolean;zReport?:CashZReport|null;integrityStatus?:CashIntegrityStatus|null };
+export type CashDayCloseView = { id:string;businessDate:string;timezone:string;openedAtMs:number;closedAtMs:number;sessionIds:string[];sessionCount:number;operatorEmails:string[];totals:CashTotals;totalOpeningFloat:number;totalCountedCash:number;totalDifference:number;discrepancySessionCount:number;closedBy:string;closedByEmail:string;note:string|null;integrityStatus:CashIntegrityStatus };
+export type CashWorkspaceSnapshot = { activeSession:CashSessionView|null;history:CashSessionView[];canOperate:boolean;canSupervise:boolean;dayClosures?:CashDayCloseView[];currentBusinessDate?:string;timezone?:string;canCloseDay?:boolean };
