@@ -24,6 +24,21 @@ test("entiende mesa y mesa numero sin crear candidatos duplicados", () => {
   }
 });
 
+test("resuelve mesa cinco aunque la etiqueta visual use numero o signos", () => {
+  const variants = [
+    { value: { id: "plain" }, tableId: "id-5-a", tableLabel: "Mesa 5" },
+    { value: { id: "numero" }, tableId: "id-5-b", tableLabel: "Mesa Nº 5" },
+    { value: { id: "short" }, tableId: "id-5-c", tableLabel: "Mesa N 5" },
+  ];
+  for (const entry of variants) {
+    for (const query of ["5", "mesa 5", "mesa numero cinco", "numero cinco", "cinco"]) {
+      const match = chooseTpvVoiceTableCandidate(query, [entry]);
+      if (!match || match === "ambiguous") assert.fail(`${query} debe resolver ${entry.tableLabel}`);
+      assert.equal(match.value.id, entry.value.id, `${query} -> ${entry.tableLabel}`);
+    }
+  }
+});
+
 test("mantiene ambiguedad real si dos mesas comparten la misma etiqueta visible", () => {
   const match = chooseTpvVoiceTableCandidate("terraza 3", [
     { value: { id: "a" }, tableId: "id-a", tableLabel: "Terraza 3" },
