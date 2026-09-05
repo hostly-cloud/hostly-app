@@ -50,6 +50,8 @@ export type ModulePageShellProps = {
   hideLogoutButton?: boolean;
   /** Oculta el selector de idioma cuando lo renderiza un chrome superior compartido. */
   hideLanguageSwitcher?: boolean;
+  /** Oculta el distintivo de plan cuando lo renderiza un chrome superior compartido. */
+  hidePlanIdentity?: boolean;
   /** Listado inventario/config carta: cabecera y franja bajo-título más bajos (solo presentación). */
   denseInventoryHeader?: boolean;
 };
@@ -79,6 +81,7 @@ export default function ModulePageShell({
   shellSurface = "default",
   hideLogoutButton,
   hideLanguageSwitcher,
+  hidePlanIdentity,
   denseInventoryHeader,
 }: ModulePageShellProps) {
   const { t } = useI18n();
@@ -243,7 +246,9 @@ export default function ModulePageShell({
         {headerRight}
       </div>
       <div className="hostly-module-header-actions__secondary">
-        <CurrentHostlyPlanIdentity compact={Boolean(compactLayout)} />
+        {!hidePlanIdentity ? (
+          <CurrentHostlyPlanIdentity compact={Boolean(compactLayout)} />
+        ) : null}
         {!hideLogoutButton && hideBackLink && backHref === "/dashboard" ? (
           <LogoutButton
             compact={Boolean(compactLayout && operationalFocus)}

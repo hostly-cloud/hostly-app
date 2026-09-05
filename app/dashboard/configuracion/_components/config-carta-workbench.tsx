@@ -101,6 +101,7 @@ export function ConfigCartaWorkbench({
       hideBackLink
       hideLogoutButton
       hideLanguageSwitcher
+      hidePlanIdentity
       headerRight={
         headerActions ? (
           <div
