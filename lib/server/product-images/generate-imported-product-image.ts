@@ -328,6 +328,14 @@ function readProviderStatus(error: unknown): number | null {
   return "cause" in error ? readProviderStatus(error.cause) : null;
 }
 
+function safeProviderErrorMessage(error: unknown): string | undefined {
+  if (!(error instanceof Error) || !error.message) return undefined;
+  return error.message
+    .replace(/\b(?:vck|sk)[-_][A-Za-z0-9_-]+\b/g, "[redacted]")
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+    .slice(0, 600);
+}
+
 function readGatewayCostUsd(value: unknown): number | undefined {
   if (!value || typeof value !== "object") return undefined;
   const gateway = (value as Record<string, unknown>).gateway;
@@ -442,6 +450,11 @@ export async function generateImageWithAiGateway(
   } catch (error) {
     if (error instanceof GenerateImportedProductImageError) throw error;
     const status = readProviderStatus(error);
+    console.error("[product-images][ai-gateway] provider request failed", {
+      status,
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: safeProviderErrorMessage(error) ?? null,
+    });
     if (status === 401 || status === 403) {
       throw new GenerateImportedProductImageError(
         "IMAGE_GENERATION_NOT_CONFIGURED",
