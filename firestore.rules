@@ -1114,22 +1114,6 @@ service cloud.firestore {
           || value == 'planter';
       }
 
-      function isAllowedDecorativeDeactivation() {
-        let affected = request.resource.data.diff(resource.data).affectedKeys();
-        let after = request.resource.data;
-        let before = resource.data;
-        return resource != null
-          && before.keys().hasAny(['restaurantId', 'type'])
-          && after.keys().hasAny(['restaurantId', 'type'])
-          && after.restaurantId == before.restaurantId
-          && after.type == before.type
-          && sameRestaurant(before.restaurantId)
-          && canManageSettings()
-          && isDecorativePlanElementType(before.type)
-          && after.isActive == false
-          && affected.hasOnly(['isActive', 'updatedAt']);
-      }
-
       function isAllowedTableClientUpdate() {
         let affected = request.resource.data.diff(resource.data).affectedKeys();
         let after = request.resource.data;
@@ -1139,58 +1123,69 @@ service cloud.firestore {
           && after.keys().hasAny(['restaurantId'])
           && after.restaurantId == before.restaurantId
           && sameRestaurant(before.restaurantId)
-          && !affected.hasAny([
-            'status',
-            'occupied',
-            'available',
-            'free',
-            'closed',
-            'groupId',
-            'mainTableId',
-          ])
           && (
-            (canSellTpv() && affected.hasOnly([
-              'guestCount',
-              'dinersCount',
-              'assignedOperatorId',
-              'assignedOperatorName',
-              'assignedAt',
-              'updatedAt',
-              'notes',
-              'metadata',
-            ]))
+            (
+              before.keys().hasAny(['type'])
+              && after.keys().hasAny(['type'])
+              && after.type == before.type
+              && isDecorativePlanElementType(before.type)
+              && after.isActive == false
+              && affected.hasOnly(['isActive', 'updatedAt'])
+              && canManageSettings()
+            )
             ||
-            (canManageSettings() && affected.hasOnly([
-              'name',
-              'label',
-              'zoneId',
-              'zoneName',
-              'guestCount',
-              'dinersCount',
-              'assignedOperatorId',
-              'assignedOperatorName',
-              'assignedAt',
-              'updatedAt',
-              'x',
-              'y',
-              'width',
-              'height',
-              'rotation',
-              'shape',
-              'capacity',
-              'notes',
-              'metadata',
-            ]))
+            (
+              !affected.hasAny([
+                'status',
+                'occupied',
+                'available',
+                'free',
+                'closed',
+                'groupId',
+                'mainTableId',
+              ])
+              && (
+                (canSellTpv() && affected.hasOnly([
+                  'guestCount',
+                  'dinersCount',
+                  'assignedOperatorId',
+                  'assignedOperatorName',
+                  'assignedAt',
+                  'updatedAt',
+                  'notes',
+                  'metadata',
+                ]))
+                ||
+                (canManageSettings() && affected.hasOnly([
+                  'name',
+                  'label',
+                  'zoneId',
+                  'zoneName',
+                  'guestCount',
+                  'dinersCount',
+                  'assignedOperatorId',
+                  'assignedOperatorName',
+                  'assignedAt',
+                  'updatedAt',
+                  'x',
+                  'y',
+                  'width',
+                  'height',
+                  'rotation',
+                  'shape',
+                  'capacity',
+                  'notes',
+                  'metadata',
+                ]))
+              )
+            )
           );
       }
 
       allow read: if sameRestaurant(resource.data.restaurantId);
       allow create: if sameRestaurant(request.resource.data.restaurantId)
         && canManageSettings();
-      // Evalúa primero la excepción estrecha del editor: una retirada decorativa
-      // válida no debe pagar también el coste del validador operativo completo.
-      allow update: if isAllowedDecorativeDeactivation()
-        || isAllowedTableClientUpdate();
+      allow update: if isAllowedTableClientUpdate();
       allow delete: if false;
     }
 
