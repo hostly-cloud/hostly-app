@@ -1105,6 +1105,15 @@ service cloud.firestore {
 
     // TABLES — lifecycle server-owned (status/groupId/mainTableId vía API TPV).
     match /tables/{tableId} {
+      function isDecorativePlanElementType(value) {
+        return value == 'wall'
+          || value == 'bar'
+          || value == 'column'
+          || value == 'pool'
+          || value == 'door'
+          || value == 'planter';
+      }
+
       function isAllowedTableClientUpdate() {
         let affected = request.resource.data.diff(resource.data).affectedKeys();
         let after = request.resource.data;
@@ -1114,48 +1123,62 @@ service cloud.firestore {
           && after.keys().hasAny(['restaurantId'])
           && after.restaurantId == before.restaurantId
           && sameRestaurant(before.restaurantId)
-          && !affected.hasAny([
-            'status',
-            'occupied',
-            'available',
-            'free',
-            'closed',
-            'groupId',
-            'mainTableId',
-          ])
           && (
-            (canSellTpv() && affected.hasOnly([
-              'guestCount',
-              'dinersCount',
-              'assignedOperatorId',
-              'assignedOperatorName',
-              'assignedAt',
-              'updatedAt',
-              'notes',
-              'metadata',
-            ]))
+            (
+              before.keys().hasAny(['type'])
+              && after.keys().hasAny(['type'])
+              && after.type == before.type
+              && isDecorativePlanElementType(before.type)
+              && after.isActive == false
+              && affected.hasOnly(['isActive', 'updatedAt'])
+              && canManageSettings()
+            )
             ||
-            (canManageSettings() && affected.hasOnly([
-              'name',
-              'label',
-              'zoneId',
-              'zoneName',
-              'guestCount',
-              'dinersCount',
-              'assignedOperatorId',
-              'assignedOperatorName',
-              'assignedAt',
-              'updatedAt',
-              'x',
-              'y',
-              'width',
-              'height',
-              'rotation',
-              'shape',
-              'capacity',
-              'notes',
-              'metadata',
-            ]))
+            (
+              !affected.hasAny([
+                'status',
+                'occupied',
+                'available',
+                'free',
+                'closed',
+                'groupId',
+                'mainTableId',
+              ])
+              && (
+                (canSellTpv() && affected.hasOnly([
+                  'guestCount',
+                  'dinersCount',
+                  'assignedOperatorId',
+                  'assignedOperatorName',
+                  'assignedAt',
+                  'updatedAt',
+                  'notes',
+                  'metadata',
+                ]))
+                ||
+                (canManageSettings() && affected.hasOnly([
+                  'name',
+                  'label',
+                  'zoneId',
+                  'zoneName',
+                  'guestCount',
+                  'dinersCount',
+                  'assignedOperatorId',
+                  'assignedOperatorName',
+                  'assignedAt',
+                  'updatedAt',
+                  'x',
+                  'y',
+                  'width',
+                  'height',
+                  'rotation',
+                  'shape',
+                  'capacity',
+                  'notes',
+                  'metadata',
+                ]))
+              )
+            )
           );
       }
 
