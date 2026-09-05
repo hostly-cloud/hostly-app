@@ -149,8 +149,11 @@ export function TpvProductInfoPlanGuard() {
 
   useEffect(() => {
     let cancelled = false;
-    setAccess(CLOSED_ACCESS);
-    setSommelierSnapshot(null);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setAccess(CLOSED_ACCESS);
+      setSommelierSnapshot(null);
+    });
     if (!rid) return () => {
       cancelled = true;
     };
