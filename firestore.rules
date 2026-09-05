@@ -1105,6 +1105,31 @@ service cloud.firestore {
 
     // TABLES — lifecycle server-owned (status/groupId/mainTableId vía API TPV).
     match /tables/{tableId} {
+      function isDecorativePlanElementType(value) {
+        return value == 'wall'
+          || value == 'bar'
+          || value == 'column'
+          || value == 'pool'
+          || value == 'door'
+          || value == 'planter';
+      }
+
+      function isAllowedDecorativeDeactivation() {
+        let affected = request.resource.data.diff(resource.data).affectedKeys();
+        let after = request.resource.data;
+        let before = resource.data;
+        return resource != null
+          && before.keys().hasAny(['restaurantId', 'type'])
+          && after.keys().hasAny(['restaurantId', 'type'])
+          && after.restaurantId == before.restaurantId
+          && after.type == before.type
+          && sameRestaurant(before.restaurantId)
+          && canManageSettings()
+          && isDecorativePlanElementType(before.type)
+          && after.isActive == false
+          && affected.hasOnly(['isActive', 'updatedAt']);
+      }
+
       function isAllowedTableClientUpdate() {
         let affected = request.resource.data.diff(resource.data).affectedKeys();
         let after = request.resource.data;
@@ -1162,7 +1187,8 @@ service cloud.firestore {
       allow read: if sameRestaurant(resource.data.restaurantId);
       allow create: if sameRestaurant(request.resource.data.restaurantId)
         && canManageSettings();
-      allow update: if isAllowedTableClientUpdate();
+      allow update: if isAllowedTableClientUpdate()
+        || isAllowedDecorativeDeactivation();
       allow delete: if false;
     }
 
