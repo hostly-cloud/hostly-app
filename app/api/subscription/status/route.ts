@@ -34,9 +34,19 @@ export async function GET(req: Request) {
             typeof subscription.currentPeriodEnd === "number"
               ? subscription.currentPeriodEnd
               : null,
+          trialEnd:
+            typeof subscription.trialEnd === "number" ? subscription.trialEnd : null,
+          trialUsed: subscription.trialUsed === true,
+          lastPaymentFailedAt:
+            typeof subscription.lastPaymentFailedAt === "number"
+              ? subscription.lastPaymentFailedAt
+              : null,
           customerLinked:
             typeof subscription.stripeCustomerId === "string" &&
             subscription.stripeCustomerId.trim().length > 0,
+          subscriptionLinked:
+            typeof subscription.stripeSubscriptionId === "string" &&
+            subscription.stripeSubscriptionId.trim().length > 0,
         }
       : null,
     billing: hostlyStripeConfigurationStatus(),

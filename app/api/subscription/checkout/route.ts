@@ -20,6 +20,11 @@ function requestBaseUrl(req: Request): string {
   return new URL(req.url).origin;
 }
 
+function safeIdempotencyKey(value: string | null): string | undefined {
+  const key = value?.trim() ?? "";
+  return /^[A-Za-z0-9:_-]{16,200}$/.test(key) ? key : undefined;
+}
+
 export async function POST(req: Request) {
   const authCtx = await requireAuthenticatedRestaurant(req);
   if (isAuthErrorResponse(authCtx)) return authCtx;
@@ -54,6 +59,7 @@ export async function POST(req: Request) {
     typeof subscription?.stripeCustomerId === "string"
       ? subscription.stripeCustomerId.trim()
       : "";
+  const proTrialEligible = plan === "pro" && subscription?.trialUsed !== true;
 
   try {
     const session = await createHostlyCheckoutSession({
@@ -63,8 +69,14 @@ export async function POST(req: Request) {
       plan,
       interval,
       baseUrl: requestBaseUrl(req),
+      proTrialEligible,
+      idempotencyKey: safeIdempotencyKey(req.headers.get("idempotency-key")),
     });
-    return NextResponse.json({ ok: true, checkoutUrl: session.url });
+    return NextResponse.json({
+      ok: true,
+      checkoutUrl: session.url,
+      trialDays: proTrialEligible ? 30 : 0,
+    });
   } catch (error) {
     const code = error instanceof Error ? error.message.split(":", 1)[0] : "SUBSCRIPTION_CHECKOUT_FAILED";
     if (
