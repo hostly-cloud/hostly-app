@@ -1,119 +1,359 @@
 {
-  "escandallos.title": ["Coûts recette", "Rezeptkalkulation", "Costi ricetta", "Custos de receita", "Receptkost"],
-  "escandallos.subtitle": ["Calculez coûts et marges en reliant les articles de vente aux ingrédients de stock.", "Kosten und Margen berechnen, indem Verkaufsartikel mit Lagerzutaten verknüpft werden.", "Calcola costi e margini collegando articoli di vendita a ingredienti di stock.", "Calcule custos e margens ligando artigos de venda a ingredientes de stock.", "Bereken kosten en marges door verkoopitems aan voorraadingrediënten te koppelen."],
-  "escandallos.loadingSubtitle": ["Chargement…", "Wird geladen…", "Caricamento…", "A carregar…", "Laden…"],
-  "escandallos.kpiAvgMargin": ["Marge moyenne", "Durchschnittliche Marge", "Margine medio", "Margem média", "Gemiddelde marge"],
-  "escandallos.kpiAvgMarginSub": ["Recettes avec coût et prix", "Rezepte mit Kosten und Preis", "Ricette con costo e prezzo", "Receitas com custo e preço", "Recepten met kost en prijs"],
-  "escandallos.kpiIncomplete": ["Incomplets", "Unvollständig", "Incompleti", "Incompletos", "Onvolledig"],
-  "escandallos.kpiIncompleteSub": ["Sans coût ou ingrédient", "Keine Kosten oder Zutaten", "Senza costi o ingredienti", "Sem custos ou ingredientes", "Geen kosten of ingrediënten"],
-  "escandallos.kpiCosted": ["Avec coût", "Kalkuliert", "Con costi", "Com custos", "Met kostprijs"],
-  "escandallos.kpiCostedSub": ["Articles avec coût", "Artikel mit Kosten", "Articoli con costi", "Artigos com custos", "Items met kostprijs"],
-  "escandallos.kpiProducts": ["Articles", "Artikel", "Articoli", "Artigos", "Items"],
-  "escandallos.kpiProductsSub": ["Catalogue de vente", "Verkaufskatalog", "Catalogo vendite", "Catálogo de vendas", "Verkoopcatalogus"],
-  "escandallos.listTitle": ["Coût par article", "Kalkulation je Artikel", "Costo per articolo", "Custo por artigo", "Kostprijs per item"],
-  "escandallos.listCount": ["{{shown}} / {{total}}", "{{shown}} / {{total}}", "{{shown}} / {{total}}", "{{shown}} / {{total}}", "{{shown}} / {{total}}"],
-  "escandallos.searchPlaceholder": ["Rechercher un article…", "Artikel suchen…", "Cerca articolo…", "Pesquisar artigo…", "Item zoeken…"],
-  "escandallos.searchNoResults": ["Aucun article ne correspond à la recherche ou au filtre.", "Keine Artikel entsprechen Suche oder Filter.", "Nessun articolo corrisponde alla ricerca o al filtro.", "Nenhum artigo corresponde à pesquisa ou ao filtro.", "Geen items voldoen aan zoekopdracht of filter."],
-  "escandallos.filterAll": ["Tous", "Alle", "Tutti", "Todos", "Alle"],
-  "escandallos.filterComplete": ["Complets", "Vollständig", "Completi", "Completos", "Volledig"],
-  "escandallos.filterIncomplete": ["Incomplets", "Unvollständig", "Incompleti", "Incompletos", "Onvolledig"],
-  "escandallos.filterHighMargin": ["Marge élevée", "Hohe Marge", "Margine alto", "Margem alta", "Hoge marge"],
-  "escandallos.filterLowMargin": ["Marge faible", "Niedrige Marge", "Margine basso", "Margem baixa", "Lage marge"],
-  "escandallos.colProduct": ["Article", "Artikel", "Articolo", "Artigo", "Item"],
-  "escandallos.colPrice": ["Prix", "Preis", "Prezzo", "Preço", "Prijs"],
-  "escandallos.colCost": ["Coût", "Kosten", "Costo", "Custo", "Kostprijs"],
-  "escandallos.colMargin": ["Marge", "Marge", "Margine", "Margem", "Marge"],
-  "escandallos.colStatus": ["Statut", "Status", "Stato", "Estado", "Status"],
-  "escandallos.colActions": ["Actions", "Aktionen", "Azioni", "Ações", "Acties"],
-  "escandallos.statusComplete": ["Complet", "Vollständig", "Completo", "Completo", "Volledig"],
-  "escandallos.statusIncomplete": ["Incomplet", "Unvollständig", "Incompleto", "Incompleto", "Onvolledig"],
-  "escandallos.actionEdit": ["Modifier", "Bearbeiten", "Modifica", "Editar", "Bewerken"],
-  "escandallos.emptyTitle": ["Aucun article à calculer", "Keine Artikel zur Kalkulation", "Nessun articolo da calcolare", "Sem artigos para calcular", "Geen items om te berekenen"],
-  "escandallos.emptyBody": ["Ajoutez des articles au catalogue de vente pour commencer à calculer coûts et marges.", "Verkaufsartikel zum Katalog hinzufügen, um Kosten und Margen zu berechnen.", "Aggiungi articoli al catalogo vendite per iniziare a calcolare costi e margini.", "Adicione artigos ao catálogo de vendas para começar a calcular custos e margens.", "Voeg verkoopitems toe aan de catalogus om kosten en marges te berekenen."],
-  "escandallos.emptyCta": ["Aller au catalogue", "Zum Katalog", "Vai al catalogo", "Ir para catálogo", "Naar catalogus"],
-  "escandallos.detailTitle": ["Coût de {{name}}", "Kalkulation für {{name}}", "Costo di {{name}}", "Custo de {{name}}", "Kostprijs van {{name}}"],
-  "escandallos.detailSub": ["Définissez les ingrédients et quantités utilisés par portion.", "Zutaten und Mengen pro Portion festlegen.", "Definisci ingredienti e quantità usati per porzione.", "Defina ingredientes e quantidades usados por dose.", "Stel ingrediënten en hoeveelheden per portie in."],
-  "escandallos.summaryPrice": ["Prix de vente", "Verkaufspreis", "Prezzo vendita", "Preço de venda", "Verkoopprijs"],
-  "escandallos.summaryCost": ["Coût total", "Gesamtkosten", "Costo totale", "Custo total", "Totale kosten"],
-  "escandallos.summaryMargin": ["Marge", "Marge", "Margine", "Margem", "Marge"],
-  "escandallos.ingredientsTitle": ["Ingrédients", "Zutaten", "Ingredienti", "Ingredientes", "Ingrediënten"],
-  "escandallos.addIngredient": ["+ Ajouter un ingrédient", "+ Zutat hinzufügen", "+ Aggiungi ingrediente", "+ Adicionar ingrediente", "+ Ingrediënt toevoegen"],
-  "escandallos.noIngredients": ["Aucun ingrédient ajouté.", "Noch keine Zutaten hinzugefügt.", "Nessun ingrediente aggiunto.", "Ainda sem ingredientes.", "Nog geen ingrediënten toegevoegd."],
-  "escandallos.fieldIngredient": ["Ingrédient", "Zutat", "Ingrediente", "Ingrediente", "Ingrediënt"],
-  "escandallos.fieldQty": ["Quantité", "Menge", "Quantità", "Quantidade", "Aantal"],
-  "escandallos.fieldUnit": ["Unité", "Einheit", "Unità", "Unidade", "Eenheid"],
-  "escandallos.fieldUnitCost": ["Coût unitaire", "Stückkosten", "Costo unitario", "Custo unitário", "Eenheidskost"],
-  "escandallos.fieldLineCost": ["Coût ligne", "Zeilenkosten", "Costo riga", "Custo da linha", "Regelkost"],
-  "escandallos.removeIngredient": ["Supprimer", "Entfernen", "Rimuovi", "Remover", "Verwijderen"],
-  "escandallos.save": ["Enregistrer", "Speichern", "Salva", "Guardar", "Opslaan"],
-  "escandallos.saving": ["Enregistrement…", "Wird gespeichert…", "Salvataggio…", "A guardar…", "Opslaan…"],
-  "escandallos.saved": ["Coût enregistré.", "Kalkulation gespeichert.", "Costo salvato.", "Custo guardado.", "Kostprijs opgeslagen."],
-  "escandallos.errorSave": ["Impossible d’enregistrer le coût.", "Kalkulation konnte nicht gespeichert werden.", "Impossibile salvare il costo.", "Não foi possível guardar o custo.", "Kostprijs kon niet worden opgeslagen."],
-  "escandallos.errorInvalidIngredient": ["Vérifiez les ingrédients et quantités.", "Zutaten und Mengen prüfen.", "Controlla ingredienti e quantità.", "Reveja ingredientes e quantidades.", "Controleer ingrediënten en hoeveelheden."],
-  "escandallos.marginExcellent": ["Excellente", "Ausgezeichnet", "Eccellente", "Excelente", "Uitstekend"],
-  "escandallos.marginGood": ["Bonne", "Gut", "Buono", "Boa", "Goed"],
-  "escandallos.marginTight": ["Serrée", "Knapp", "Stretto", "Apertada", "Krap"],
-  "escandallos.marginRisk": ["À risque", "Gefährdet", "A rischio", "Em risco", "Risico"],
-
-  "escandalloDetail.title": ["Détail du coût", "Kalkulationsdetails", "Dettaglio costi", "Detalhe de custos", "Kostprijsdetails"],
-  "escandalloDetail.subtitle": ["Recette, coût matière et marge de l’article.", "Rezept, Wareneinsatz und Marge des Artikels.", "Ricetta, costo materia e margine dell’articolo.", "Receita, custo de matéria e margem do artigo.", "Recept, grondstofkosten en marge van het item."],
-  "escandalloDetail.back": ["← Retour aux coûts", "← Zurück zur Kalkulation", "← Torna ai costi", "← Voltar aos custos", "← Terug naar kostprijs"],
-  "escandalloDetail.loading": ["Chargement…", "Wird geladen…", "Caricamento…", "A carregar…", "Laden…"],
-  "escandalloDetail.notFound": ["Coût introuvable.", "Kalkulation nicht gefunden.", "Costo non trovato.", "Custo não encontrado.", "Kostprijs niet gevonden."],
-  "escandalloDetail.product": ["Article", "Artikel", "Articolo", "Artigo", "Item"],
-  "escandalloDetail.price": ["Prix de vente", "Verkaufspreis", "Prezzo vendita", "Preço de venda", "Verkoopprijs"],
-  "escandalloDetail.totalCost": ["Coût total", "Gesamtkosten", "Costo totale", "Custo total", "Totale kosten"],
-  "escandalloDetail.margin": ["Marge", "Marge", "Margine", "Margem", "Marge"],
-  "escandalloDetail.ingredients": ["Ingrédients", "Zutaten", "Ingredienti", "Ingredientes", "Ingrediënten"],
-  "escandalloDetail.addIngredient": ["+ Ajouter", "+ Hinzufügen", "+ Aggiungi", "+ Adicionar", "+ Toevoegen"],
-  "escandalloDetail.noIngredients": ["Aucun ingrédient pour cet article.", "Keine Zutaten für diesen Artikel.", "Nessun ingrediente per questo articolo.", "Sem ingredientes para este artigo.", "Geen ingrediënten voor dit item."],
-  "escandalloDetail.colIngredient": ["Ingrédient", "Zutat", "Ingrediente", "Ingrediente", "Ingrediënt"],
-  "escandalloDetail.colQty": ["Quantité", "Menge", "Quantità", "Quantidade", "Aantal"],
-  "escandalloDetail.colUnit": ["Unité", "Einheit", "Unità", "Unidade", "Eenheid"],
-  "escandalloDetail.colUnitCost": ["Coût unitaire", "Stückkosten", "Costo unitario", "Custo unitário", "Eenheidskost"],
-  "escandalloDetail.colLineCost": ["Coût", "Kosten", "Costo", "Custo", "Kostprijs"],
-  "escandalloDetail.colActions": ["Actions", "Aktionen", "Azioni", "Ações", "Acties"],
-  "escandalloDetail.inventoryManualOption": ["— Manuel / non lié", "— Manuell / nicht verknüpft", "— Manuale / non collegato", "— Manual / não ligado", "— Handmatig / niet gekoppeld"],
-  "escandalloDetail.selectProductPlaceholder": ["— Sélectionner un produit…", "— Produkt auswählen…", "— Seleziona prodotto…", "— Selecionar produto…", "— Product selecteren…"],
-  "escandalloDetail.loadingIngredients": ["Chargement des ingrédients…", "Zutaten werden geladen…", "Caricamento ingredienti…", "A carregar ingredientes…", "Ingrediënten laden…"],
-  "escandalloDetail.placeholderIngredient": ["Ingrédient", "Zutat", "Ingrediente", "Ingrediente", "Ingrediënt"],
-  "escandalloDetail.placeholderQty": ["0", "0", "0", "0", "0"],
-  "escandalloDetail.placeholderUnit": ["kg", "kg", "kg", "kg", "kg"],
-  "escandalloDetail.placeholderUnitCost": ["0,00", "0,00", "0,00", "0,00", "0,00"],
-  "escandalloDetail.footerLineTotal": ["Coût total (ingrédients)", "Gesamtkosten (Zutaten)", "Costo totale (ingredienti)", "Custo total (ingredientes)", "Totale kosten (ingrediënten)"],
-  "escandalloDetail.ariaInventoryProduct": ["Produit d’inventaire", "Inventarprodukt", "Prodotto inventario", "Produto de inventário", "Voorraadproduct"],
-  "escandalloDetail.ariaProduct": ["Produit", "Produkt", "Prodotto", "Produto", "Product"],
-  "escandalloDetail.ariaIngredient": ["Ingrédient", "Zutat", "Ingrediente", "Ingrediente", "Ingrediënt"],
-  "escandalloDetail.ariaQtyUsed": ["Quantité utilisée", "Verwendete Menge", "Quantità usata", "Quantidade usada", "Gebruikte hoeveelheid"],
-  "escandalloDetail.ariaUnit": ["Unité", "Einheit", "Unità", "Unidade", "Eenheid"],
-  "escandalloDetail.ariaUnitCost": ["Coût unitaire", "Stückkosten", "Costo unitario", "Custo unitário", "Eenheidskost"],
-  "escandalloDetail.productFallback": ["Produit {{id}}", "Produkt {{id}}", "Prodotto {{id}}", "Produto {{id}}", "Product {{id}}"],
-  "escandalloDetail.unknownProductName": ["Produit #{{id}}", "Produkt #{{id}}", "Prodotto #{{id}}", "Produto #{{id}}", "Product #{{id}}"],
-  "escandalloDetail.msgSaveNotFound": ["Coût introuvable", "Kalkulation nicht gefunden", "Costo non trovato", "Custo não encontrado", "Kostprijs niet gevonden"],
-  "escandalloDetail.msgSavedMock": ["Modifications enregistrées (mode démo).", "Änderungen gespeichert (Demo-Modus).", "Modifiche salvate (modalità demo).", "Alterações guardadas (modo demo).", "Wijzigingen opgeslagen (demomodus)."],
-  "escandalloDetail.msgSaved": ["Modifications enregistrées.", "Änderungen gespeichert.", "Modifiche salvate.", "Alterações guardadas.", "Wijzigingen opgeslagen."],
-  "escandalloDetail.msgIngredientsSavedCostUpdateFail": ["Ingrédients enregistrés, mais le coût total n’a pas pu être mis à jour.", "Zutaten gespeichert, Gesamtkosten konnten aber nicht aktualisiert werden.", "Ingredienti salvati, ma il costo totale non è stato aggiornato.", "Ingredientes guardados, mas não foi possível atualizar o custo total.", "Ingrediënten opgeslagen, maar totale kostprijs kon niet worden bijgewerkt."],
-  "escandalloDetail.msgSaveSupabaseFail": ["Impossible d’enregistrer sur le serveur. Vous restez en mode démo.", "Speichern auf dem Server fehlgeschlagen. Demo-Modus bleibt aktiv.", "Impossibile salvare sul server. Rimani in modalità demo.", "Não foi possível guardar no servidor. Continua em modo demo.", "Opslaan op server mislukt. U blijft in demomodus."],
-  "escandalloDetail.unexpectedError": ["Erreur inattendue", "Unerwarteter Fehler", "Errore imprevisto", "Erro inesperado", "Onverwachte fout"],
-  "escandalloDetail.errorSave": ["Erreur lors de l’enregistrement", "Fehler beim Speichern", "Errore durante il salvataggio", "Erro ao guardar", "Fout bij opslaan"],
-  "escandalloDetail.errorRowIncomplete": ["Vérifiez les lignes : chaque ligne renseignée doit avoir un produit, une quantité supérieure à 0 et une unité. Supprimez les lignes vides ou complétez-les.", "Zeilen prüfen: Jede ausgefüllte Zeile braucht Produkt, Menge > 0 und Einheit. Leere Zeilen löschen oder vervollständigen.", "Controlla le righe: ogni riga compilata deve avere prodotto, quantità > 0 e unità. Elimina le righe vuote o completale.", "Reveja as linhas: cada linha preenchida deve ter produto, quantidade > 0 e unidade. Elimine linhas vazias ou complete-as.", "Controleer regels: elke ingevulde regel moet product, hoeveelheid > 0 en eenheid hebben. Verwijder lege regels of vul ze aan."],
-  "escandalloDetail.errorLoadProductos": ["Impossible de charger le catalogue de produits", "Produktkatalog konnte nicht geladen werden", "Impossibile caricare il catalogo prodotti", "Não foi possível carregar o catálogo de produtos", "Productcatalogus kon niet worden geladen"],
-  "escandalloDetail.errorReloadIngredients": ["Enregistrement réussi, mais impossible de recharger les lignes. Rechargez la page.", "Gespeichert, aber Zeilen konnten nicht neu geladen werden. Seite neu laden.", "Salvataggio riuscito, ma impossibile ricaricare le righe. Ricarica la pagina.", "Guardado com sucesso, mas não foi possível recarregar as linhas. Recarregue a página.", "Opslaan gelukt, maar regels konden niet opnieuw worden geladen. Herlaad de pagina."],
-  "escandalloDetail.errorUpdateCosteTotal": ["Impossible de mettre à jour le coût total.", "Gesamtkosten konnten nicht aktualisiert werden.", "Impossibile aggiornare il costo totale.", "Não foi possível atualizar o custo total.", "Totale kostprijs kon niet worden bijgewerkt."],
-
-  "inventory.title": ["Inventaire", "Inventar", "Inventario", "Inventário", "Voorraad"],
-  "inventory.subtitle": ["Gérez les ingrédients de stock, coût unitaire et minimums.", "Lagerzutaten, Stückkosten und Mindestbestände verwalten.", "Gestisci ingredienti di stock, costo unitario e minimi.", "Gerir ingredientes de stock, custo unitário e mínimos.", "Beheer voorraadingrediënten, eenheidskost en minimums."],
-  "inventory.colUnitCostEuro": ["Coût unitaire (€)", "Stückkosten (€)", "Costo unitario (€)", "Custo unitário (€)", "Eenheidskost (€)"],
-  "inventory.mockBannerBefore": ["Affichage de données de démonstration : impossible de charger la table ", "Demo-Daten werden angezeigt: Tabelle konnte nicht geladen werden ", "Visualizzazione dati demo: impossibile caricare la tabella ", "A mostrar dados de demonstração: não foi possível carregar a tabela ", "Demogegevens worden getoond: tabel kon niet worden geladen "],
-  "inventory.mockBannerAfter": [" depuis le serveur.", " vom Server.", " dal server.", " do servidor.", " van de server."],
-  "inventory.addProduct": ["+ Ajouter un ingrédient", "+ Zutat hinzufügen", "+ Aggiungi ingrediente", "+ Adicionar ingrediente", "+ Ingrediënt toevoegen"],
-  "inventory.loadingProducts": ["Chargement des ingrédients…", "Zutaten werden geladen…", "Caricamento ingredienti…", "A carregar ingredientes…", "Ingrediënten laden…"],
-  "inventory.emptyProducts": ["Aucun ingrédient en stock.", "Keine Lagerzutaten.", "Nessun ingrediente di stock.", "Sem ingredientes de stock.", "Geen voorraadingrediënten."],
-  "inventory.placeholderProduct": ["Ingrédient", "Zutat", "Ingrediente", "Ingrediente", "Ingrediënt"],
-  "inventory.selectToConfigure": ["Sélectionnez un ingrédient pour le configurer.", "Zutat auswählen, um sie zu konfigurieren.", "Seleziona un ingrediente da configurare.", "Selecione um ingrediente para configurar.", "Selecteer een ingrediënt om te configureren."],
-  "inventory.ariaUnitCost": ["Coût unitaire", "Stückkosten", "Costo unitario", "Custo unitário", "Eenheidskost"],
-  "inventory.errorLoadMock": ["Impossible de charger l’inventaire (mode démo).", "Inventar konnte nicht geladen werden (Demo-Modus).", "Impossibile caricare l’inventario (modalità demo).", "Não foi possível carregar o inventário (modo demo).", "Voorraad kon niet worden geladen (demomodus)."],
-  "inventory.errorCreateProduct": ["Impossible de créer l’ingrédient.", "Zutat konnte nicht erstellt werden.", "Impossibile creare l’ingrediente.", "Não foi possível criar o ingrediente.", "Ingrediënt kon niet worden gemaakt."],
-  "inventory.errorSave": ["Erreur lors de l’enregistrement", "Fehler beim Speichern", "Errore durante il salvataggio", "Erro ao guardar", "Fout bij opslaan"],
-  "inventory.errorDelete": ["Erreur lors de la suppression", "Fehler beim Löschen", "Errore durante l’eliminazione", "Erro ao eliminar", "Fout bij verwijderen"]
+  "escandallos.title": [
+    "Coûts recette",
+    "Rezeptkalkulation",
+    "Costi ricetta",
+    "Custos de receita",
+    "Receptkost"
+  ],
+  "escandallos.subtitle": [
+    "Calculez coûts et marges en reliant les articles de vente aux ingrédients de stock.",
+    "Kosten und Margen berechnen, indem Verkaufsartikel mit Lagerzutaten verknüpft werden.",
+    "Calcola costi e margini collegando articoli di vendita a ingredienti di stock.",
+    "Calcule custos e margens ligando artigos de venda a ingredientes de stock.",
+    "Bereken kosten en marges door verkoopitems aan voorraadingrediënten te koppelen."
+  ],
+  "escandalloDetail.subtitle": [
+    "Recette, coût matière et marge de l’article.",
+    "Rezept, Wareneinsatz und Marge des Artikels.",
+    "Ricetta, costo materia e margine dell’articolo.",
+    "Receita, custo de matéria e margem do artigo.",
+    "Recept, grondstofkosten en marge van het item."
+  ],
+  "escandalloDetail.ingredients": [
+    "Ingrédients",
+    "Zutaten",
+    "Ingredienti",
+    "Ingredientes",
+    "Ingrediënten"
+  ],
+  "escandalloDetail.addIngredient": [
+    "+ Ajouter",
+    "+ Hinzufügen",
+    "+ Aggiungi",
+    "+ Adicionar",
+    "+ Toevoegen"
+  ],
+  "escandalloDetail.noIngredients": [
+    "Aucun ingrédient pour cet article.",
+    "Keine Zutaten für diesen Artikel.",
+    "Nessun ingrediente per questo articolo.",
+    "Sem ingredientes para este artigo.",
+    "Geen ingrediënten voor dit item."
+  ],
+  "escandalloDetail.colIngredient": [
+    "Ingrédient",
+    "Zutat",
+    "Ingrediente",
+    "Ingrediente",
+    "Ingrediënt"
+  ],
+  "escandalloDetail.colUnit": [
+    "Unité",
+    "Einheit",
+    "Unità",
+    "Unidade",
+    "Eenheid"
+  ],
+  "escandalloDetail.colActions": [
+    "Actions",
+    "Aktionen",
+    "Azioni",
+    "Ações",
+    "Acties"
+  ],
+  "escandalloDetail.inventoryManualOption": [
+    "— Manuel / non lié",
+    "— Manuell / nicht verknüpft",
+    "— Manuale / non collegato",
+    "— Manual / não ligado",
+    "— Handmatig / niet gekoppeld"
+  ],
+  "escandalloDetail.selectProductPlaceholder": [
+    "— Sélectionner un produit…",
+    "— Produkt auswählen…",
+    "— Seleziona prodotto…",
+    "— Selecionar produto…",
+    "— Product selecteren…"
+  ],
+  "escandalloDetail.loadingIngredients": [
+    "Chargement des ingrédients…",
+    "Zutaten werden geladen…",
+    "Caricamento ingredienti…",
+    "A carregar ingredientes…",
+    "Ingrediënten laden…"
+  ],
+  "escandalloDetail.placeholderIngredient": [
+    "Ingrédient",
+    "Zutat",
+    "Ingrediente",
+    "Ingrediente",
+    "Ingrediënt"
+  ],
+  "escandalloDetail.placeholderQty": [
+    "0",
+    "0",
+    "0",
+    "0",
+    "0"
+  ],
+  "escandalloDetail.placeholderUnit": [
+    "kg",
+    "kg",
+    "kg",
+    "kg",
+    "kg"
+  ],
+  "escandalloDetail.placeholderUnitCost": [
+    "0,00",
+    "0,00",
+    "0,00",
+    "0,00",
+    "0,00"
+  ],
+  "escandalloDetail.footerLineTotal": [
+    "Coût total (ingrédients)",
+    "Gesamtkosten (Zutaten)",
+    "Costo totale (ingredienti)",
+    "Custo total (ingredientes)",
+    "Totale kosten (ingrediënten)"
+  ],
+  "escandalloDetail.ariaInventoryProduct": [
+    "Produit d’inventaire",
+    "Inventarprodukt",
+    "Prodotto inventario",
+    "Produto de inventário",
+    "Voorraadproduct"
+  ],
+  "escandalloDetail.ariaProduct": [
+    "Produit",
+    "Produkt",
+    "Prodotto",
+    "Produto",
+    "Product"
+  ],
+  "escandalloDetail.ariaIngredient": [
+    "Ingrédient",
+    "Zutat",
+    "Ingrediente",
+    "Ingrediente",
+    "Ingrediënt"
+  ],
+  "escandalloDetail.ariaQtyUsed": [
+    "Quantité utilisée",
+    "Verwendete Menge",
+    "Quantità usata",
+    "Quantidade usada",
+    "Gebruikte hoeveelheid"
+  ],
+  "escandalloDetail.ariaUnit": [
+    "Unité",
+    "Einheit",
+    "Unità",
+    "Unidade",
+    "Eenheid"
+  ],
+  "escandalloDetail.ariaUnitCost": [
+    "Coût unitaire",
+    "Stückkosten",
+    "Costo unitario",
+    "Custo unitário",
+    "Eenheidskost"
+  ],
+  "escandalloDetail.productFallback": [
+    "Produit {{id}}",
+    "Produkt {{id}}",
+    "Prodotto {{id}}",
+    "Produto {{id}}",
+    "Product {{id}}"
+  ],
+  "escandalloDetail.unknownProductName": [
+    "Produit #{{id}}",
+    "Produkt #{{id}}",
+    "Prodotto #{{id}}",
+    "Produto #{{id}}",
+    "Product #{{id}}"
+  ],
+  "escandalloDetail.msgSaveNotFound": [
+    "Coût introuvable",
+    "Kalkulation nicht gefunden",
+    "Costo non trovato",
+    "Custo não encontrado",
+    "Kostprijs niet gevonden"
+  ],
+  "escandalloDetail.msgSavedMock": [
+    "Modifications enregistrées (mode démo).",
+    "Änderungen gespeichert (Demo-Modus).",
+    "Modifiche salvate (modalità demo).",
+    "Alterações guardadas (modo demo).",
+    "Wijzigingen opgeslagen (demomodus)."
+  ],
+  "escandalloDetail.msgSaved": [
+    "Modifications enregistrées.",
+    "Änderungen gespeichert.",
+    "Modifiche salvate.",
+    "Alterações guardadas.",
+    "Wijzigingen opgeslagen."
+  ],
+  "escandalloDetail.msgIngredientsSavedCostUpdateFail": [
+    "Ingrédients enregistrés, mais le coût total n’a pas pu être mis à jour.",
+    "Zutaten gespeichert, Gesamtkosten konnten aber nicht aktualisiert werden.",
+    "Ingredienti salvati, ma il costo totale non è stato aggiornato.",
+    "Ingredientes guardados, mas não foi possível atualizar o custo total.",
+    "Ingrediënten opgeslagen, maar totale kostprijs kon niet worden bijgewerkt."
+  ],
+  "escandalloDetail.msgSaveSupabaseFail": [
+    "Impossible d’enregistrer sur le serveur. Vous restez en mode démo.",
+    "Speichern auf dem Server fehlgeschlagen. Demo-Modus bleibt aktiv.",
+    "Impossibile salvare sul server. Rimani in modalità demo.",
+    "Não foi possível guardar no servidor. Continua em modo demo.",
+    "Opslaan op server mislukt. U blijft in demomodus."
+  ],
+  "escandalloDetail.unexpectedError": [
+    "Erreur inattendue",
+    "Unerwarteter Fehler",
+    "Errore imprevisto",
+    "Erro inesperado",
+    "Onverwachte fout"
+  ],
+  "escandalloDetail.errorSave": [
+    "Erreur lors de l’enregistrement",
+    "Fehler beim Speichern",
+    "Errore durante il salvataggio",
+    "Erro ao guardar",
+    "Fout bij opslaan"
+  ],
+  "escandalloDetail.errorRowIncomplete": [
+    "Vérifiez les lignes : chaque ligne renseignée doit avoir un produit, une quantité supérieure à 0 et une unité. Supprimez les lignes vides ou complétez-les.",
+    "Zeilen prüfen: Jede ausgefüllte Zeile braucht Produkt, Menge > 0 und Einheit. Leere Zeilen löschen oder vervollständigen.",
+    "Controlla le righe: ogni riga compilata deve avere prodotto, quantità > 0 e unità. Elimina le righe vuote o completale.",
+    "Reveja as linhas: cada linha preenchida deve ter produto, quantidade > 0 e unidade. Elimine linhas vazias ou complete-as.",
+    "Controleer regels: elke ingevulde regel moet product, hoeveelheid > 0 en eenheid hebben. Verwijder lege regels of vul ze aan."
+  ],
+  "escandalloDetail.errorLoadProductos": [
+    "Impossible de charger le catalogue de produits",
+    "Produktkatalog konnte nicht geladen werden",
+    "Impossibile caricare il catalogo prodotti",
+    "Não foi possível carregar o catálogo de produtos",
+    "Productcatalogus kon niet worden geladen"
+  ],
+  "escandalloDetail.errorReloadIngredients": [
+    "Enregistrement réussi, mais impossible de recharger les lignes. Rechargez la page.",
+    "Gespeichert, aber Zeilen konnten nicht neu geladen werden. Seite neu laden.",
+    "Salvataggio riuscito, ma impossibile ricaricare le righe. Ricarica la pagina.",
+    "Guardado com sucesso, mas não foi possível recarregar as linhas. Recarregue a página.",
+    "Opslaan gelukt, maar regels konden niet opnieuw worden geladen. Herlaad de pagina."
+  ],
+  "escandalloDetail.errorUpdateCosteTotal": [
+    "Impossible de mettre à jour le coût total.",
+    "Gesamtkosten konnten nicht aktualisiert werden.",
+    "Impossibile aggiornare il costo totale.",
+    "Não foi possível atualizar o custo total.",
+    "Totale kostprijs kon niet worden bijgewerkt."
+  ],
+  "inventory.title": [
+    "Inventaire",
+    "Inventar",
+    "Inventario",
+    "Inventário",
+    "Voorraad"
+  ],
+  "inventory.subtitle": [
+    "Gérez les ingrédients de stock, coût unitaire et minimums.",
+    "Lagerzutaten, Stückkosten und Mindestbestände verwalten.",
+    "Gestisci ingredienti di stock, costo unitario e minimi.",
+    "Gerir ingredientes de stock, custo unitário e mínimos.",
+    "Beheer voorraadingrediënten, eenheidskost en minimums."
+  ],
+  "inventory.colUnitCostEuro": [
+    "Coût unitaire (€)",
+    "Stückkosten (€)",
+    "Costo unitario (€)",
+    "Custo unitário (€)",
+    "Eenheidskost (€)"
+  ],
+  "inventory.mockBannerBefore": [
+    "Affichage de données de démonstration : impossible de charger la table ",
+    "Demo-Daten werden angezeigt: Tabelle konnte nicht geladen werden ",
+    "Visualizzazione dati demo: impossibile caricare la tabella ",
+    "A mostrar dados de demonstração: não foi possível carregar a tabela ",
+    "Demogegevens worden getoond: tabel kon niet worden geladen "
+  ],
+  "inventory.mockBannerAfter": [
+    " depuis le serveur.",
+    " vom Server.",
+    " dal server.",
+    " do servidor.",
+    " van de server."
+  ],
+  "inventory.addProduct": [
+    "+ Ajouter un ingrédient",
+    "+ Zutat hinzufügen",
+    "+ Aggiungi ingrediente",
+    "+ Adicionar ingrediente",
+    "+ Ingrediënt toevoegen"
+  ],
+  "inventory.loadingProducts": [
+    "Chargement des ingrédients…",
+    "Zutaten werden geladen…",
+    "Caricamento ingredienti…",
+    "A carregar ingredientes…",
+    "Ingrediënten laden…"
+  ],
+  "inventory.emptyProducts": [
+    "Aucun ingrédient en stock.",
+    "Keine Lagerzutaten.",
+    "Nessun ingrediente di stock.",
+    "Sem ingredientes de stock.",
+    "Geen voorraadingrediënten."
+  ],
+  "inventory.placeholderProduct": [
+    "Ingrédient",
+    "Zutat",
+    "Ingrediente",
+    "Ingrediente",
+    "Ingrediënt"
+  ],
+  "inventory.selectToConfigure": [
+    "Sélectionnez un ingrédient pour le configurer.",
+    "Zutat auswählen, um sie zu konfigurieren.",
+    "Seleziona un ingrediente da configurare.",
+    "Selecione um ingrediente para configurar.",
+    "Selecteer een ingrediënt om te configureren."
+  ],
+  "inventory.ariaUnitCost": [
+    "Coût unitaire",
+    "Stückkosten",
+    "Costo unitario",
+    "Custo unitário",
+    "Eenheidskost"
+  ],
+  "inventory.errorLoadMock": [
+    "Impossible de charger l’inventaire (mode démo).",
+    "Inventar konnte nicht geladen werden (Demo-Modus).",
+    "Impossibile caricare l’inventario (modalità demo).",
+    "Não foi possível carregar o inventário (modo demo).",
+    "Voorraad kon niet worden geladen (demomodus)."
+  ],
+  "inventory.errorCreateProduct": [
+    "Impossible de créer l’ingrédient.",
+    "Zutat konnte nicht erstellt werden.",
+    "Impossibile creare l’ingrediente.",
+    "Não foi possível criar o ingrediente.",
+    "Ingrediënt kon niet worden gemaakt."
+  ],
+  "inventory.errorSave": [
+    "Erreur lors de l’enregistrement",
+    "Fehler beim Speichern",
+    "Errore durante il salvataggio",
+    "Erro ao guardar",
+    "Fout bij opslaan"
+  ],
+  "inventory.errorDelete": [
+    "Erreur lors de la suppression",
+    "Fehler beim Löschen",
+    "Errore durante l’eliminazione",
+    "Erro ao eliminar",
+    "Fout bij verwijderen"
+  ]
 }
