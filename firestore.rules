@@ -247,6 +247,15 @@ service cloud.firestore {
       return isManagerOrAbove();
     }
 
+    function canViewFiscalDocuments() {
+      return isManagerOrAbove();
+    }
+
+    function canManageFiscalConfiguration() {
+      let role = canonicalNormalizedRole();
+      return role == 'owner' || role == 'admin';
+    }
+
     function canManageReservations() {
       return canonicalNormalizedRole().matches('^(owner|admin|manager|waiter)$');
     }
@@ -1267,6 +1276,66 @@ service cloud.firestore {
       allow read: if sameRestaurant(restaurantId) && canChargeTpv();
       allow create, update: if sameRestaurant(restaurantId) && isManagerOrAbove();
       allow delete: if false;
+    }
+
+    // CAPA FISCAL ESPAÑA — todas las mutaciones son server-authoritative.
+    // Las facturas y eventos son apéndices inmutables; correcciones crean nuevos registros.
+    match /fiscalConfigurations/{restaurantId} {
+      allow read: if sameRestaurant(restaurantId) && canManageFiscalConfiguration();
+      allow create, update, delete: if false;
+    }
+
+    match /fiscalInvoices/{invoiceId} {
+      allow read: if sameRestaurant(resource.data.restaurantId)
+        && canViewFiscalDocuments();
+      allow create, update, delete: if false;
+    }
+
+    match /fiscalAuditEvents/{eventId} {
+      allow read: if sameRestaurant(resource.data.restaurantId)
+        && canViewFiscalDocuments();
+      allow create, update, delete: if false;
+    }
+
+    // Los registros RRSIF, colas, cadenas y contadores nunca se exponen al SDK cliente.
+    match /fiscalRecords/{recordId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /fiscalOutbox/{outboxId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /fiscalDeliveryStates/{stateId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /fiscalAeatFlowControls/{flowId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /fiscalSubmissions/{submissionId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /fiscalChains/{chainId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /fiscalCounters/{counterId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /fiscalRectificationLedgers/{ledgerId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /fiscalRelations/{relationId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /fiscalCancellations/{cancellationId} {
+      allow read, create, update, delete: if false;
     }
   }
 }

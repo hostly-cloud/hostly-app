@@ -1,5 +1,11 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { eurosToCents } from "@/lib/fiscal/money";
 import type { AuthenticatedRestaurantContext } from "@/lib/server/auth/require-authenticated-restaurant";
+import {
+  issueFiscalInvoiceInPaymentTransaction,
+  issueFiscalRefundRectificationInTransaction,
+  type FiscalEmissionSummary,
+} from "@/lib/server/fiscal/issue-fiscal-invoice";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import {
   computeOrderEconomics,
@@ -128,7 +134,12 @@ function buildPaymentMetadata(
 export async function handleChargeOrder(
   ctx: AuthenticatedRestaurantContext,
   intent: ChargeOrderIntent,
-): Promise<{ paymentId: string; amount: number; remainingAfterPayment: number } | TpvMutationError> {
+): Promise<{
+  paymentId: string;
+  amount: number;
+  remainingAfterPayment: number;
+  fiscal: FiscalEmissionSummary | null;
+} | TpvMutationError> {
   if (!serverRoleHasCapability(ctx.role, "tpv.charge")) {
     return { status: 403, error: "TPV_CHARGE_REQUIRED" };
   }
@@ -179,6 +190,7 @@ export async function handleChargeOrder(
         paymentId: String(hit.paymentId),
         amount: Number(hit.amount) || 0,
         remainingAfterPayment: Number(hit.remainingAfterPayment) || 0,
+        fiscal: (hit.fiscal as FiscalEmissionSummary | null | undefined) ?? null,
       };
     }
   }
@@ -187,6 +199,8 @@ export async function handleChargeOrder(
   const paymentRef = ctx.db.collection("payments").doc();
   let resultAmount = 0;
   let resultRemaining = 0;
+  let resultFiscal: FiscalEmissionSummary | null = null;
+  const issuedAt = new Date();
 
   try {
     await ctx.db.runTransaction(async (tx) => {
@@ -300,7 +314,51 @@ export async function handleChargeOrder(
         isAccountFinalPayment,
       );
 
+      if (isAccountFinalPayment) {
+        resultFiscal = await issueFiscalInvoiceInPaymentTransaction({
+          db: ctx.db,
+          tx,
+          restaurantId: ctx.restaurantId,
+          actorUid: ctx.uid,
+          orderId,
+          orderData,
+          items,
+          economics,
+          paymentId: paymentRef.id,
+          settledPayments: [
+            ...paymentsSnap.docs.flatMap((doc) => {
+              const data = doc.data();
+              const method = data.paymentMethod;
+              return data.status === "paid" && (method === "cash" || method === "card" || method === "voucher")
+                ? [{ id: doc.id, paymentMethod: method }]
+                : [];
+            }),
+            { id: paymentRef.id, paymentMethod: intent.paymentMethod },
+          ],
+          invoiceIntent: intent.invoice,
+          issuedAt,
+        });
+        if (resultFiscal) {
+          paymentPayload.fiscalInvoiceId = resultFiscal.invoiceId;
+          paymentPayload.fiscalInvoiceNumber = resultFiscal.invoiceNumber;
+          paymentPayload.fiscalRecordStatus = resultFiscal.recordStatus;
+          paymentPayload.fiscalMode = resultFiscal.mode;
+        }
+      }
+
       tx.set(paymentRef, paymentPayload);
+
+      if (resultFiscal) {
+        for (const priorPayment of paymentsSnap.docs) {
+          if (priorPayment.data().status !== "paid") continue;
+          tx.update(priorPayment.ref, {
+            fiscalInvoiceId: resultFiscal.invoiceId,
+            fiscalInvoiceNumber: resultFiscal.invoiceNumber,
+            fiscalRecordStatus: resultFiscal.recordStatus,
+            fiscalMode: resultFiscal.mode,
+          });
+        }
+      }
 
       const orderUpdate: Record<string, unknown> = {
         updatedAt: FieldValue.serverTimestamp(),
@@ -328,6 +386,7 @@ export async function handleChargeOrder(
             paymentId: paymentRef.id,
             amount: chargeAmount,
             remainingAfterPayment,
+            fiscal: resultFiscal,
           },
         );
       }
@@ -343,6 +402,7 @@ export async function handleChargeOrder(
         paymentId: pid!,
         amount: Number(amt) || 0,
         remainingAfterPayment: Number(rem) || 0,
+        fiscal: null,
       };
     }
     if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
@@ -379,6 +439,7 @@ export async function handleChargeOrder(
     paymentId: paymentRef.id,
     amount: resultAmount,
     remainingAfterPayment: resultRemaining,
+    fiscal: resultFiscal,
   };
 }
 
@@ -392,7 +453,7 @@ async function mutatePaymentWithOrderBalance(
     refundAmount: number,
     nowMs: number,
   ) => Record<string, unknown>,
-): Promise<{ paymentId: string; refundAmount: number } | TpvMutationError> {
+): Promise<{ paymentId: string; refundAmount: number; fiscal: FiscalEmissionSummary | null } | TpvMutationError> {
   const capErr = serverRoleHasCapability(ctx.role, "tpv.refund")
     ? null
     : { status: 403 as const, error: "TPV_REFUND_REQUIRED" };
@@ -417,12 +478,14 @@ async function mutatePaymentWithOrderBalance(
       return {
         paymentId: String(hit.paymentId),
         refundAmount: Number(hit.refundAmount) || 0,
+        fiscal: (hit.fiscal as FiscalEmissionSummary | null | undefined) ?? null,
       };
     }
   }
 
   const paymentRef = ctx.db.collection("payments").doc(pid);
   let refundAmount = 0;
+  let resultFiscal: FiscalEmissionSummary | null = null;
 
   try {
     await ctx.db.runTransaction(async (tx) => {
@@ -537,6 +600,28 @@ async function mutatePaymentWithOrderBalance(
         }
       }
 
+      const fiscalInvoiceId = String(paymentData.fiscalInvoiceId ?? "").trim();
+      if (fiscalInvoiceId) {
+        const method = paymentData.paymentMethod;
+        if (method !== "cash" && method !== "card" && method !== "voucher") {
+          throw new Error("FISCAL_PAYMENT_METHOD_INVALID");
+        }
+        resultFiscal = await issueFiscalRefundRectificationInTransaction({
+          db: ctx.db,
+          tx,
+          restaurantId: ctx.restaurantId,
+          actorUid: ctx.uid,
+          originalInvoiceId: fiscalInvoiceId,
+          paymentId: pid,
+          paymentMethod: method,
+          refundAmountCents: eurosToCents(refundAmount),
+          issuedAt: new Date(nowMs),
+          reason: kind === "refund_payment" ? "Devolución de cobro" : "Anulación operativa de cobro",
+        });
+        paymentUpdate.fiscalRectificationInvoiceId = resultFiscal.invoiceId;
+        paymentUpdate.fiscalRectificationNumber = resultFiscal.invoiceNumber;
+      }
+
       tx.update(paymentRef, paymentUpdate);
       tx.update(orderRef, orderUpdate);
 
@@ -554,7 +639,7 @@ async function mutatePaymentWithOrderBalance(
           idempotencyDocRef(ctx.db, ctx.restaurantId, idemKey),
           kind,
           payloadHash,
-          { paymentId: pid, refundAmount },
+          { paymentId: pid, refundAmount, fiscal: resultFiscal },
         );
       }
     });
@@ -562,23 +647,24 @@ async function mutatePaymentWithOrderBalance(
     const msg = e instanceof Error ? e.message : "";
     if (msg.startsWith("IDEM_OK:")) {
       const [, id, amt] = msg.split(":");
-      return { paymentId: id!, refundAmount: Number(amt) || 0 };
+      return { paymentId: id!, refundAmount: Number(amt) || 0, fiscal: null };
     }
     if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
     if (msg === "PAYMENT_NOT_FOUND") return { status: 404, error: "PAYMENT_NOT_FOUND" };
     if (msg === "TENANT_MISMATCH") return { status: 403, error: "TENANT_MISMATCH" };
     if (msg === "PAYMENT_NOT_REVERSIBLE") return { status: 400, error: "PAYMENT_NOT_REVERSIBLE" };
     if (msg === "ORDER_NOT_FOUND") return { status: 404, error: "ORDER_NOT_FOUND" };
+    if (msg.startsWith("FISCAL_")) return { status: 409, error: msg };
     throw e;
   }
 
-  return { paymentId: pid, refundAmount };
+  return { paymentId: pid, refundAmount, fiscal: resultFiscal };
 }
 
 export async function handleRefundPayment(
   ctx: AuthenticatedRestaurantContext,
   intent: RefundPaymentIntent,
-): Promise<{ paymentId: string; refundAmount: number } | TpvMutationError> {
+): Promise<{ paymentId: string; refundAmount: number; fiscal: FiscalEmissionSummary | null } | TpvMutationError> {
   return mutatePaymentWithOrderBalance(
     ctx,
     intent.paymentId,
@@ -598,7 +684,7 @@ export async function handleRefundPayment(
 export async function handleVoidPayment(
   ctx: AuthenticatedRestaurantContext,
   intent: VoidPaymentIntent,
-): Promise<{ paymentId: string; refundAmount: number } | TpvMutationError> {
+): Promise<{ paymentId: string; refundAmount: number; fiscal: FiscalEmissionSummary | null } | TpvMutationError> {
   return mutatePaymentWithOrderBalance(
     ctx,
     intent.paymentId,

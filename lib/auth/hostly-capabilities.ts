@@ -28,7 +28,14 @@ export type HostlyCapability =
   | "employees.manage"
   | "analytics.view"
   | "settings.manage"
-  | "users.manage";
+  | "users.manage"
+  | "fiscal.issue"
+  | "fiscal.rectify"
+  | "fiscal.cancel"
+  | "fiscal.view"
+  | "fiscal.export"
+  | "fiscal.config"
+  | "fiscal.certificates";
 
 export type HostlyRole =
   | "owner"
@@ -65,6 +72,13 @@ export const ALL_HOSTLY_CAPABILITIES: readonly HostlyCapability[] = [
   "analytics.view",
   "settings.manage",
   "users.manage",
+  "fiscal.issue",
+  "fiscal.rectify",
+  "fiscal.cancel",
+  "fiscal.view",
+  "fiscal.export",
+  "fiscal.config",
+  "fiscal.certificates",
 ] as const;
 
 const MANAGER_CAPABILITIES: readonly HostlyCapability[] = [
@@ -85,6 +99,11 @@ const MANAGER_CAPABILITIES: readonly HostlyCapability[] = [
   "supplier_invoices.manage",
   "employees.manage",
   "analytics.view",
+  "fiscal.issue",
+  "fiscal.rectify",
+  "fiscal.cancel",
+  "fiscal.view",
+  "fiscal.export",
 ];
 
 const WAITER_CAPABILITIES: readonly HostlyCapability[] = [
@@ -92,6 +111,7 @@ const WAITER_CAPABILITIES: readonly HostlyCapability[] = [
   "tpv.cancel_line",
   "tpv.charge",
   "reservations.manage",
+  "fiscal.issue",
 ];
 
 const KITCHEN_CAPABILITIES: readonly HostlyCapability[] = ["kds.manage"];
@@ -126,6 +146,13 @@ export const HOSTLY_CAPABILITY_LABELS: Readonly<Record<HostlyCapability, string>
   "analytics.view": "Ver analítica",
   "settings.manage": "Gestionar configuración",
   "users.manage": "Gestionar usuarios y accesos",
+  "fiscal.issue": "Emitir facturas",
+  "fiscal.rectify": "Emitir facturas rectificativas",
+  "fiscal.cancel": "Anular registros fiscales",
+  "fiscal.view": "Consultar facturación fiscal",
+  "fiscal.export": "Exportar facturación fiscal",
+  "fiscal.config": "Editar configuración fiscal",
+  "fiscal.certificates": "Gestionar credenciales fiscales",
 };
 
 /** Normaliza roles Firebase/legacy a rol Hostly operacional sin escalar desconocidos. */
@@ -164,6 +191,8 @@ export function listCapabilitiesForRole(role: unknown): HostlyCapability[] {
 }
 
 const DASHBOARD_ACCESS: readonly { prefix: string; capability: HostlyCapability }[] = [
+  { prefix: "/dashboard/configuracion/fiscal", capability: "fiscal.config" },
+  { prefix: "/dashboard/fiscal", capability: "fiscal.view" },
   { prefix: "/dashboard/configuracion/empleados", capability: "employees.manage" },
   { prefix: "/dashboard/empleados", capability: "employees.manage" },
   { prefix: "/dashboard/usuarios", capability: "users.manage" },

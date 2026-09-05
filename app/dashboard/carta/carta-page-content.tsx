@@ -4044,6 +4044,14 @@ export function CartaPageContent({
               name: invoiceName,
               taxId: invoiceTaxId,
               email: invoiceEmail,
+              address: selectedBillingCustomer?.address ?? undefined,
+              postalCode: selectedBillingCustomer?.postalCode ?? undefined,
+              city: selectedBillingCustomer?.city ?? undefined,
+              province: selectedBillingCustomer?.province ?? undefined,
+              countryCode:
+                selectedBillingCustomer?.country?.trim().length === 2
+                  ? selectedBillingCustomer.country.trim().toUpperCase()
+                  : "ES",
             }
           : undefined,
         waiterId: waiterId ?? undefined,
@@ -4059,6 +4067,7 @@ export function CartaPageContent({
 
       if (
         selectedBillingCustomer &&
+        !chargeResult.fiscal &&
         !isSplitEqualInstallment &&
         isAccountFinalPayment
       ) {

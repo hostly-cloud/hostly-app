@@ -33,6 +33,11 @@ export type PaymentInvoiceIntent = {
   name: string;
   taxId: string;
   email: string;
+  address?: string;
+  postalCode?: string;
+  city?: string;
+  province?: string;
+  countryCode?: string;
 };
 
 export type ChargeOrderIntent = {
@@ -396,7 +401,16 @@ function parseInvoiceIntent(raw: unknown): PaymentInvoiceIntent | undefined {
   const taxId = typeof raw.taxId === "string" ? raw.taxId.trim() : "";
   const email = typeof raw.email === "string" ? raw.email.trim() : "";
   if (!name && !taxId && !email) return undefined;
-  return { name, taxId, email };
+  return {
+    name,
+    taxId,
+    email,
+    address: typeof raw.address === "string" ? raw.address.trim() : undefined,
+    postalCode: typeof raw.postalCode === "string" ? raw.postalCode.trim() : undefined,
+    city: typeof raw.city === "string" ? raw.city.trim() : undefined,
+    province: typeof raw.province === "string" ? raw.province.trim() : undefined,
+    countryCode: typeof raw.countryCode === "string" ? raw.countryCode.trim().toUpperCase() : undefined,
+  };
 }
 
 export function parseChargeOrderBody(raw: unknown): ChargeOrderIntent | { error: string } {

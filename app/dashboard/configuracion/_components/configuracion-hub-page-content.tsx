@@ -11,6 +11,7 @@ import {
   MonitorCog,
   PackageOpen,
   PlugZap,
+  ReceiptText,
   Search,
   UsersRound,
   UtensilsCrossed,
@@ -66,9 +67,20 @@ const CONFIG_ROUTES = {
   printQueue: "/dashboard/configuracion/impresoras/cola",
   aiImport: "/dashboard/configuracion/carta/importacion",
   integrations: "/dashboard/configuracion/integraciones",
+  fiscal: "/dashboard/configuracion/fiscal",
 } as const;
 
 const HUB_CARDS: HubCard[] = [
+  {
+    id: "fiscal",
+    title: "Fiscalidad y VERI*FACTU",
+    description: "Empresa, series, impuestos y conexión fiscal.",
+    href: CONFIG_ROUTES.fiscal,
+    status: "Configurar fiscalidad",
+    statusTone: "warn",
+    visual: "fiscal",
+    Icon: ReceiptText,
+  },
   {
     id: "restaurant",
     title: "Mi restaurante",
@@ -180,6 +192,14 @@ type ConfigSearchItem = {
 };
 
 const CONFIG_SEARCH_ITEMS: ConfigSearchItem[] = [
+  {
+    id: "fiscal",
+    section: "Fiscalidad",
+    title: "Fiscalidad y VERI*FACTU",
+    description: "Datos fiscales, NIF, IVA, series, QR y conexión con AEAT.",
+    href: CONFIG_ROUTES.fiscal,
+    keywords: ["fiscal", "factura", "facturacion", "verifactu", "aeat", "nif", "iva", "serie", "qr"],
+  },
   {
     id: "restaurant",
     section: "Mi restaurante",

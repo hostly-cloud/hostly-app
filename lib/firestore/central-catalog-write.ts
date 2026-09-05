@@ -47,6 +47,8 @@ export type CentralOperationalProductInput = {
   categoryId?: string | null;
   categoryName: string;
   price: number;
+  /** Tipo de IVA en puntos básicos; si se omite se aplica el predeterminado fiscal. */
+  vatRateBps?: number | null;
   /** Legacy: ?rea de preparaci?n en texto; omitir si se env?a estaci?n operativa. */
   preparationArea?: string;
   operationStationId?: string | null;
@@ -192,6 +194,7 @@ function buildOperationalPatch(
     ...(categoryId ? { categoryId } : {}),
     ...familyFields,
     price: input.price,
+    ...(input.vatRateBps != null ? { vatRateBps: input.vatRateBps } : {}),
     ...fields,
     tipoVenta: input.tipoVenta,
     productCompositionType: normalizeProductCompositionType(
@@ -245,6 +248,11 @@ function buildPartialOperationalPatch(
   }
   if (typeof input.price === "number" && Number.isFinite(input.price)) {
     patch.price = input.price;
+  }
+  if (input.vatRateBps === null) {
+    patch.vatRateBps = deleteField();
+  } else if (typeof input.vatRateBps === "number" && Number.isInteger(input.vatRateBps)) {
+    patch.vatRateBps = input.vatRateBps;
   }
   if (
     input.operationStationId !== undefined ||

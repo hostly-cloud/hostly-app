@@ -70,6 +70,8 @@ export type Product = {
   /** Grupos de modificadores asignados directamente al producto. */
   modifierGroupIds?: string[];
   precio: number;
+  /** Tipo de IVA en puntos básicos (10 % = 1000). */
+  vatRateBps?: number | null;
   /** Posición dentro de `categoryId` (menor = primero en TPV). */
   sortOrder?: number;
   /** Pase / curso del catálogo (1–4: entrante…postre). Opcional en datos legados. */

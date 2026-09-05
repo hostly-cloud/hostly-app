@@ -70,6 +70,7 @@ export type ProductWrite = {
   categoria: string;
   precio: number | null;
   preparationArea: string;
+  vatRateBps?: number | null;
 };
 
 export type ProductInventoryDocument = {
@@ -115,6 +116,8 @@ export type ProductDocument = {
   /** Denormalizado desde categoría de carta (import / catálogo central). */
   categoryName?: string | null;
   price: number | null;
+  /** Tipo de IVA en puntos básicos (10 % = 1000), congelado en la línea al vender. */
+  vatRateBps?: number | null;
   active: boolean;
   station: string | null;
   /** Área operativa explícita en documento central (p. ej. cocina, barra). */
@@ -477,6 +480,10 @@ function mapDocToProduct(d: QueryDocumentSnapshot): Product {
     typeof preparationAreaRaw === "string" && preparationAreaRaw.trim() !== ""
       ? preparationAreaRaw.trim()
       : "cocina";
+  const vatRateBps =
+    typeof data.vatRateBps === "number" && Number.isInteger(data.vatRateBps)
+      ? data.vatRateBps
+      : null;
   return {
     id: d.id,
     nombre,
@@ -484,6 +491,7 @@ function mapDocToProduct(d: QueryDocumentSnapshot): Product {
     categoryId,
     precio,
     preparationArea,
+    vatRateBps,
     createdAt,
     userId,
     restaurantId,
@@ -573,6 +581,7 @@ export async function addProduct(
       userId: uid,
       restaurantId: rid,
       createdAt: serverTimestamp(),
+      ...(data.vatRateBps != null ? { vatRateBps: data.vatRateBps } : {}),
     };
     if (imageUrl && imagePath) {
       payload.imageUrl = imageUrl;
@@ -643,6 +652,7 @@ export async function updateProduct(
           categoria: data.categoria,
           precio: data.precio,
           preparationArea: data.preparationArea,
+          ...(data.vatRateBps != null ? { vatRateBps: data.vatRateBps } : {}),
           imageUrl: up.url,
           imagePath: up.path,
         };
@@ -664,6 +674,7 @@ export async function updateProduct(
           categoria: data.categoria,
           precio: data.precio,
           preparationArea: data.preparationArea,
+          ...(data.vatRateBps != null ? { vatRateBps: data.vatRateBps } : {}),
         };
         if (needsRestaurantBackfill) patch.restaurantId = rid;
         await updateDoc(ref, patch as DocumentData);
@@ -859,6 +870,10 @@ function mapCentralDocToProductDocument(
     readFiniteNumber(data.price) ??
     readFiniteNumber(data.precio) ??
     null;
+  const vatRateBps =
+    typeof data.vatRateBps === "number" && Number.isInteger(data.vatRateBps)
+      ? data.vatRateBps
+      : null;
 
   const ingredients = Array.isArray(recipeRaw.ingredients)
     ? (recipeRaw.ingredients as ProductRecipeIngredientDocument[])
@@ -885,6 +900,7 @@ function mapCentralDocToProductDocument(
     categoryId,
     categoryName,
     price,
+    vatRateBps,
     active,
     station,
     preparationArea,

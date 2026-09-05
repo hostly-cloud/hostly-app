@@ -69,6 +69,7 @@ export function buildAuthoritativeSaleLine(
     status,
     price: basePrice,
     precio: basePrice,
+    ...(product.vatRateBps != null ? { vatRateBps: product.vatRateBps } : {}),
     ...(modifiers.length > 0 ? { modifierTotal } : {}),
     total: lineTotal,
     displayName,
