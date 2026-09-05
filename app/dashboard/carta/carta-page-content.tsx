@@ -2342,6 +2342,8 @@ export function CartaPageContent({
   const [myTablesMapScope, setMyTablesMapScope] = useState<"all" | "mine">("all");
   /** Menú compacto de cambio de plano (TPV mapa); solo UX, misma `setSelectedTpvFloorPlanId`. */
   const [tpvFloorPlanMenuOpen, setTpvFloorPlanMenuOpen] = useState(false);
+  const useCompactTpvFloorPlanSelector =
+    cartaHeaderMobile || embeddedInOperacion;
   const tpvFloorPlanMenuRef = useRef<HTMLDivElement | null>(null);
   const tpvFloorPlanMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const [tpvFloorPlanMenuRect, setTpvFloorPlanMenuRect] = useState<{
@@ -2418,7 +2420,7 @@ export function CartaPageContent({
   }, [myTablesMapScope]);
 
   useEffect(() => {
-    if (!tpvFloorPlanMenuOpen || !cartaHeaderMobile) return;
+    if (!tpvFloorPlanMenuOpen || !useCompactTpvFloorPlanSelector) return;
     const onDocPointer = (e: PointerEvent) => {
       const t = e.target as Node;
       const wrap = tpvFloorPlanMenuRef.current;
@@ -2435,17 +2437,17 @@ export function CartaPageContent({
       document.removeEventListener("pointerdown", onDocPointer, true);
       document.removeEventListener("keydown", onKey);
     };
-  }, [tpvFloorPlanMenuOpen, cartaHeaderMobile]);
+  }, [tpvFloorPlanMenuOpen, useCompactTpvFloorPlanSelector]);
 
   useEffect(() => {
-    if (!tpvFloorPlanMenuOpen || !cartaHeaderMobile) return;
+    if (!tpvFloorPlanMenuOpen || !useCompactTpvFloorPlanSelector) return;
     const onScroll = () => setTpvFloorPlanMenuOpen(false);
     window.addEventListener("scroll", onScroll, true);
     return () => window.removeEventListener("scroll", onScroll, true);
-  }, [tpvFloorPlanMenuOpen, cartaHeaderMobile]);
+  }, [tpvFloorPlanMenuOpen, useCompactTpvFloorPlanSelector]);
 
   useLayoutEffect(() => {
-    if (!tpvFloorPlanMenuOpen || !cartaHeaderMobile) {
+    if (!tpvFloorPlanMenuOpen || !useCompactTpvFloorPlanSelector) {
       setTpvFloorPlanMenuRect(null);
       return;
     }
@@ -2480,15 +2482,15 @@ export function CartaPageContent({
     place();
     window.addEventListener("resize", place);
     return () => window.removeEventListener("resize", place);
-  }, [tpvFloorPlanMenuOpen, cartaHeaderMobile]);
+  }, [tpvFloorPlanMenuOpen, useCompactTpvFloorPlanSelector]);
 
   useEffect(() => {
     setTpvFloorPlanMenuOpen(false);
   }, [selectedTpvFloorPlanId]);
 
   useEffect(() => {
-    if (!cartaHeaderMobile) setTpvFloorPlanMenuOpen(false);
-  }, [cartaHeaderMobile]);
+    if (!useCompactTpvFloorPlanSelector) setTpvFloorPlanMenuOpen(false);
+  }, [useCompactTpvFloorPlanSelector]);
 
   const selectOperationalTpvFloorPlan = useCallback((planId: string) => {
     setSelectedTpvFloorPlanId(planId);
@@ -14789,7 +14791,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     />
                     <span className="carta-map-floor-plan-label">Plano</span>
                     {operationalFloorPlansForTpv.length > 1 ? (
-                      cartaHeaderMobile ? (
+                      useCompactTpvFloorPlanSelector ? (
                         <div
                           ref={tpvFloorPlanMenuRef}
                           className="carta-tpv-floor-plan-wrap"
@@ -14884,7 +14886,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                   </span>
                 )}
                 {operationalFloorPlansForTpv.length > 1 &&
-                cartaHeaderMobile &&
+                useCompactTpvFloorPlanSelector &&
                 tpvFloorPlanMenuOpen &&
                 tpvFloorPlanMenuRect &&
                 typeof document !== "undefined"
@@ -14895,9 +14897,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         role="listbox"
                         aria-label="Planos operativos"
                         data-carta-tpv-compact-menu={
-                          embeddedInOperacion && cartaHeaderMobile
-                            ? "true"
-                            : undefined
+                          embeddedInOperacion ? "true" : undefined
                         }
                         style={{
                           position: "fixed",
@@ -15102,6 +15102,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     initialZoom={1}
                   >
                   <EditableFloorMap
+                    key={`tpv-plan-${selectedTpvFloorPlanId ?? "legacy"}`}
                     editable={false}
                     editorPlanSurface
                     editorVisualPreset="premium"
