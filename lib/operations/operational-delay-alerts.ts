@@ -120,19 +120,18 @@ function levelScore(level: OperationalDelayAlertLevel): number {
 }
 
 function firstRealServiceSentAtMs(order: OperationalOrderRecord): number | null {
-  const orderSentAtMs = readOperationalTimestampMs(order.sentAt);
-  if (orderSentAtMs != null) return orderSentAtMs;
-  if (!Array.isArray(order.items)) return null;
   let firstSentAtMs: number | null = null;
-  for (const rawItem of order.items) {
-    if (!rawItem || typeof rawItem !== "object") continue;
-    const item = rawItem as Record<string, unknown>;
-    if (!isTableServiceLine(item.status)) continue;
-    const sentAtMs = readOperationalTimestampMs(item.sentAt);
-    if (sentAtMs == null) continue;
-    if (firstSentAtMs == null || sentAtMs < firstSentAtMs) firstSentAtMs = sentAtMs;
+  if (Array.isArray(order.items)) {
+    for (const rawItem of order.items) {
+      if (!rawItem || typeof rawItem !== "object") continue;
+      const item = rawItem as Record<string, unknown>;
+      if (!isTableServiceLine(item.status)) continue;
+      const sentAtMs = readOperationalTimestampMs(item.sentAt);
+      if (sentAtMs == null) continue;
+      if (firstSentAtMs == null || sentAtMs < firstSentAtMs) firstSentAtMs = sentAtMs;
+    }
   }
-  return firstSentAtMs;
+  return firstSentAtMs ?? readOperationalTimestampMs(order.sentAt);
 }
 
 function buildTableServiceAlert(
