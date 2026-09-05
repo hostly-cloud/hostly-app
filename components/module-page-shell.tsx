@@ -8,6 +8,7 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { HostlyBackButton } from "@/components/hostly/back-button";
 import { HostlyPageContainer } from "@/components/hostly/page-container";
 import { HostlyPageHeader } from "@/components/hostly/page-header";
+import { CurrentHostlyPlanIdentity } from "@/components/subscription/current-hostly-plan-identity";
 
 export type ModulePageShellProps = {
   title?: ReactNode;
@@ -242,6 +243,7 @@ export default function ModulePageShell({
         {headerRight}
       </div>
       <div className="hostly-module-header-actions__secondary">
+        <CurrentHostlyPlanIdentity compact={Boolean(compactLayout)} />
         {!hideLogoutButton && hideBackLink && backHref === "/dashboard" ? (
           <LogoutButton
             compact={Boolean(compactLayout && operationalFocus)}

@@ -47,6 +47,7 @@ cerradas:
 - `HostlyDataTable`
 - `HostlyMobileList`
 - `HostlyStatusBadge`
+- `HostlyPlanIdentity`
 - `HostlyRowActions`
 
 No se crea una variante local si uno de estos componentes puede cubrir el caso.
@@ -425,6 +426,7 @@ Clases operacionales unificadas (post-[L]):
 | `ConfigCartaRouteTabs` | `app/dashboard/configuracion/_components/config-carta-route-tabs.tsx` | Tabs hub Configuración → Carta |
 | `ConfigCartaWorkbench` | `app/dashboard/configuracion/_components/config-carta-workbench.tsx` | Shell carta config + `ConfigCard` / botones tokenizados |
 | `HostlyDataTable` / `HostlyMobileList` | `components/ui/hostly/data-table/*` | Sistema tablas/listados operacionales responsive |
+| `HostlyPlanIdentity` | `components/ui/hostly/HostlyPlanIdentity.tsx` | Distintivo global Básico/Pro/Ultra; representa el plan efectivo sin conceder capacidades |
 | `ProductosCartaDataView` | `components/productos/productos-carta-data-view.tsx` | Primera migración v2.7 (Config → Carta → Productos) |
 | `CategoriasCartaDataView` | `components/carta/categorias-carta-data-view.tsx` | Listado categorías v2.8 |
 | `FamiliasCartaDataView` | `components/carta/familias-carta-data-view.tsx` | Listado familias v2.8 |
