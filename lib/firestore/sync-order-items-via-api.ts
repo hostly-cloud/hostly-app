@@ -1,6 +1,7 @@
 import { firestoreItemsToSaleLineIntents } from "@/lib/firestore/firestore-items-to-sale-intent";
 import { selectDraftPersistableFirestoreItems } from "@/lib/firestore/merge-order-items-for-persist";
 import {
+  buildStableIdempotencyKey,
   cancelLinesViaApi,
   createOpenOrderViaApi,
   upsertSaleLinesViaApi,
@@ -40,6 +41,21 @@ export type SyncOrderItemsViaApiDeps = {
   cancelLinesViaApi?: typeof cancelLinesViaApi;
 };
 
+function createOpenSyncIdempotencyKey(params: {
+  tableId: string;
+  markSent: boolean;
+  lines: Array<{ lineId: string; productId: string; quantity: number }>;
+}): string {
+  return buildStableIdempotencyKey(
+    "sync-create-open",
+    params.tableId,
+    params.markSent ? "sent" : "pending",
+    ...params.lines.map(
+      (line) => `${line.lineId}:${line.productId}:${line.quantity}`,
+    ),
+  );
+}
+
 /** @deprecated Usar tpv-mutations-via-api directamente. */
 export async function syncOrderItemsViaApi(
   params: SyncOrderItemsViaApiParams,
@@ -53,17 +69,23 @@ export async function syncOrderItemsViaApi(
     if (!params.tableId?.trim()) {
       return { ok: false, error: "TABLE_ID_REQUIRED" };
     }
+    const tableId = params.tableId.trim();
     const markSent = params.markSent === true;
     const itemsForCreate = markSent
       ? params.items
       : selectDraftPersistableFirestoreItems(params.items);
     const lines = firestoreItemsToSaleLineIntents(itemsForCreate);
     const result = await createOpen({
-      tableId: params.tableId,
+      tableId,
       tableLabel: params.tableLabel,
       lines,
       markSent: params.markSent,
       operatorAssignment: params.operatorAssignment,
+      idempotencyKey: createOpenSyncIdempotencyKey({
+        tableId,
+        markSent,
+        lines,
+      }),
     });
     return result.ok
       ? result
