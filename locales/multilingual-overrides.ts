@@ -16,26 +16,25 @@ import onboardingBusinessMenu from "@/locales/multilingual/onboarding-business-m
 import onboardingStockTeamLive from "@/locales/multilingual/onboarding-stock-team-live.json";
 
 type BaseMultilingualLocale = "fr" | "de" | "it" | "pt" | "nl";
-type TranslationTuple = [string, string, string, string, string];
-type TranslationBundle = Record<string, TranslationTuple>;
+type TranslationBundle = Record<string, readonly string[]>;
 
 const BASE_LOCALES: readonly BaseMultilingualLocale[] = ["fr", "de", "it", "pt", "nl"];
-const BUNDLES: TranslationBundle[] = [
-  core as TranslationBundle,
-  productRouting as TranslationBundle,
-  productActions as TranslationBundle,
-  menuCategories as TranslationBundle,
-  receipts as TranslationBundle,
-  invoicesCosts as TranslationBundle,
-  smartValidation as TranslationBundle,
-  purchases as TranslationBundle,
-  salesCatalogCore as TranslationBundle,
-  salesCatalogRecipe as TranslationBundle,
-  modifiers as TranslationBundle,
-  menuImportReview as TranslationBundle,
-  menuImportAnalyzePublish as TranslationBundle,
-  onboardingBusinessMenu as TranslationBundle,
-  onboardingStockTeamLive as TranslationBundle,
+const BUNDLES: readonly TranslationBundle[] = [
+  core,
+  productRouting,
+  productActions,
+  menuCategories,
+  receipts,
+  invoicesCosts,
+  smartValidation,
+  purchases,
+  salesCatalogCore,
+  salesCatalogRecipe,
+  modifiers,
+  menuImportReview,
+  menuImportAnalyzePublish,
+  onboardingBusinessMenu,
+  onboardingStockTeamLive,
 ];
 
 function baseLocale(locale: Locale): BaseMultilingualLocale | null {
