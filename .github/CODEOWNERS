@@ -1,0 +1,15 @@
+# Security-critical areas require an explicit owner review when branch protection
+# is configured to require Code Owner approval.
+/.github/ @hostly-cloud
+/.env.example @hostly-cloud
+/next.config.js @hostly-cloud
+/firebase.json @hostly-cloud
+/firestore.rules @hostly-cloud
+/firestore.indexes.json @hostly-cloud
+/storage.rules @hostly-cloud
+/app/api/auth/ @hostly-cloud
+/lib/firebase/ @hostly-cloud
+/lib/server/auth/ @hostly-cloud
+/lib/server/security/ @hostly-cloud
+/tests/security/ @hostly-cloud
+/tests/config/next-security-headers.test.mjs @hostly-cloud
