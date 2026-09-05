@@ -568,7 +568,9 @@ La imagen generada es una **propuesta**, no una fuente operativa autónoma:
 - conserva modelo, proveedor, fecha y coste devuelto por el Gateway cuando está disponible.
 
 El modelo por defecto debe priorizar coste controlado y puede cambiarse mediante
-`HOSTLY_AI_IMAGE_MODEL`, siempre usando un identificador vigente del Gateway.
+`HOSTLY_AI_IMAGE_MODEL`, siempre usando un identificador vigente del Gateway. Los
+modelos Gemini de imagen son multimodales: se invocan con `generateText`, solicitan
+las modalidades `TEXT` e `IMAGE` y entregan la imagen en `result.files`.
 
 ---
 
