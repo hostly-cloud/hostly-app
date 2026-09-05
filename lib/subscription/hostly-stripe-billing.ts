@@ -7,6 +7,7 @@ export type HostlyBillingInterval = "month" | "year";
 export type HostlyStripeSubscriptionSnapshot = {
   id: string;
   customerId: string;
+  restaurantId: string;
   status: string;
   priceId: string;
   plan: HostlyPlan;
@@ -188,9 +189,12 @@ export async function retrieveHostlyStripeSubscription(
       ? subscription.customer
       : subscription.customer?.id ?? "";
   if (!customerId) throw new Error("STRIPE_CUSTOMER_ID_MISSING");
+  const restaurantId = subscription.metadata?.restaurantId?.trim() ?? "";
+  if (!restaurantId) throw new Error("STRIPE_RESTAURANT_ID_MISSING");
   return {
     id: subscription.id,
     customerId,
+    restaurantId,
     status: subscription.status,
     priceId,
     plan: mapped.plan,
