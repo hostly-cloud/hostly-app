@@ -16,10 +16,15 @@ test("global subscription access resolves the canonical plan and entitlements", 
     "catalog.image.ai.single",
     "catalog.image.ai.bulk",
     "catalog.image.catalogSearch",
+    "tpv.productInfo.gastronomy",
     "ai.sommelierPairing",
   ]);
   assert.equal(
     subscriptionAccessHasEntitlement(access, "catalog.image.ai.bulk"),
+    true,
+  );
+  assert.equal(
+    subscriptionAccessHasEntitlement(access, "tpv.productInfo.gastronomy"),
     true,
   );
   assert.equal(
@@ -36,7 +41,12 @@ test("global subscription access preserves the Pro compatibility fallback", () =
   assert.deepEqual(access.entitlements, [
     "catalog.image.ai.single",
     "catalog.image.catalogSearch",
+    "tpv.productInfo.gastronomy",
   ]);
+  assert.equal(
+    subscriptionAccessHasEntitlement(access, "tpv.productInfo.gastronomy"),
+    true,
+  );
   assert.equal(
     subscriptionAccessHasEntitlement(access, "ai.sommelierPairing"),
     false,
@@ -52,6 +62,10 @@ test("Basic exposes no confirmed commercial entitlements", () => {
   assert.deepEqual(access.entitlements, []);
   assert.equal(
     subscriptionAccessHasEntitlement(access, "catalog.image.ai.single"),
+    false,
+  );
+  assert.equal(
+    subscriptionAccessHasEntitlement(access, "tpv.productInfo.gastronomy"),
     false,
   );
   assert.equal(
