@@ -56,6 +56,8 @@ jobs:
         run: npm audit
       - name: Firebase CLI stream-json security compatibility tests
         run: node --test tests/security/stream-json-compat.test.mjs
+      - name: Storage product image RBAC contract
+        run: node --test tests/security/storage-product-image-rbac-contract.test.mjs
       - name: TypeScript
         run: npx tsc --noEmit
       - name: Hostly plan contract tests
