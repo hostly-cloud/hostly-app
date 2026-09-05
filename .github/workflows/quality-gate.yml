@@ -78,8 +78,8 @@ jobs:
         run: |
           npx tsx --test tests/lib/operational-rbac.test.ts
           npx firebase emulators:exec --only firestore --project demo-hostly-operational-rbac "node --import tsx --test tests/server/operational-rbac-rules.test.ts"
-      - name: Operational delay alert tests
-        run: npx tsx --test tests/lib/operational-delay-alerts.test.ts tests/lib/operational-alert-policy.test.ts
+      - name: Operational alert tests
+        run: npx tsx --test tests/lib/operational-delay-alerts.test.ts tests/lib/operational-alert-policy.test.ts tests/lib/operational-notifications.test.ts
       - name: Cash close contract tests
         run: npx tsx --test tests/lib/cash-close-contract.test.ts
       - name: Products control UX tests
