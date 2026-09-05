@@ -11,11 +11,25 @@ import {
   generateAndPersistSommelierSnapshot,
   loadPersistedSommelierSnapshot,
 } from "@/lib/server/sommelier/sommelier-pairing-engine";
-import type { SommelierApiResponse } from "@/lib/sommelier/sommelier-types";
+import type { SommelierApiResponse, SommelierSnapshot } from "@/lib/sommelier/sommelier-types";
 
 function error(status: number, code: string) {
   const body: SommelierApiResponse = { ok: false, error: code };
   return NextResponse.json(body, { status });
+}
+
+function lockedSnapshot(): SommelierSnapshot {
+  return {
+    catalogHash: "",
+    generatedAtMs: null,
+    generatedBy: null,
+    model: null,
+    source: null,
+    wines: [],
+    dishes: [],
+    pairings: [],
+    wineProfiles: {},
+  };
 }
 
 async function resolveAccess(req: Request) {
@@ -39,10 +53,12 @@ async function resolveAccess(req: Request) {
 export async function GET(req: Request) {
   const access = await resolveAccess(req);
   if ("response" in access) return access.response;
-  const snapshot = await loadPersistedSommelierSnapshot({
-    db: access.auth.db,
-    restaurantId: access.auth.restaurantId,
-  });
+  const snapshot = access.entitled
+    ? await loadPersistedSommelierSnapshot({
+        db: access.auth.db,
+        restaurantId: access.auth.restaurantId,
+      })
+    : lockedSnapshot();
   const body: SommelierApiResponse = {
     ok: true,
     effectivePlan: access.plan,
