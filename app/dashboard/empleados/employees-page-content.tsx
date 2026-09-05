@@ -47,6 +47,11 @@ function isManagedAdmin(role: unknown): boolean {
   return managedRoleValue(role) === "admin";
 }
 
+function userFacingError(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return fallback;
+}
+
 export default function EmpleadosPageContent({
   embedInConfig = false,
 }: {
@@ -57,21 +62,31 @@ export default function EmpleadosPageContent({
   const canManageUsers = can("users.manage");
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!isFirebaseConfigured || !restaurantId || !canManageUsers) {
       setRows([]);
+      setLoadError(null);
       setLoading(false);
       return;
     }
     setLoading(true);
+    setLoadError(null);
     try {
       const list = await requestManagedRestaurantUsers();
       setRows(list as UserRow[]);
-    } catch (e) {
-      console.error(e);
-      setRows([]);
+    } catch (error) {
+      console.error(error);
+      setLoadError(
+        userFacingError(
+          error,
+          "No se pudo cargar el equipo. Comprueba la conexión y vuelve a intentarlo.",
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -118,18 +133,46 @@ export default function EmpleadosPageContent({
   const onRemove = async (userId: string) => {
     if (!restaurantId) return;
     setRemovingId(userId);
+    setActionError(null);
     try {
       const row = rows.find((candidate) => candidate.id === userId);
       await requestManagedUserUpdate({
         userId,
         status: row?.status === "disabled" ? "active" : "disabled",
       });
-      const list = await requestManagedRestaurantUsers();
-      setRows(list as UserRow[]);
-    } catch (e) {
-      console.error(e);
+      await load();
+    } catch (error) {
+      console.error(error);
+      setActionError(
+        userFacingError(
+          error,
+          "No se pudo actualizar el acceso del empleado. Vuelve a intentarlo.",
+        ),
+      );
     } finally {
       setRemovingId(null);
+    }
+  };
+
+  const onRoleChange = async (row: UserRow, newRole: ManagedAssignableRole) => {
+    setUpdatingRoleId(row.id);
+    setActionError(null);
+    try {
+      await requestManagedUserUpdate({
+        userId: row.id,
+        role: newRole,
+      });
+      await load();
+    } catch (error) {
+      console.error(error);
+      setActionError(
+        userFacingError(
+          error,
+          "No se pudo cambiar el rol. El empleado conserva el rol anterior.",
+        ),
+      );
+    } finally {
+      setUpdatingRoleId(null);
     }
   };
 
@@ -161,6 +204,16 @@ export default function EmpleadosPageContent({
           </div>
         </header>
 
+        {actionError ? (
+          <div className="hostly-employees-state hostly-employees-state--warning" role="alert">
+            <strong>No se pudo completar el cambio</strong>
+            <span>{actionError}</span>
+            <HostlyButton variant="secondary" size="compact" onClick={() => setActionError(null)}>
+              Cerrar aviso
+            </HostlyButton>
+          </div>
+        ) : null}
+
         {!isFirebaseConfigured ? (
           <div className="hostly-employees-state hostly-employees-state--warning">
             Falta configuración de Firebase.
@@ -171,6 +224,14 @@ export default function EmpleadosPageContent({
           </div>
         ) : loading ? (
           <div className="hostly-employees-state">Cargando empleados…</div>
+        ) : loadError ? (
+          <div className="hostly-employees-state hostly-employees-state--warning" role="alert">
+            <strong>No se pudo cargar el equipo</strong>
+            <span>{loadError}</span>
+            <HostlyButton variant="secondary" size="compact" onClick={() => void load()}>
+              Reintentar
+            </HostlyButton>
+          </div>
         ) : rows.length === 0 ? (
           <div className="hostly-employees-state hostly-employees-state--empty">
             <strong>Tu equipo todavía está vacío</strong>
@@ -197,6 +258,7 @@ export default function EmpleadosPageContent({
                 const protectedAdmin = isManagedAdmin(row.role) && actorRole !== "owner";
                 const locked = isSelf || owner || protectedAdmin || Boolean(row.reviewRequired);
                 const actionBusy = removingId === row.id;
+                const roleBusy = updatingRoleId === row.id;
                 const enabling = row.status === "disabled";
                 return (
                   <article className="hostly-employees-row" key={row.id}>
@@ -229,16 +291,10 @@ export default function EmpleadosPageContent({
                       <span className="hostly-employees-mobile-label">Rol</span>
                       <select
                         value={managedRoleValue(row.role)}
-                        disabled={locked}
-                        onChange={(e) => {
-                          void (async () => {
-                            const newRole = e.target.value as ManagedAssignableRole;
-                            await requestManagedUserUpdate({
-                              userId: row.id,
-                              role: newRole,
-                            });
-                            await load();
-                          })();
+                        disabled={locked || roleBusy}
+                        onChange={(event) => {
+                          const newRole = event.target.value as ManagedAssignableRole;
+                          void onRoleChange(row, newRole);
                         }}
                         className="hostly-employees-role-select"
                         aria-label={`Rol de ${displayNombre(row)}`}
@@ -260,16 +316,18 @@ export default function EmpleadosPageContent({
                       <HostlyButton
                         variant={enabling ? "secondary" : "destructive"}
                         size="compact"
-                        disabled={actionBusy || locked}
+                        disabled={actionBusy || roleBusy || locked}
                         onClick={() => void onRemove(row.id)}
                         className="hostly-employees-access-btn"
                         data-state={enabling ? "enable" : "disable"}
                       >
                         {row.reviewRequired
                           ? "Revisión necesaria"
-                          : enabling
-                            ? "Activar"
-                            : "Desactivar"}
+                          : actionBusy
+                            ? "Guardando…"
+                            : enabling
+                              ? "Activar"
+                              : "Desactivar"}
                       </HostlyButton>
                     </div>
                   </article>
