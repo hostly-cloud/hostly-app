@@ -4,13 +4,15 @@ export type LandscapeElementKind =
   | "rectangularPlanter"
   | "roundPlanter"
   | "palm"
-  | "olive";
+  | "olive"
+  | "tree"
+  | "shrub"
+  | "hedge"
+  | "flowers"
+  | "rock"
+  | "fountain";
 
-export type ResizableLandscapeElementKind =
-  | "rectangularPlanter"
-  | "roundPlanter"
-  | "palm"
-  | "olive";
+export type ResizableLandscapeElementKind = LandscapeElementKind;
 
 export type LandscapeElement = {
   id: LandscapeElementId;
@@ -27,19 +29,19 @@ export type LandscapeElement = {
   updatedAt: number;
 };
 
-export type LandscapeElementDraft = Omit<
-  LandscapeElement,
-  "id" | "createdAt" | "updatedAt"
->;
+export type LandscapeElementDraft = Omit<LandscapeElement, "id" | "createdAt" | "updatedAt">;
 
-export const LANDSCAPE_ELEMENT_DEFAULT_SIZE: Record<
-  LandscapeElementKind,
-  { width: number; height: number }
-> = {
+export const LANDSCAPE_ELEMENT_DEFAULT_SIZE: Record<LandscapeElementKind, { width: number; height: number }> = {
   rectangularPlanter: { width: 152, height: 50 },
   roundPlanter: { width: 76, height: 76 },
   palm: { width: 88, height: 88 },
   olive: { width: 88, height: 84 },
+  tree: { width: 96, height: 96 },
+  shrub: { width: 76, height: 64 },
+  hedge: { width: 156, height: 48 },
+  flowers: { width: 104, height: 62 },
+  rock: { width: 82, height: 64 },
+  fountain: { width: 92, height: 92 },
 };
 
 const LANDSCAPE_ELEMENT_KINDS: readonly LandscapeElementKind[] = [
@@ -47,26 +49,20 @@ const LANDSCAPE_ELEMENT_KINDS: readonly LandscapeElementKind[] = [
   "roundPlanter",
   "palm",
   "olive",
+  "tree",
+  "shrub",
+  "hedge",
+  "flowers",
+  "rock",
+  "fountain",
 ] as const;
 
-export function isLandscapeElementKind(
-  value: unknown,
-): value is LandscapeElementKind {
-  return (
-    typeof value === "string" &&
-    (LANDSCAPE_ELEMENT_KINDS as readonly string[]).includes(value)
-  );
+export function isLandscapeElementKind(value: unknown): value is LandscapeElementKind {
+  return typeof value === "string" && (LANDSCAPE_ELEMENT_KINDS as readonly string[]).includes(value);
 }
 
-export function isResizableLandscapeElementKind(
-  value: LandscapeElementKind,
-): value is ResizableLandscapeElementKind {
-  return (
-    value === "rectangularPlanter" ||
-    value === "roundPlanter" ||
-    value === "palm" ||
-    value === "olive"
-  );
+export function isResizableLandscapeElementKind(value: LandscapeElementKind): value is ResizableLandscapeElementKind {
+  return (LANDSCAPE_ELEMENT_KINDS as readonly string[]).includes(value);
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -81,9 +77,7 @@ function booleanOrDefault(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
-export function createLandscapeElement(
-  draft: LandscapeElementDraft,
-): LandscapeElement {
+export function createLandscapeElement(draft: LandscapeElementDraft): LandscapeElement {
   const now = Date.now();
   return {
     id: `landscape-${now}-${Math.random().toString(36).slice(2, 9)}`,
@@ -94,27 +88,14 @@ export function createLandscapeElement(
   };
 }
 
-export function normalizeLandscapeElements(
-  elements: readonly unknown[],
-  validEspacioIds: ReadonlySet<string>,
-): LandscapeElement[] {
+export function normalizeLandscapeElements(elements: readonly unknown[], validEspacioIds: ReadonlySet<string>): LandscapeElement[] {
   const normalized: LandscapeElement[] = [];
-
   for (const raw of elements) {
     if (!isPlainObject(raw)) continue;
     const kind = raw.kind;
     const espacioId = raw.espacioId;
     const id = raw.id;
-
-    if (
-      typeof id !== "string" ||
-      typeof espacioId !== "string" ||
-      !validEspacioIds.has(espacioId) ||
-      !isLandscapeElementKind(kind)
-    ) {
-      continue;
-    }
-
+    if (typeof id !== "string" || typeof espacioId !== "string" || !validEspacioIds.has(espacioId) || !isLandscapeElementKind(kind)) continue;
     const defaultSize = LANDSCAPE_ELEMENT_DEFAULT_SIZE[kind];
     normalized.push({
       id,
@@ -131,6 +112,5 @@ export function normalizeLandscapeElements(
       updatedAt: numberOrDefault(raw.updatedAt, Date.now()),
     });
   }
-
   return normalized;
 }

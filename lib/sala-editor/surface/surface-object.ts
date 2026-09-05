@@ -11,10 +11,17 @@ export type SurfaceMaterialKind =
   | "tile"
   | "custom";
 
+export type SurfaceShapeKind = "rectangle" | "rounded" | "ellipse" | "organic";
+
+export const SALA_SURFACE_SHAPE_EVENT = "hostly:sala-surface-shape";
+export type SalaSurfaceShapeEventDetail = { shape: SurfaceShapeKind };
+
 export type SurfaceObject = {
   id: SurfaceObjectId;
   espacioId: string;
   material: SurfaceMaterialKind;
+  /** Opcional para compatibilidad con planos V2 ya guardados. */
+  shape?: SurfaceShapeKind;
   x: number;
   y: number;
   width: number;
@@ -29,6 +36,7 @@ export function createSurfaceObject(draft: SurfaceObjectDraft): SurfaceObject {
   return {
     id: `surface-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     ...draft,
+    shape: draft.shape ?? "rectangle",
   };
 }
 
@@ -38,16 +46,32 @@ function isFiniteNumber(value: unknown): value is number {
 
 function isSurfaceMaterialKind(value: unknown): value is SurfaceMaterialKind {
   return (
-    value === "wood" ||
-    value === "stone" ||
-    value === "grass" ||
-    value === "sand" ||
-    value === "water" ||
-    value === "deck" ||
-    value === "carpet" ||
-    value === "tile" ||
-    value === "custom"
+    value === "wood" || value === "stone" || value === "grass" || value === "sand" ||
+    value === "water" || value === "deck" || value === "carpet" || value === "tile" || value === "custom"
   );
+}
+
+function isSurfaceShapeKind(value: unknown): value is SurfaceShapeKind {
+  return value === "rectangle" || value === "rounded" || value === "ellipse" || value === "organic";
+}
+
+export function getSurfaceShapeStyle(shape: SurfaceShapeKind | null | undefined): {
+  borderRadius?: string;
+  clipPath?: string;
+} {
+  switch (shape) {
+    case "rounded":
+      return { borderRadius: "26px" };
+    case "ellipse":
+      return { borderRadius: "50%" };
+    case "organic":
+      return {
+        borderRadius: "43% 57% 61% 39% / 37% 44% 56% 63%",
+        clipPath: "polygon(7% 27%, 18% 9%, 43% 3%, 68% 10%, 91% 28%, 97% 54%, 87% 80%, 62% 95%, 33% 92%, 11% 75%, 3% 51%)",
+      };
+    default:
+      return {};
+  }
 }
 
 export function normalizeSurfaceObjects(
@@ -60,25 +84,18 @@ export function normalizeSurfaceObjects(
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
     const entry = raw as Partial<SurfaceObject>;
     if (typeof entry.id !== "string" || entry.id.trim() === "") continue;
-    if (typeof entry.espacioId !== "string" || !validEspacioIds.has(entry.espacioId)) {
-      continue;
-    }
+    if (typeof entry.espacioId !== "string" || !validEspacioIds.has(entry.espacioId)) continue;
     if (!isSurfaceMaterialKind(entry.material)) continue;
     if (
-      !isFiniteNumber(entry.x) ||
-      !isFiniteNumber(entry.y) ||
-      !isFiniteNumber(entry.width) ||
-      !isFiniteNumber(entry.height) ||
-      entry.width <= 0 ||
-      entry.height <= 0
-    ) {
-      continue;
-    }
+      !isFiniteNumber(entry.x) || !isFiniteNumber(entry.y) || !isFiniteNumber(entry.width) ||
+      !isFiniteNumber(entry.height) || entry.width <= 0 || entry.height <= 0
+    ) continue;
 
     normalized.push({
       id: entry.id,
       espacioId: entry.espacioId,
       material: entry.material,
+      shape: isSurfaceShapeKind(entry.shape) ? entry.shape : "rectangle",
       x: entry.x,
       y: entry.y,
       width: entry.width,

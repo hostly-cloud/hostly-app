@@ -9,7 +9,6 @@ import { TpvProductInfoPlanGuard } from "@/components/tpv/tpv-product-info-plan-
 import { useTableGroups } from "@/hooks/useTableGroups";
 import { preloadTpvEditorV2OperationalMap } from "@/lib/tpv/load-editor-v2-operational-map";
 import { OperacionModuleShell } from "../_components/operacion-module-shell";
-import { TpvEditorV2ReadyGate } from "./_components/tpv-editor-v2-ready-gate";
 import { TpvVoiceCommandButton } from "./_components/tpv-voice-command-button";
 import { TpvVoiceCommandRuntime } from "./_components/tpv-voice-command-runtime";
 import { TpvCustomerControl } from "./_components/tpv-customer-control";
@@ -45,9 +44,7 @@ export default function OperacionTpvPage() {
       <TpvProductInfoPlanGuard />
       <OperacionModuleShell title="TPV" hideTopBar={hideShellTopBar}>
         <ActiveOperatorGate>
-          <TpvEditorV2ReadyGate restaurantId={restaurantIdTrimmed}>
-            <CartaPageContent embeddedInOperacion tablesReadyToClose={tablesReadyToClose} groupedTablesMapHandlers={groupedTablesMapHandlers} onEmbeddedOperacionChromeChange={handleEmbeddedOperacionChromeChange} />
-          </TpvEditorV2ReadyGate>
+          <CartaPageContent embeddedInOperacion tablesReadyToClose={tablesReadyToClose} groupedTablesMapHandlers={groupedTablesMapHandlers} onEmbeddedOperacionChromeChange={handleEmbeddedOperacionChromeChange} />
         </ActiveOperatorGate>
       </OperacionModuleShell>
       <div className="hidden xl:block">
