@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
-import { generateImage, NoImageGeneratedError } from "ai";
+import { generateText } from "ai";
 import {
   buildPendingAutomaticProductImageEnrichment,
   canAutomaticallyReplaceProductImage,
@@ -338,9 +338,40 @@ function readGatewayCostUsd(value: unknown): number | undefined {
   return undefined;
 }
 
-async function generateImageWithAiGateway(
+type ProductImageGenerateTextRequest = {
+  model: string;
+  prompt: string;
+  maxRetries: number;
+  abortSignal: AbortSignal;
+  providerOptions: {
+    gateway: {
+      user: string;
+      tags: string[];
+      disallowPromptTraining: boolean;
+    };
+    google: {
+      responseModalities: string[];
+    };
+  };
+};
+
+type ProductImageGenerateTextResult = {
+  files: Array<{
+    mediaType: string;
+    uint8Array: Uint8Array;
+  }>;
+  providerMetadata?: unknown;
+};
+
+type ProductImageGenerateText = (
+  request: ProductImageGenerateTextRequest,
+) => Promise<ProductImageGenerateTextResult>;
+
+export async function generateImageWithAiGateway(
   prompt: string,
   userId: string,
+  generateTextForImage: ProductImageGenerateText = (request) =>
+    generateText(request),
 ): Promise<{
   bytes: Buffer;
   model: string;
@@ -350,11 +381,9 @@ async function generateImageWithAiGateway(
   const model = process.env.HOSTLY_AI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
 
   try {
-    const result = await generateImage({
+    const result = await generateTextForImage({
       model,
       prompt,
-      n: 1,
-      aspectRatio: "1:1",
       maxRetries: 1,
       abortSignal: AbortSignal.timeout(AI_IMAGE_TIMEOUT_MS),
       providerOptions: {
@@ -363,9 +392,22 @@ async function generateImageWithAiGateway(
           tags: ["feature:product-image", "review:required"],
           disallowPromptTraining: true,
         },
+        google: {
+          responseModalities: ["TEXT", "IMAGE"],
+        },
       },
     });
-    const mediaType = result.image.mediaType;
+    const image = result.files.find((file) =>
+      file.mediaType.startsWith("image/"),
+    );
+    if (!image) {
+      throw new GenerateImportedProductImageError(
+        "IMAGE_PROVIDER_EMPTY_RESPONSE",
+        "El proveedor no devolvió ninguna imagen",
+        502,
+      );
+    }
+    const mediaType = image.mediaType;
     if (
       mediaType !== "image/png" &&
       mediaType !== "image/jpeg" &&
@@ -377,7 +419,7 @@ async function generateImageWithAiGateway(
         502,
       );
     }
-    const bytes = Buffer.from(result.image.uint8Array);
+    const bytes = Buffer.from(image.uint8Array);
     if (bytes.length === 0 || bytes.length > MAX_GENERATED_IMAGE_BYTES) {
       throw new GenerateImportedProductImageError(
         "IMAGE_PROVIDER_INVALID_IMAGE",
@@ -424,9 +466,7 @@ async function generateImageWithAiGateway(
       );
     }
     throw new GenerateImportedProductImageError(
-      NoImageGeneratedError.isInstance(error)
-        ? "IMAGE_PROVIDER_EMPTY_RESPONSE"
-        : "IMAGE_PROVIDER_FAILED",
+      "IMAGE_PROVIDER_FAILED",
       "No se pudo generar la imagen",
       502,
     );
