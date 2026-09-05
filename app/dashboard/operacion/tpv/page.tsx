@@ -48,7 +48,9 @@ export default function OperacionTpvPage() {
           </TpvEditorV2ReadyGate>
         </ActiveOperatorGate>
       </OperacionModuleShell>
-      <TpvCustomerControl />
+      <div className="hidden xl:block">
+        <TpvCustomerControl />
+      </div>
       <TpvVoiceCommandRuntime />
       <TpvVoiceCommandButton />
     </ActiveOperatorProvider>
