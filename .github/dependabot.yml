@@ -1,5 +1,9 @@
 version: 2
 updates:
+  # Security-first policy: keep vulnerability remediation enabled without
+  # automatically opening routine major/minor/patch version-update PRs.
+  # GitHub documents open-pull-requests-limit: 0 as the way to disable
+  # version updates while allowing Dependabot security updates to continue.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -7,7 +11,7 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "Europe/Madrid"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "security"
@@ -19,7 +23,7 @@ updates:
       day: "monday"
       time: "06:15"
       timezone: "Europe/Madrid"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "security"
