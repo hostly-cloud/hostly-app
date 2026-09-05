@@ -57,6 +57,9 @@ jobs:
       - name: Public API surface audit
         run: node --test tests/security/public-api-surface.test.mjs
 
+      - name: Disaster recovery security boundary
+        run: node --test tests/security/disaster-recovery-boundary.test.mjs
+
       - name: Employee clocking QR security tests
         run: npx tsx --test tests/security/clocking-qr-route.test.ts
 
