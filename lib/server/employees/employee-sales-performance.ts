@@ -209,11 +209,12 @@ export async function saveEmployeeSalesGoal(input: {
   if (!employeeId) throw new EmployeeSalesPerformanceError("EMPLOYEE_ID_REQUIRED", 400);
   const range = parseMonth(input.month);
   const targetAmount = readGoalAmount(input.targetAmount);
-  const ref = input.db
-    .collection("restaurants")
-    .doc(input.restaurantId)
-    .collection("employeeSalesGoals")
-    .doc(`${employeeId}__${range.month}`);
+  const root = input.db.collection("restaurants").doc(input.restaurantId);
+  const employeeSnap = await root.collection("employees").doc(employeeId).get();
+  if (!employeeSnap.exists) {
+    throw new EmployeeSalesPerformanceError("EMPLOYEE_NOT_FOUND", 404);
+  }
+  const ref = root.collection("employeeSalesGoals").doc(`${employeeId}__${range.month}`);
 
   if (targetAmount == null) {
     await ref.delete();
