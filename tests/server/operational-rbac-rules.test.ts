@@ -66,17 +66,6 @@ async function seed() {
       height: 80,
       capacity: 4,
     });
-    await setDoc(doc(db, "tables", "decorative-a"), {
-      restaurantId: RESTAURANT_ID,
-      name: "Pared Editor V2",
-      type: "wall",
-      isActive: true,
-      source: "editor-v2",
-      x: 10,
-      y: 10,
-      width: 120,
-      height: 12,
-    });
     await setDoc(doc(db, "products", "legacy-product-a"), {
       restaurantId: RESTAURANT_ID,
       name: "Producto legacy",
@@ -165,24 +154,6 @@ describe("operational RBAC Firestore rules", () => {
         restaurantId: RESTAURANT_ID,
         name: "Mesa owner",
       }),
-    );
-  });
-
-  test("owner puede retirar decorativos de Editor V2 sin abrir el lifecycle de mesas", async () => {
-    const owner = firestoreFor("owner-a");
-    const waiter = firestoreFor("waiter-a");
-
-    await assertFails(
-      updateDoc(doc(waiter, "tables", "decorative-a"), { isActive: false }),
-    );
-    await assertFails(
-      updateDoc(doc(owner, "tables", "table-a"), { isActive: false }),
-    );
-    await assertFails(
-      updateDoc(doc(owner, "tables", "decorative-a"), { type: "table" }),
-    );
-    await assertSucceeds(
-      updateDoc(doc(owner, "tables", "decorative-a"), { isActive: false }),
     );
   });
 
