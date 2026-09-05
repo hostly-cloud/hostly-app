@@ -113,6 +113,10 @@ import {
   shouldFlushDraftBeforeBackToMap,
   shouldNavigateToMapAfterBackToMap,
 } from "@/lib/tpv/back-to-map-pending-draft";
+import {
+  buildDraftPersistRequestKey,
+  nextDraftPersistRevision,
+} from "@/lib/tpv/draft-persist-request-key";
 import { syncOrderItemsViaApi } from "@/lib/firestore/sync-order-items-via-api";
 import {
   autoCloseTableViaApi,
@@ -2813,6 +2817,10 @@ export function CartaPageContent({
   const draftPersistChainByTableRef = useRef<
     Record<string, Promise<string | undefined | void>>
   >({});
+  const draftPersistRevisionByTableRef = useRef<Record<string, number>>({});
+  const draftPersistSessionIdRef = useRef(
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+  );
   const backToMapFlushGuardRef = useRef(createBackToMapFlushGuard());
   /** Evita que el listener realtime pise comensales durante persistGuestCount. */
   const guestCountPersistRef = useRef<{
@@ -3056,7 +3064,11 @@ export function CartaPageContent({
   }, [comandaLineEditorId]);
 
   const flushPersistDraftOrderForTable = useCallback(
-    async (tableId: string, lines: CartOrderLine[]): Promise<string | undefined> => {
+    async (
+      tableId: string,
+      lines: CartOrderLine[],
+      revision: number,
+    ): Promise<string | undefined> => {
       if (!restaurantId || !isFirebaseConfigured) return;
       const tid = tableId.trim();
       if (!tid) return;
@@ -3088,6 +3100,12 @@ export function CartaPageContent({
           items,
           total: Number.isFinite(grandTotal) ? grandTotal : 0,
           existingOrderId: knownId,
+          idempotencyKey: buildDraftPersistRequestKey({
+            tableId: tid,
+            orderId: knownId,
+            sessionId: draftPersistSessionIdRef.current,
+            revision,
+          }),
           operatorAssignment: knownId
             ? null
             : resolveOperatorAssignmentForNewOrder(
@@ -3123,26 +3141,26 @@ export function CartaPageContent({
   }, []);
 
   const enqueueDraftPersistFlushForTable = useCallback(
-    (tableId: string, lines: CartOrderLine[]) => {
+    (tableId: string, lines: CartOrderLine[], revision: number) => {
       const tid = tableId.trim();
       if (!tid) return;
       const tail =
         draftPersistChainByTableRef.current[tid] ?? Promise.resolve();
       draftPersistChainByTableRef.current[tid] = tail
         .catch(() => undefined)
-        .then(() => flushPersistDraftOrderForTable(tid, lines));
+        .then(() => flushPersistDraftOrderForTable(tid, lines, revision));
     },
     [flushPersistDraftOrderForTable],
   );
 
   const schedulePersistDraftOrderForTable = useCallback(
-    (tableId: string, lines: CartOrderLine[]) => {
+    (tableId: string, lines: CartOrderLine[], revision: number) => {
       const tid = tableId.trim();
       if (!tid) return;
       cancelDraftPersistDebounceForTable(tid);
       draftPersistDebounceByTableRef.current[tid] = window.setTimeout(() => {
         draftPersistDebounceByTableRef.current[tid] = undefined;
-        enqueueDraftPersistFlushForTable(tid, lines);
+        enqueueDraftPersistFlushForTable(tid, lines, revision);
       }, 380) as number;
     },
     [cancelDraftPersistDebounceForTable, enqueueDraftPersistFlushForTable],
@@ -3174,11 +3192,23 @@ export function CartaPageContent({
           const isShrink =
             activeLineCount(nextOrder) < activeLineCount(cur) ||
             unitCount(nextOrder) < unitCount(cur);
+          const revision = nextDraftPersistRevision(
+            draftPersistRevisionByTableRef.current[selectedTableId],
+          );
+          draftPersistRevisionByTableRef.current[selectedTableId] = revision;
           if (isShrink) {
             cancelDraftPersistDebounceForTable(selectedTableId);
-            enqueueDraftPersistFlushForTable(selectedTableId, nextOrder);
+            enqueueDraftPersistFlushForTable(
+              selectedTableId,
+              nextOrder,
+              revision,
+            );
           } else {
-            schedulePersistDraftOrderForTable(selectedTableId, nextOrder);
+            schedulePersistDraftOrderForTable(
+              selectedTableId,
+              nextOrder,
+              revision,
+            );
           }
         }
         return { ...prev, [selectedTableId]: nextOrder };
@@ -7485,7 +7515,11 @@ export function CartaPageContent({
           const linesToFlush =
             ordersByTableRef.current[tid] ?? orderRef.current ?? [];
           try {
-            enqueueDraftPersistFlushForTable(tid, linesToFlush);
+            enqueueDraftPersistFlushForTable(
+              tid,
+              linesToFlush,
+              draftPersistRevisionByTableRef.current[tid] ?? 0,
+            );
             const orderId = await (draftPersistChainByTableRef.current[tid] ??
               Promise.resolve(undefined));
             const ackOk =

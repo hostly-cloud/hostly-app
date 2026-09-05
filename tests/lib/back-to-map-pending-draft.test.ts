@@ -244,6 +244,7 @@ describe("handleBackToMap structural — no perder pending", () => {
     assert.match(src, /shouldFlushDraftBeforeBackToMap/);
     assert.match(src, /await \(draftPersistChainByTableRef\.current\[tid\]/);
     assert.match(src, /isValidPersistDraftAck/);
+    assert.match(src, /draftPersistRevisionByTableRef\.current\[tid\] \?\? 0/);
   });
 
   test("17. no navega si el flush falla (ACK real)", () => {
