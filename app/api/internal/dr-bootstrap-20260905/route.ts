@@ -40,6 +40,17 @@ async function gcpJson(path: string, init?: RequestInit) {
   return body;
 }
 
+async function storageStatus() {
+  const bucket = getHostlyStorageBucket();
+  if (!bucket) throw new Error("FIREBASE_STORAGE_NOT_CONFIGURED");
+  const [metadata] = await bucket.getMetadata();
+  return {
+    name: metadata.name,
+    location: metadata.location,
+    softDeletePolicy: metadata.softDeletePolicy ?? null,
+  };
+}
+
 export async function GET(req: Request) {
   if (!authorized(req)) return new NextResponse(null, { status: 404 });
   try {
@@ -48,8 +59,27 @@ export async function GET(req: Request) {
     const parent = `projects/${projectId}/databases/(default)`;
     const op = new URL(req.url).searchParams.get("op") || "status";
 
+    if (op === "storage-status") {
+      return NextResponse.json({ ok: true, storage: await storageStatus() }, {
+        headers: { "Cache-Control": "no-store, max-age=0" },
+      });
+    }
+
+    if (op === "storage-enable") {
+      const bucket = getHostlyStorageBucket();
+      if (!bucket) throw new Error("FIREBASE_STORAGE_NOT_CONFIGURED");
+      const before = await storageStatus();
+      const currentSeconds = Number((before.softDeletePolicy as { retentionDurationSeconds?: string | number } | null)?.retentionDurationSeconds ?? 0);
+      if (!Number.isFinite(currentSeconds) || currentSeconds < 1209600) {
+        await bucket.setMetadata({ softDeletePolicy: { retentionDurationSeconds: 1209600 } } as never);
+      }
+      return NextResponse.json({ ok: true, before, storage: await storageStatus() }, {
+        headers: { "Cache-Control": "no-store, max-age=0" },
+      });
+    }
+
     if (op === "enable") {
-      await gcpJson(`${parent}?updateMask=pointInTimeRecoveryEnablement&updateMask=deleteProtectionState`, {
+      await gcpJson(`${parent}?updateMask=pointInTimeRecoveryEnablement,deleteProtectionState`, {
         method: "PATCH",
         body: JSON.stringify({
           pointInTimeRecoveryEnablement: "POINT_IN_TIME_RECOVERY_ENABLED",
@@ -71,22 +101,11 @@ export async function GET(req: Request) {
           body: JSON.stringify({ retention: "8467200s", weeklyRecurrence: { day: "SUNDAY" } }),
         });
       }
-
-      const bucket = getHostlyStorageBucket();
-      if (!bucket) throw new Error("FIREBASE_STORAGE_NOT_CONFIGURED");
-      await bucket.setMetadata({ softDeletePolicy: { retentionDurationSeconds: 1209600 } } as never);
     }
 
     const database = await gcpJson(parent);
     const backupSchedules = await gcpJson(`${parent}/backupSchedules`);
-    const bucket = getHostlyStorageBucket();
-    const storage = bucket ? await bucket.getMetadata().then(([metadata]) => ({
-      name: metadata.name,
-      location: metadata.location,
-      softDeletePolicy: metadata.softDeletePolicy ?? null,
-    })) : null;
-
-    return NextResponse.json({ ok: true, op, database, backupSchedules, storage }, {
+    return NextResponse.json({ ok: true, op, database, backupSchedules, storage: await storageStatus() }, {
       headers: { "Cache-Control": "no-store, max-age=0" },
     });
   } catch (error) {
