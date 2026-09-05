@@ -12,6 +12,12 @@ export default function EmpleadosPage() {
           Terminal de fichaje
         </Link>
         <Link
+          href="/dashboard/empleados/rendimiento"
+          className="hostly-button-secondary hostly-button-compact"
+        >
+          Rendimiento
+        </Link>
+        <Link
           href="/dashboard/empleados/operaciones"
           className="hostly-button-primary hostly-button-compact"
         >
