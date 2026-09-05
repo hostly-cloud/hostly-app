@@ -1,6 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["cdg1"],
+  "env": {
+    "HOSTLY_AI_IMAGE_MODEL": "google/gemini-2.5-flash-image"
+  },
   "functions": {
     "app/api/queues/catalog-image-bulk/route.ts": {
       "experimentalTriggers": [
