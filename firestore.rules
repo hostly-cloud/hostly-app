@@ -1187,8 +1187,10 @@ service cloud.firestore {
       allow read: if sameRestaurant(resource.data.restaurantId);
       allow create: if sameRestaurant(request.resource.data.restaurantId)
         && canManageSettings();
-      allow update: if isAllowedTableClientUpdate()
-        || isAllowedDecorativeDeactivation();
+      // Evalúa primero la excepción estrecha del editor: una retirada decorativa
+      // válida no debe pagar también el coste del validador operativo completo.
+      allow update: if isAllowedDecorativeDeactivation()
+        || isAllowedTableClientUpdate();
       allow delete: if false;
     }
 
