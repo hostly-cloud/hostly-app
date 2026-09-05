@@ -103,9 +103,7 @@ function candidateBrandMatches(
   context: HostlyCatalogProductMatchContext,
   candidate: CatalogProductImageCandidate,
 ): boolean {
-  const expected = normalizeCatalogMatchText(
-    context.brand ?? context.name,
-  );
+  const expected = normalizeCatalogMatchText(context.brand ?? context.name);
   const actual = normalizeCatalogMatchText(candidate.brand ?? "");
   if (!actual || !expected) return false;
   return expected.includes(actual) || actual.includes(expected);
@@ -147,6 +145,23 @@ function addQueryPart(parts: string[], value: string | null | undefined): void {
   parts.push(part);
 }
 
+function addQuantityQueryPart(
+  parts: string[],
+  value: string | null | undefined,
+): void {
+  const part = value?.trim();
+  if (!part) return;
+  const requestedTokens = quantityTokens(part);
+  const currentTokens = quantityTokens(parts.join(" "));
+  if (
+    requestedTokens.length > 0 &&
+    requestedTokens.some((token) => currentTokens.includes(token))
+  ) {
+    return;
+  }
+  addQueryPart(parts, part);
+}
+
 export function buildCatalogSearchQueries(
   context: HostlyCatalogProductMatchContext,
   requestedQuery: string,
@@ -154,7 +169,7 @@ export function buildCatalogSearchQueries(
   const fallback = (requestedQuery.trim() || context.name.trim()).slice(0, 160);
   const preciseParts = [fallback];
   addQueryPart(preciseParts, context.brand);
-  addQueryPart(preciseParts, context.quantity);
+  addQuantityQueryPart(preciseParts, context.quantity);
   const precise = preciseParts.join(" ").trim().slice(0, 160);
 
   return [...new Set([precise, fallback].filter((value) => value.length >= 2))];
