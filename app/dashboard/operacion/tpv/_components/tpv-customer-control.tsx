@@ -72,7 +72,7 @@ export function TpvCustomerControl() {
       <HostlyButton
         variant="secondary"
         size="compact"
-        className="fixed bottom-[88px] right-4 z-[70] shadow-lg"
+        className="fixed right-4 bottom-[96px] z-[70] shadow-lg"
         onClick={() => setOpen(true)}
         aria-label="Identificar cliente de la mesa"
       >

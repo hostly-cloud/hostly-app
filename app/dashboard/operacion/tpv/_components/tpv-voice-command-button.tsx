@@ -464,7 +464,7 @@ export function TpvVoiceCommandButton() {
         </div>
       ) : null}
 
-      <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] left-4 z-[70] sm:left-6">
+      <div className="fixed right-4 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-[70] sm:right-6">
         {listening ? (
           <span
             aria-hidden
@@ -481,16 +481,16 @@ export function TpvVoiceCommandButton() {
           onClick={toggleVoiceCommand}
           data-hostly-tpv-voice-trigger
           data-recording={listening ? "true" : "false"}
-          className={`relative inline-flex size-[4.5rem] min-h-[4.5rem] min-w-[4.5rem] items-center justify-center rounded-full border-[3px] p-0 text-white transition-all duration-150 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 ${
+          className={`relative inline-flex size-16 min-h-16 min-w-16 items-center justify-center rounded-full border-[3px] p-0 text-white transition-all duration-150 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 ${
             listening
               ? "border-white bg-red-600 shadow-[0_0_0_5px_rgba(248,113,113,0.28),0_12px_32px_rgba(127,29,29,0.36)] hover:bg-red-600"
               : "border-white/90 bg-[var(--hostly-navy-deep)] shadow-[0_12px_32px_rgba(11,42,65,0.34)] hover:scale-[1.03] hover:bg-[var(--hostly-navy-mid)] focus-visible:outline-[var(--hostly-accent)]"
           }`}
         >
           {listening ? (
-            <Square aria-hidden size={28} strokeWidth={0} fill="currentColor" className="rounded-[3px]" />
+            <Square aria-hidden size={26} strokeWidth={0} fill="currentColor" className="rounded-[3px]" />
           ) : (
-            <Mic aria-hidden size={30} strokeWidth={2.4} />
+            <Mic aria-hidden size={28} strokeWidth={2.4} />
           )}
           <span
             aria-hidden
