@@ -34,6 +34,23 @@ export async function POST(req: Request) {
   const interval = normalizeHostlyBillingInterval(body.interval);
   if (!plan || !interval) return jsonError(400, "INVALID_SUBSCRIPTION_SELECTION");
 
+  const restaurantSnap = await authCtx.db
+    .collection("restaurants")
+    .doc(authCtx.restaurantId)
+    .get();
+  const restaurant = restaurantSnap.data() as Record<string, unknown> | undefined;
+  const subscription =
+    restaurant?.subscription && typeof restaurant.subscription === "object"
+      ? (restaurant.subscription as Record<string, unknown>)
+      : null;
+  const linkedSubscriptionId =
+    typeof subscription?.stripeSubscriptionId === "string"
+      ? subscription.stripeSubscriptionId.trim()
+      : "";
+  if (linkedSubscriptionId) {
+    return jsonError(409, "STRIPE_SUBSCRIPTION_ALREADY_LINKED");
+  }
+
   try {
     const session = await createHostlyCheckoutSession({
       restaurantId: authCtx.restaurantId,
