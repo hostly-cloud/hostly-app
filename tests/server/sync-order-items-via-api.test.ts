@@ -242,6 +242,37 @@ describe("syncOrderItemsViaApi draft persist filters non-pending", () => {
     assert.deepEqual(receivedLineIds, ["pend-1"]);
   });
 
+  test("persist_items reenvía la clave de idempotencia del intento lógico", async () => {
+    let receivedKey: string | undefined;
+    const result = await syncOrderItemsViaApi(
+      {
+        operation: "persist_items",
+        orderId: "order-oscillation",
+        idempotencyKey: "persist-draft:mesa-11:order-oscillation:session-a:3",
+        items: [
+          { id: "pend-1", productId: "p1", quantity: 1, status: "pending" },
+        ],
+      },
+      {
+        upsertSaleLinesViaApi: async (params) => {
+          receivedKey = params.idempotencyKey;
+          return {
+            ok: true,
+            orderId: "order-oscillation",
+            total: 10,
+            inventoryWarnings: [],
+          };
+        },
+      },
+    );
+
+    assertSuccessResult(result);
+    assert.equal(
+      receivedKey,
+      "persist-draft:mesa-11:order-oscillation:session-a:3",
+    );
+  });
+
   test("persist_items solo enviadas es no-op sin llamar upsert", async () => {
     let upsertCalls = 0;
     const result = await syncOrderItemsViaApi(

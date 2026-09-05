@@ -13,6 +13,7 @@ import type { TableOperatorAssignment } from "@/lib/tpv/table-operator-assignmen
 export type SyncOrderItemsViaApiParams = {
   operation: TpvOrderItemsOperation;
   orderId?: string | null;
+  idempotencyKey?: string;
   tableId?: string;
   tableLabel?: string;
   items: Record<string, unknown>[];
@@ -81,11 +82,13 @@ export async function syncOrderItemsViaApi(
       lines,
       markSent: params.markSent,
       operatorAssignment: params.operatorAssignment,
-      idempotencyKey: createOpenSyncIdempotencyKey({
-        tableId,
-        markSent,
-        lines,
-      }),
+      idempotencyKey:
+        params.idempotencyKey?.trim() ||
+        createOpenSyncIdempotencyKey({
+          tableId,
+          markSent,
+          lines,
+        }),
     });
     return result.ok
       ? result
@@ -129,6 +132,7 @@ export async function syncOrderItemsViaApi(
     orderId,
     lines,
     markSent,
+    idempotencyKey: params.idempotencyKey?.trim() || undefined,
   });
   return result.ok
     ? result

@@ -11,6 +11,8 @@ export type PersistOpenOrderForTableParams = {
   total: number;
   /** Si existe, solo actualiza campos de borrador sin tocar `status` (p. ej. sigue `sent` tras Comanda). */
   existingOrderId: string | null;
+  /** Identifica un intento lógico concreto; puede repetirse al reintentar el mismo flush. */
+  idempotencyKey?: string;
   /** Solo en alta nueva: primera asignación de operador TPV. */
   operatorAssignment?: Pick<
     TableOperatorAssignment,
@@ -32,6 +34,7 @@ export async function persistOpenOrderForTable(
     tableLabel,
     items,
     existingOrderId,
+    idempotencyKey,
     operatorAssignment,
   } = params;
   const tid = tableId.trim();
@@ -39,6 +42,7 @@ export async function persistOpenOrderForTable(
   const result = await syncOrderItemsViaApi({
     operation: existingOrderId?.trim() ? "persist_items" : "create_open",
     orderId: existingOrderId,
+    idempotencyKey,
     tableId: tid,
     tableLabel,
     items,
