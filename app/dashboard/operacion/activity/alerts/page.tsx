@@ -8,6 +8,12 @@ import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import { authenticatedApiFetch } from "@/lib/auth/authenticated-api-fetch";
 import type { OperationalDelayAlert } from "@/lib/operations/operational-delay-alerts";
 import type { OperationalAlertPolicy } from "@/lib/operations/operational-alert-policy";
+import {
+  activateOperationalPush,
+  deactivateOperationalPush,
+  readOperationalPushStatus,
+  type OperationalPushStatus,
+} from "@/lib/operations/operational-push-client";
 
 type IncidentStatus = "open" | "acknowledged" | "snoozed" | "resolved" | "auto_resolved";
 
@@ -26,11 +32,20 @@ type Incident = {
   updatedAtMs: number;
 };
 
+type NotificationProviders = {
+  push: boolean;
+  email: boolean;
+  whatsapp: false;
+  sms: false;
+  vapidKeyConfigured: boolean;
+};
+
 type CenterPayload = {
   ok: true;
   policy: OperationalAlertPolicy;
   alerts: CenterAlert[];
   history: Incident[];
+  notificationProviders: NotificationProviders;
 };
 
 const STATION_LABELS = {
@@ -60,10 +75,16 @@ function statusLabel(status: IncidentStatus) {
   return "Abierta";
 }
 
+function channelState(enabled: boolean, available: boolean) {
+  if (!available) return "Proveedor pendiente";
+  return enabled ? "Activo" : "Desactivado";
+}
+
 export default function OperationalAlertCenterPage() {
   const { can } = useHostlyCapabilities();
   const [payload, setPayload] = useState<CenterPayload | null>(null);
   const [draft, setDraft] = useState<OperationalAlertPolicy | null>(null);
+  const [pushStatus, setPushStatus] = useState<OperationalPushStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canManageSettings = can("settings.manage");
@@ -80,11 +101,20 @@ export default function OperationalAlertCenterPage() {
     setError(null);
   }, []);
 
+  const refreshPushStatus = useCallback(async () => {
+    try {
+      setPushStatus(await readOperationalPushStatus());
+    } catch {
+      setPushStatus(null);
+    }
+  }, []);
+
   useEffect(() => {
     void refresh();
+    void refreshPushStatus();
     const interval = window.setInterval(() => void refresh(), 15_000);
     return () => window.clearInterval(interval);
-  }, [refresh]);
+  }, [refresh, refreshPushStatus]);
 
   const criticalCount = useMemo(
     () => payload?.alerts.filter((alert) => alert.level === "critical").length ?? 0,
@@ -121,8 +151,18 @@ export default function OperationalAlertCenterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "updateSettings", policy: draft }),
       });
-      if (!response.ok) throw new Error("No se pudo guardar la configuración");
-      setPayload((current) => current ? { ...current, policy: draft } : current);
+      const data = await response.json().catch(() => null) as {
+        ok?: boolean;
+        policy?: OperationalAlertPolicy;
+        notificationProviders?: NotificationProviders;
+      } | null;
+      if (!response.ok || data?.ok !== true || !data.policy) throw new Error("No se pudo guardar la configuración");
+      setDraft(data.policy);
+      setPayload((current) => current ? {
+        ...current,
+        policy: data.policy!,
+        notificationProviders: data.notificationProviders ?? current.notificationProviders,
+      } : current);
       setError(null);
     } catch (settingsError) {
       setError(settingsError instanceof Error ? settingsError.message : "No se pudo guardar la configuración");
@@ -130,6 +170,32 @@ export default function OperationalAlertCenterPage() {
       setBusy(null);
     }
   }, [draft]);
+
+  const togglePushDevice = useCallback(async () => {
+    setBusy("push-device");
+    try {
+      if (pushStatus?.subscribed) await deactivateOperationalPush();
+      else await activateOperationalPush();
+      await refreshPushStatus();
+      setError(null);
+    } catch (pushError) {
+      setError(pushError instanceof Error ? pushError.message : "No se pudo actualizar la notificación de este dispositivo");
+    } finally {
+      setBusy(null);
+    }
+  }, [pushStatus?.subscribed, refreshPushStatus]);
+
+  const setChannel = useCallback((channel: "push" | "email", enabled: boolean) => {
+    setDraft((current) => current ? {
+      ...current,
+      notificationChannels: {
+        ...current.notificationChannels,
+        [channel]: enabled,
+      },
+    } : current);
+  }, []);
+
+  const providers = payload?.notificationProviders;
 
   return (
     <ModulePageShell title="Centro de operaciones" subtitle="Retrasos, mesas prolongadas, escalados e historial del servicio" maxWidth={1280} compactLayout operationalFocus shellSurface="configLight">
@@ -174,9 +240,33 @@ export default function OperationalAlertCenterPage() {
           </div>
         </section>
 
+        <section className="rounded-2xl border border-blue-200 bg-blue-50/30 p-4 shadow-sm" aria-label="Notificaciones operativas">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-950">Avisos fuera de Hostly</h2>
+              <p className="text-sm font-medium text-slate-600">Las alertas cambian de etapa una sola vez: Atención, Crítica y Escalada. Hostly evita envíos duplicados.</p>
+            </div>
+            <HostlyButton
+              variant={pushStatus?.subscribed ? "secondary" : "primary"}
+              size="compact"
+              onClick={() => void togglePushDevice()}
+              disabled={busy !== null || pushStatus?.supported !== true || pushStatus?.providerReady !== true}
+            >
+              {pushStatus?.subscribed ? "Desactivar push en este dispositivo" : "Activar push en este dispositivo"}
+            </HostlyButton>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs font-extrabold uppercase tracking-wide text-slate-500">Push</p><p className="mt-1 text-sm font-bold text-slate-900">{channelState(payload?.policy.notificationChannels.push === true, providers?.push === true)}</p><p className="mt-1 text-xs font-semibold text-slate-500">{pushStatus?.subscribed ? "Este dispositivo está registrado." : pushStatus?.supported === false ? "No disponible en este navegador." : "Actívalo en cada móvil, tablet o equipo que deba recibir avisos."}</p></div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs font-extrabold uppercase tracking-wide text-slate-500">Email</p><p className="mt-1 text-sm font-bold text-slate-900">{channelState(payload?.policy.notificationChannels.email === true, providers?.email === true)}</p><p className="mt-1 text-xs font-semibold text-slate-500">Se envía únicamente a responsables activos con permiso de supervisión.</p></div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs font-extrabold uppercase tracking-wide text-slate-500">WhatsApp</p><p className="mt-1 text-sm font-bold text-slate-900">Proveedor pendiente</p><p className="mt-1 text-xs font-semibold text-slate-500">No se activa hasta disponer de proveedor, consentimiento y política comercial.</p></div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs font-extrabold uppercase tracking-wide text-slate-500">SMS</p><p className="mt-1 text-sm font-bold text-slate-900">Proveedor pendiente</p><p className="mt-1 text-xs font-semibold text-slate-500">No se activa hasta disponer de proveedor, consentimiento y política comercial.</p></div>
+          </div>
+          {pushStatus?.permission === "denied" && <p className="mt-3 text-xs font-bold text-red-700">El navegador tiene bloqueadas las notificaciones. Debes habilitarlas para hostlyapp.app desde los permisos del navegador.</p>}
+        </section>
+
         {canManageSettings && draft && (
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Configuración de alertas">
-            <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-extrabold text-slate-950">Tiempos de alerta</h2><p className="text-sm font-medium text-slate-600">Configura Atención, Crítico y minutos adicionales hasta Escalado.</p></div><HostlyButton variant="primary" size="compact" onClick={() => void saveSettings()} disabled={busy !== null}>Guardar</HostlyButton></div>
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-extrabold text-slate-950">Tiempos y canales</h2><p className="text-sm font-medium text-slate-600">Configura Atención, Crítico, Escalado y qué canales reales puede usar el restaurante.</p></div><HostlyButton variant="primary" size="compact" onClick={() => void saveSettings()} disabled={busy !== null}>Guardar</HostlyButton></div>
             <div className="mt-4 grid gap-3 lg:grid-cols-4">
               {(Object.keys(STATION_LABELS) as Array<keyof typeof STATION_LABELS>).map((station) => {
                 const stationPolicy = draft.stations[station];
@@ -201,7 +291,16 @@ export default function OperationalAlertCenterPage() {
                 <p className="mt-2 text-[11px] font-semibold text-slate-500">Cuenta desde la primera línea realmente enviada; un borrador del TPV no inicia el reloj.</p>
               </fieldset>
             </div>
-            <p className="mt-3 text-xs font-semibold text-slate-500">Canales externos preparados: push, email, WhatsApp y SMS permanecen desactivados hasta conectar proveedores y política comercial.</p>
+            <fieldset className="mt-4 rounded-xl border border-slate-200 p-3">
+              <legend className="px-1 text-sm font-extrabold text-slate-950">Canales externos</legend>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                <label className="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800"><input type="checkbox" checked={draft.notificationChannels.push} disabled={providers?.push !== true} onChange={(event) => setChannel("push", event.target.checked)} />Push</label>
+                <label className="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800"><input type="checkbox" checked={draft.notificationChannels.email} disabled={providers?.email !== true} onChange={(event) => setChannel("email", event.target.checked)} />Email</label>
+                <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-500"><span>WhatsApp</span><span className="text-[11px] uppercase">Pendiente</span></div>
+                <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-500"><span>SMS</span><span className="text-[11px] uppercase">Pendiente</span></div>
+              </div>
+              <p className="mt-2 text-xs font-semibold text-slate-500">Hostly solo permite guardar canales cuyo proveedor está configurado. WhatsApp y SMS permanecen bloqueados de forma segura.</p>
+            </fieldset>
           </section>
         )}
 
