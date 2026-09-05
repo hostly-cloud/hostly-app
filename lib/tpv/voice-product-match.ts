@@ -251,28 +251,21 @@ function bestNameWindowScore(query: string, candidate: string): number {
   return best;
 }
 
-function hasSharedPrefixConflict(query: string, productName: string): boolean {
+function hasSharedPrefixConflict(query: string, candidateContext: string): boolean {
   const queryTokens = catalogIdentityTokens(query);
-  const productTokens = catalogIdentityTokens(productName);
-  if (queryTokens.length < 2 || productTokens.length < 2) return false;
-
-  const shared = queryTokens.filter((token) => productTokens.includes(token));
+  const candidateTokens = catalogIdentityTokens(candidateContext);
+  if (queryTokens.length < 2 || candidateTokens.length < 2) return false;
+  const shared = queryTokens.filter((token) => candidateTokens.includes(token));
   if (shared.length === 0) return false;
-
-  const queryRemainder = queryTokens.filter((token) => !productTokens.includes(token));
-  const productRemainder = productTokens.filter((token) => !queryTokens.includes(token));
-  if (queryRemainder.length === 0 || productRemainder.length === 0) return false;
-
+  const queryRemainder = queryTokens.filter((token) => !candidateTokens.includes(token));
+  const candidateRemainder = candidateTokens.filter((token) => !queryTokens.includes(token));
+  if (queryRemainder.length === 0 || candidateRemainder.length === 0) return false;
   let bestRemainderSimilarity = 0;
   for (const queryToken of queryRemainder) {
-    for (const productToken of productRemainder) {
-      bestRemainderSimilarity = Math.max(
-        bestRemainderSimilarity,
-        tokenSimilarity(queryToken, productToken),
-      );
+    for (const candidateToken of candidateRemainder) {
+      bestRemainderSimilarity = Math.max(bestRemainderSimilarity, tokenSimilarity(queryToken, candidateToken));
     }
   }
-
   return bestRemainderSimilarity < 0.58;
 }
 
@@ -326,7 +319,8 @@ function scoreProduct(
   if (variant.matchedBy === "service_alias" && bestScore >= PRODUCT_MATCH_MIN_SCORE) matchedBy = "service_alias";
 
   let finalScore = applyVariantPreference(bestScore, variant.value, product);
-  if (matchedBy !== "service_alias" && hasSharedPrefixConflict(variant.value, product.nombre)) {
+  const conflictContext = [product.nombre, category, family].filter(Boolean).join(" ");
+  if (matchedBy !== "service_alias" && hasSharedPrefixConflict(variant.value, conflictContext)) {
     finalScore = Math.min(finalScore, PRODUCT_MATCH_MIN_SCORE - 0.01);
   }
   return { product, score: finalScore, matchedBy };
