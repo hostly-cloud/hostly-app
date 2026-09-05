@@ -1,0 +1,35 @@
+name: One-shot Sommelier lint fix
+on:
+  push:
+    branches:
+      - fix/final-hardening-2026-09-05-v2
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/final-hardening-2026-09-05-v2
+      - name: Apply exact prefer-const fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lib/server/sommelier/sommelier-pairing-engine.ts')
+          text = path.read_text()
+          old = '  let wineProfiles: Record<string, SommelierWineProfile> = {};'
+          new = '  const wineProfiles: Record<string, SommelierWineProfile> = {};'
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one target, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit exact change
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add lib/server/sommelier/sommelier-pairing-engine.ts
+          git diff --cached --exit-code && exit 1 || true
+          git commit -m "fix(sommelier): satisfy prefer-const"
+          git push origin HEAD:fix/final-hardening-2026-09-05-v2
