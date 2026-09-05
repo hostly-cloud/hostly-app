@@ -57,6 +57,14 @@
         { "fieldPath": "restaurantId", "order": "ASCENDING" },
         { "fieldPath": "billingCustomerId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "fiscalInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "restaurantId", "order": "ASCENDING" },
+        { "fieldPath": "issuedAtMs", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

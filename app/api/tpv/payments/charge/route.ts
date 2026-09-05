@@ -10,6 +10,7 @@ import {
   tpvMutationJsonOk,
   isTpvMutationError,
 } from "@/lib/server/tpv/tpv-mutation-response";
+import { enqueueFiscalRecord } from "@/lib/server/fiscal/fiscal-outbox-queue";
 
 export async function POST(req: Request) {
   const authCtx = await requireAuthenticatedRestaurant(req);
@@ -23,5 +24,13 @@ export async function POST(req: Request) {
 
   const result = await handleChargeOrder(authCtx, parsed);
   if (isTpvMutationError(result)) return tpvMutationJsonError(result);
+  if (result.fiscal) {
+    await enqueueFiscalRecord(result.fiscal.recordId).catch((error) => {
+      console.error("[fiscal-outbox] initial enqueue failed", {
+        recordId: result.fiscal?.recordId,
+        code: error instanceof Error ? error.name : "UNKNOWN_ERROR",
+      });
+    });
+  }
   return tpvMutationJsonOk(result);
 }

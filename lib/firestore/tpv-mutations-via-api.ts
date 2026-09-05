@@ -1,4 +1,5 @@
 import { authenticatedApiFetch } from "@/lib/auth/authenticated-api-fetch";
+import type { FiscalEmissionSummary } from "@/lib/server/fiscal/issue-fiscal-invoice";
 import type { ModifierStockConsumptionWarning } from "@/lib/inventory/stock-movement-types";
 import type { PaymentInvoiceIntent, SaleLineIntent } from "@/lib/server/tpv/tpv-mutation-dtos";
 import type { TableOperatorAssignment } from "@/lib/tpv/table-operator-assignment";
@@ -312,7 +313,13 @@ export async function chargeOrderViaApi(params: {
   invoice?: PaymentInvoiceIntent;
   waiterId?: string;
   waiterEmail?: string;
-}): Promise<{ ok: true; paymentId: string; amount: number; remainingAfterPayment: number } | ApiFail> {
+}): Promise<{
+  ok: true;
+  paymentId: string;
+  amount: number;
+  remainingAfterPayment: number;
+  fiscal: FiscalEmissionSummary | null;
+} | ApiFail> {
   const response = await authenticatedApiFetch("/api/tpv/payments/charge", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -336,6 +343,7 @@ export async function chargeOrderViaApi(params: {
     paymentId: string;
     amount: number;
     remainingAfterPayment: number;
+    fiscal: FiscalEmissionSummary | null;
   }>(response);
   if (!parsed.ok || !parsed.paymentId) return parsed.ok ? { ok: false, error: "CHARGE_FAILED" } : parsed;
   return {
@@ -343,6 +351,7 @@ export async function chargeOrderViaApi(params: {
     paymentId: parsed.paymentId,
     amount: Number(parsed.amount) || 0,
     remainingAfterPayment: Number(parsed.remainingAfterPayment) || 0,
+    fiscal: parsed.fiscal ?? null,
   };
 }
 

@@ -46,6 +46,10 @@ function mapAdminProductDoc(docId: string, data: Record<string, unknown>): Produ
           ? data.categoria.trim()
           : null,
     price: readFiniteNumber(data.price) ?? readFiniteNumber(data.precio),
+    vatRateBps:
+      typeof data.vatRateBps === "number" && Number.isInteger(data.vatRateBps)
+        ? data.vatRateBps
+        : null,
     active: data.active !== false,
     station:
       typeof data.station === "string" && data.station.trim()

@@ -8,12 +8,21 @@
     {
       "path": "/api/cron/operational-alert-notifications",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/fiscal-outbox-recovery",
+      "schedule": "* * * * *"
     }
   ],
   "functions": {
     "app/api/queues/catalog-image-bulk/route.ts": {
       "experimentalTriggers": [
         { "type": "queue/v2beta", "topic": "catalog-image-bulk" }
+      ]
+    },
+    "app/api/queues/fiscal-aeat-submit/route.ts": {
+      "experimentalTriggers": [
+        { "type": "queue/v2beta", "topic": "fiscal-aeat-submit" }
       ]
     }
   }
