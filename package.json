@@ -40,7 +40,7 @@
     "firebase-admin": "^14.3.0",
     "geist": "1.7.2",
     "jspdf": "^4.2.1",
-    "lucide-react": "^0.468.0",
+    "lucide-react": "^1.39.0",
     "next": "16.3.4",
     "pdf-parse": "^2.4.5",
     "qrcode-generator": "2.0.4",
