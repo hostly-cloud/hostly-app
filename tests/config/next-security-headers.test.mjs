@@ -42,6 +42,16 @@ test("all Hostly routes receive conservative production security headers", async
   // Hostly can legitimately use camera and same-origin microphone input for
   // operational workflows, while cross-origin microphone access stays blocked.
   assert.doesNotMatch(permissions, /camera=\(\)/);
+
+  const csp = headers.get("content-security-policy-report-only") ?? "";
+  assert.match(csp, /default-src 'self'/);
+  assert.match(csp, /base-uri 'self'/);
+  assert.match(csp, /object-src 'none'/);
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /form-action 'self'/);
+  assert.match(csp, /connect-src 'self'/);
+  assert.match(csp, /frame-src 'self'/);
+  assert.doesNotMatch(csp, /default-src \*/);
 });
 
 test("Hostly does not opt every route into cross-origin API access", async () => {
