@@ -138,12 +138,14 @@ export function useSalaWallDrawing({
     }
 
     if (payload.target.type === "wall-move") {
-      const wall = wallsInEspacio.find((item) => item.id === payload.target.wallId) ?? null;
+      const target = payload.target;
+      const wall = wallsInEspacio.find((item) => item.id === target.wallId) ?? null;
       if (wall) { startEditSession(wall, "move", point); return; }
     }
     if (payload.target.type === "wall-endpoint") {
-      const wall = wallsInEspacio.find((item) => item.id === payload.target.wallId) ?? null;
-      if (wall) { startEditSession(wall, "resize", point, payload.target.endpoint); return; }
+      const target = payload.target;
+      const wall = wallsInEspacio.find((item) => item.id === target.wallId) ?? null;
+      if (wall) { startEditSession(wall, "resize", point, target.endpoint); return; }
     }
     const hitWall = resolveTargetWall(point, payload.target);
     if (hitWall) { setSelectedWallId(hitWall.id); return; }
