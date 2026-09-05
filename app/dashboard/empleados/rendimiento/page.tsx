@@ -149,10 +149,10 @@ export default function EmployeeSalesPerformancePage() {
 
         {snapshot ? (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <HostlyKpiCard label="Ventas del mes" value={formatEur(snapshot.totalSalesAmount)} />
-            <HostlyKpiCard label="Tickets cobrados" value={String(snapshot.totalTicketCount)} />
-            <HostlyKpiCard label="Ticket medio" value={formatEur(snapshot.averageTicket)} />
-            <HostlyKpiCard label="Objetivos cumplidos" value={`${achievedCount}/${targetRows.length}`} />
+            <HostlyKpiCard title="Ventas del mes" value={formatEur(snapshot.totalSalesAmount)} />
+            <HostlyKpiCard title="Tickets cobrados" value={String(snapshot.totalTicketCount)} />
+            <HostlyKpiCard title="Ticket medio" value={formatEur(snapshot.averageTicket)} />
+            <HostlyKpiCard title="Objetivos cumplidos" value={`${achievedCount}/${targetRows.length}`} />
           </div>
         ) : null}
 
@@ -162,7 +162,7 @@ export default function EmployeeSalesPerformancePage() {
           </div>
         ) : null}
 
-        <HostlySurface className="overflow-hidden p-0">
+        <HostlySurface variant="ice" className="overflow-hidden p-0">
           {loading ? (
             <div className="p-6 text-sm font-semibold text-slate-600">Cargando rendimiento…</div>
           ) : rows.length === 0 ? (
