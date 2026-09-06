@@ -130,7 +130,11 @@ export async function publishPosMigration(params: {
     if (item.decision === "review" && !confirmedReviews.has(item.id)) return false;
     return Boolean(item.name);
   });
-  const skippedItemIds = allItems.filter((item) => !selectedItems.some((selected) => selected.id === item.id)).map((item) => item.id);
+  const selectedItemIds = new Set(selectedItems.map((item) => item.id));
+  const skippedItemIds = allItems.filter((item) => !selectedItemIds.has(item.id)).map((item) => item.id);
+
+  const createdCategoryIds: string[] = [];
+  const createdProductIds: string[] = [];
 
   try {
     const [existingProducts, existingCategories] = await Promise.all([
@@ -139,7 +143,6 @@ export async function publishPosMigration(params: {
     ]);
     const existingProductNames = new Set(existingProducts.map((product) => normalizeProductName(product.name)).filter(Boolean));
     const categoryByName = new Map(existingCategories.map((category) => [normalizeCategory(category.name), category]));
-    const createdCategoryIds: string[] = [];
     const createdCategoryRefs = new Map<string, { id: string; name: string }>();
     let nextSortOrder = existingCategories.reduce((max, category) => Math.max(max, category.sortOrder), -1) + 1;
 
@@ -153,7 +156,7 @@ export async function publishPosMigration(params: {
       }
       const ref = params.db.collection("restaurantes").doc(restaurantId).collection("cartaCategorias").doc();
       const nowIso = new Date().toISOString();
-      const payload = {
+      await ref.set({
         restaurantId,
         name: categoryName,
         normalizedName: key,
@@ -166,9 +169,13 @@ export async function publishPosMigration(params: {
         createdAt: nowIso,
         updatedAt: nowIso,
         createdBy: params.userId,
-      };
-      await ref.set(payload);
+      });
       createdCategoryIds.push(ref.id);
+      await migrationRef.update({
+        createdCategoryIds: [...createdCategoryIds],
+        updatedAt: Date.now(),
+        updatedBy: params.userId,
+      });
       createdCategoryRefs.set(key, { id: ref.id, name: categoryName });
       nextSortOrder += 1;
     }
@@ -187,50 +194,62 @@ export async function publishPosMigration(params: {
       const station = normalizeStation(item.station);
       const inventoryEnabled = item.stock != null || item.cost != null;
       const now = Date.now();
-      const data: Record<string, unknown> = {
-        restaurantId,
-        name: item.name,
-        normalizedName,
-        categoryId: category?.id ?? null,
-        categoryName: category?.name ?? item.category ?? null,
-        price: item.price,
-        active: item.active,
-        visibleOnMenu: true,
-        ...(station ? { station } : {}),
-        inventory: {
-          enabled: inventoryEnabled,
-          unit: item.unit,
-          currentStock: item.stock ?? 0,
-          minStock: 0,
-          costPerUnit: item.cost ?? 0,
+      productWrites.push({
+        id: productRef.id,
+        itemId: item.id,
+        data: {
+          restaurantId,
+          name: item.name,
+          normalizedName,
+          categoryId: category?.id ?? null,
+          categoryName: category?.name ?? item.category ?? null,
+          price: item.price,
+          active: item.active,
+          visibleOnMenu: true,
+          ...(station ? { station } : {}),
+          inventory: {
+            enabled: inventoryEnabled,
+            unit: item.unit,
+            currentStock: item.stock ?? 0,
+            minStock: 0,
+            costPerUnit: item.cost ?? 0,
+          },
+          recipe: { enabled: false, ingredients: [] },
+          importedFromPosMigrationId: migrationId,
+          importedPosMigrationItemId: item.id,
+          importedAt: now,
+          importedBy: params.userId,
+          source: "pos_migration",
+          createdAt: now,
+          updatedAt: now,
         },
-        recipe: { enabled: false, ingredients: [] },
-        importedFromPosMigrationId: migrationId,
-        importedPosMigrationItemId: item.id,
-        importedAt: now,
-        importedBy: params.userId,
-        source: "pos_migration",
-        createdAt: now,
-        updatedAt: now,
-      };
-      productWrites.push({ id: productRef.id, data, itemId: item.id });
+      });
     }
 
     for (let offset = 0; offset < productWrites.length; offset += WRITE_CHUNK_SIZE) {
+      const chunk = productWrites.slice(offset, offset + WRITE_CHUNK_SIZE);
       const batch = params.db.batch();
-      for (const write of productWrites.slice(offset, offset + WRITE_CHUNK_SIZE)) {
+      const publishedAt = Date.now();
+      for (const write of chunk) {
         const ref = params.db.collection("restaurants").doc(restaurantId).collection("products").doc(write.id);
         batch.set(ref, write.data);
         batch.update(migrationRef.collection("items").doc(write.itemId), {
           publishStatus: "published",
           publishedProductId: write.id,
-          publishedAt: Date.now(),
+          publishedAt,
         });
       }
       await batch.commit();
+      createdProductIds.push(...chunk.map((write) => write.id));
+      await migrationRef.update({
+        createdProductIds: [...createdProductIds],
+        createdCategoryIds: [...createdCategoryIds],
+        skippedItemIds,
+        updatedAt: Date.now(),
+        updatedBy: params.userId,
+      });
     }
 
-    const createdProductIds = productWrites.map((write) => write.id);
     await migrationRef.update({
       status: "published",
       publishInProgress: false,
@@ -252,7 +271,16 @@ export async function publishPosMigration(params: {
       skippedItemIds,
     };
   } catch (error) {
-    await migrationRef.update({ publishInProgress: false, updatedAt: Date.now(), updatedBy: params.userId }).catch(() => undefined);
+    await migrationRef.update({
+      status: "failed",
+      publishInProgress: false,
+      createdProductIds,
+      createdCategoryIds,
+      skippedItemIds,
+      failedAt: Date.now(),
+      updatedAt: Date.now(),
+      updatedBy: params.userId,
+    }).catch(() => undefined);
     throw error;
   }
 }
