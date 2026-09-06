@@ -44,6 +44,10 @@ export const CONFIG_NAV_GROUPS: ConfigNavGroup[] = [
         href: "/dashboard/configuracion/carta/importacion",
         label: "IA / Importación",
       },
+      {
+        href: "/dashboard/configuracion/carta/migracion-tpv",
+        label: "Migrar desde otro TPV",
+      },
     ],
   },
   {
