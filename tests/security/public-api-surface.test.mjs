@@ -11,6 +11,7 @@ const EXPLICIT_ROUTE_CLASSIFICATION = new Map([
   ["app/api/marketing/leads/route.ts", "public-rate-limited"],
   ["app/api/employees/clocking/qr/route.ts", "public-tokenized"],
   ["app/api/operations/notifications/service-worker/route.ts", "public-static-firebase-config"],
+  ["app/api/operations/automations/route.ts", "authenticated-tenant"],
   ["app/api/tpv/orders/sync-items/route.ts", "retired-410"],
   ["app/api/debug/firebase/route.ts", "production-disabled"],
   ["app/api/queues/catalog-image-bulk/route.ts", "signed-callback"],
