@@ -5,6 +5,7 @@ import type {
   FiscalOperatingMode,
   FiscalSeries,
 } from "@/lib/fiscal/model";
+import { assertFiscalLiveWindowOpen } from "@/lib/fiscal/live-activation-policy";
 import { assertValidSpanishTaxId } from "@/lib/fiscal/nif";
 import {
   currentResponsibleDeclaration,
@@ -186,6 +187,7 @@ export function assertFiscalConfigurationCanActivate(
     .filter((check) => !check.ready && (requestedMode === "live" || check.key !== "declaration"))
     .map((check) => check.key);
   if (missing.length) throw new Error(`FISCAL_CONFIGURATION_INCOMPLETE:${missing.join(",")}`);
+  if (requestedMode === "live") assertFiscalLiveWindowOpen();
   if (requestedMode === "live" && process.env.HOSTLY_FISCAL_LIVE_ACTIVATION_ENABLED !== "true") {
     throw new Error("FISCAL_LIVE_ACTIVATION_DISABLED");
   }
