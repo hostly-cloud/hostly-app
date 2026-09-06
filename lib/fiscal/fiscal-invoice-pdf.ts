@@ -56,18 +56,33 @@ export function generateFiscalInvoicePdf(input: {
   const doc = new jsPDF({ unit: "mm", format: thermal ? [width, estimatedHeight] : "a4", compress: true });
   const margin = thermal ? 4 : 16;
   const contentWidth = width - margin * 2;
+  const pageHeight = thermal ? estimatedHeight : 297;
+  const bottomMargin = thermal ? margin : 16;
   let y = margin;
   const lineHeight = thermal ? 3.7 : 4.6;
+
+  const ensureSpace = (heightMm: number) => {
+    if (!thermal && y + heightMm > pageHeight - bottomMargin) {
+      doc.addPage();
+      y = margin;
+    }
+  };
   const write = (value: string, options?: { size?: number; bold?: boolean; align?: "left" | "center" | "right" }) => {
     const size = options?.size ?? (thermal ? 7.5 : 9.5);
     doc.setFont("helvetica", options?.bold ? "bold" : "normal");
     doc.setFontSize(size);
     const lines = doc.splitTextToSize(value, contentWidth);
+    ensureSpace(lines.length * lineHeight);
     const x = options?.align === "center" ? width / 2 : options?.align === "right" ? width - margin : margin;
     doc.text(lines, x, y, { align: options?.align ?? "left" });
     y += lines.length * lineHeight;
   };
-  const rule = () => { doc.setDrawColor(150); doc.line(margin, y, width - margin, y); y += 3; };
+  const rule = () => {
+    ensureSpace(3);
+    doc.setDrawColor(150);
+    doc.line(margin, y, width - margin, y);
+    y += 3;
+  };
 
   if (input.invoice.mode === "test") {
     write("DOCUMENTO DE PRUEBA — SIN VALIDEZ FISCAL", { bold: true, align: "center", size: thermal ? 7 : 10 });
@@ -80,6 +95,7 @@ export function generateFiscalInvoicePdf(input: {
   const qrSize = FISCAL_PDF_QR_SIZE_MM;
   const qrX = (width - qrSize) / 2;
   write(AEAT_QR_SPECIFICATION.leadingText, { align: "center", bold: true, size: thermal ? 7 : 8 });
+  ensureSpace(qrSize + 3);
   doc.addImage(qrDataUrl(input.invoice.qrUrl), "GIF", qrX, y, qrSize, qrSize);
   y += qrSize + 3;
   write(AEAT_QR_SPECIFICATION.verifactuText, { align: "center", bold: true, size: thermal ? 6.5 : 8 });
