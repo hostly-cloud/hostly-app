@@ -30,7 +30,7 @@ export async function GET(req: Request) {
 
   const restaurantSnap = await authCtx.db.collection("restaurants").doc(authCtx.restaurantId).get();
   const plan = resolveHostlyPlanFromRestaurant((restaurantSnap.data() ?? null) as Record<string, unknown> | null).effectivePlan;
-  const entitled = hasHostlyPlanEntitlement(plan, "operations.managerAutomations");
+  const entitled = hasHostlyPlanEntitlement(plan, "ai.managerAnalytics");
   if (!entitled) {
     return NextResponse.json({
       ok: true,
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
 
   const restaurantSnap = await authCtx.db.collection("restaurants").doc(authCtx.restaurantId).get();
   const plan = resolveHostlyPlanFromRestaurant((restaurantSnap.data() ?? null) as Record<string, unknown> | null).effectivePlan;
-  if (!hasHostlyPlanEntitlement(plan, "operations.managerAutomations")) {
+  if (!hasHostlyPlanEntitlement(plan, "ai.managerAnalytics")) {
     return jsonError(403, "MANAGER_AUTOMATIONS_PLAN_REQUIRED");
   }
 
