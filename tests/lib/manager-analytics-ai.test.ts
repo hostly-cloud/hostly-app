@@ -55,5 +55,7 @@ test("heuristic manager report prioritizes verified operational pressure", () =>
   assert.equal(report.signals.some((signal) => signal.key === "pending_items"), true);
   assert.equal(report.signals.some((signal) => signal.key === "ready_items"), true);
   assert.equal(report.actions.some((action) => action.priority === "high"), true);
-  assert.match(report.summary, /7\.500,00/);
+  assert.match(report.summary, /Hostly registra/);
+  assert.match(report.summary, /100 cobros/);
+  assert.match(report.summary, /40 reservas/);
 });
