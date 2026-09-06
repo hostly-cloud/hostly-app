@@ -17,30 +17,17 @@ test("global subscription access resolves the canonical plan and entitlements", 
     "catalog.image.ai.bulk",
     "catalog.image.catalogSearch",
     "tpv.productInfo.gastronomy",
+    "ai.managerAnalytics",
     "ai.sommelierPairing",
     "migration.products",
     "migration.full",
   ]);
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "catalog.image.ai.bulk"),
-    true,
-  );
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "tpv.productInfo.gastronomy"),
-    true,
-  );
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "ai.sommelierPairing"),
-    true,
-  );
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "migration.products"),
-    true,
-  );
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "migration.full"),
-    true,
-  );
+  assert.equal(subscriptionAccessHasEntitlement(access, "catalog.image.ai.bulk"), true);
+  assert.equal(subscriptionAccessHasEntitlement(access, "tpv.productInfo.gastronomy"), true);
+  assert.equal(subscriptionAccessHasEntitlement(access, "ai.managerAnalytics"), true);
+  assert.equal(subscriptionAccessHasEntitlement(access, "ai.sommelierPairing"), true);
+  assert.equal(subscriptionAccessHasEntitlement(access, "migration.products"), true);
+  assert.equal(subscriptionAccessHasEntitlement(access, "migration.full"), true);
 });
 
 test("global subscription access preserves the Pro compatibility fallback", () => {
@@ -52,24 +39,14 @@ test("global subscription access preserves the Pro compatibility fallback", () =
     "catalog.image.ai.single",
     "catalog.image.catalogSearch",
     "tpv.productInfo.gastronomy",
+    "ai.managerAnalytics",
     "migration.products",
   ]);
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "tpv.productInfo.gastronomy"),
-    true,
-  );
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "ai.sommelierPairing"),
-    false,
-  );
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "migration.products"),
-    true,
-  );
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "migration.full"),
-    false,
-  );
+  assert.equal(subscriptionAccessHasEntitlement(access, "tpv.productInfo.gastronomy"), true);
+  assert.equal(subscriptionAccessHasEntitlement(access, "ai.managerAnalytics"), true);
+  assert.equal(subscriptionAccessHasEntitlement(access, "ai.sommelierPairing"), false);
+  assert.equal(subscriptionAccessHasEntitlement(access, "migration.products"), true);
+  assert.equal(subscriptionAccessHasEntitlement(access, "migration.full"), false);
 });
 
 test("Basic exposes no confirmed commercial entitlements", () => {
@@ -79,26 +56,12 @@ test("Basic exposes no confirmed commercial entitlements", () => {
 
   assert.equal(access.effectivePlan, "basic");
   assert.deepEqual(access.entitlements, []);
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "catalog.image.ai.single"),
-    false,
-  );
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "tpv.productInfo.gastronomy"),
-    false,
-  );
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "ai.sommelierPairing"),
-    false,
-  );
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "migration.products"),
-    false,
-  );
-  assert.equal(
-    subscriptionAccessHasEntitlement(access, "migration.full"),
-    false,
-  );
+  assert.equal(subscriptionAccessHasEntitlement(access, "catalog.image.ai.single"), false);
+  assert.equal(subscriptionAccessHasEntitlement(access, "tpv.productInfo.gastronomy"), false);
+  assert.equal(subscriptionAccessHasEntitlement(access, "ai.managerAnalytics"), false);
+  assert.equal(subscriptionAccessHasEntitlement(access, "ai.sommelierPairing"), false);
+  assert.equal(subscriptionAccessHasEntitlement(access, "migration.products"), false);
+  assert.equal(subscriptionAccessHasEntitlement(access, "migration.full"), false);
 });
 
 test("subscription.plan remains authoritative over legacy aliases", () => {
