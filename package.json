@@ -36,6 +36,7 @@
     "admin:catalog-image-credits": "tsx scripts/administer-catalog-image-credits.ts",
     "admin:fiscal-credential": "tsx scripts/administer-fiscal-credential.ts",
     "admin:fiscal-preflight": "tsx scripts/fiscal-go-live-preflight.ts",
+    "admin:fiscal-fleet-readiness": "tsx scripts/fiscal-fleet-readiness.ts",
     "eval:menu-import": "tsx scripts/eval-menu-import-corpus.ts",
     "eval:menu-import:v2": "tsx scripts/eval-menu-import-corpus.ts --shadow-v2 --skip-baseline-check",
     "eval:menu-import:modern": "tsx scripts/eval-menu-import-modern.ts",
