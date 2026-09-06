@@ -1,3 +1,4 @@
+import { createSecureContext } from "node:tls";
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 
 export type FiscalCertificateMaterial = {
@@ -16,6 +17,14 @@ function secretManagerClient(): SecretManagerServiceClient {
     });
   }
   return new SecretManagerServiceClient();
+}
+
+export function assertValidFiscalCertificateMaterial(material: FiscalCertificateMaterial): void {
+  try {
+    createSecureContext({ pfx: material.pfx, passphrase: material.passphrase, minVersion: "TLSv1.2" });
+  } catch {
+    throw new Error("FISCAL_CERTIFICATE_PKCS12_INVALID");
+  }
 }
 
 export async function readFiscalCertificateSecret(
@@ -45,5 +54,7 @@ export async function readFiscalCertificateSecret(
   }
   const pfx = Buffer.from(pfxBase64, "base64");
   if (pfx.length < 64 || pfx.length > 3_000_000) throw new Error("FISCAL_CERTIFICATE_PFX_INVALID");
-  return { pfx, passphrase };
+  const material = { pfx, passphrase };
+  assertValidFiscalCertificateMaterial(material);
+  return material;
 }
