@@ -30,6 +30,8 @@ const FIELD_LABELS: Record<string, string> = {
   active: "Activo",
 };
 
+const SUPPORTED_VENDOR_LABELS = ["Revo", "Glop", "Last.app", "FrontRest", "Ágora", "Square", "Lightspeed"];
+
 function money(value: number | null): string {
   return value == null ? "—" : `${value.toFixed(2)} €`;
 }
@@ -128,6 +130,9 @@ export function PosMigrationPageContent() {
               <p className="mt-1 text-xs text-[var(--hostly-ink-muted)]">
                 CSV, TSV o TXT. Detectamos producto, categoría, PVP, IVA, coste, stock, unidad y destino.
               </p>
+              <p className="mt-1 text-[11px] text-[var(--hostly-ink-soft)]">
+                Adaptadores actuales: {SUPPORTED_VENDOR_LABELS.join(" · ")} · otros formatos usan el motor universal.
+              </p>
             </div>
             <label className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[var(--hostly-radius-button)] border border-[var(--hostly-line-strong)] bg-white px-4 text-sm font-semibold text-[var(--hostly-navy-deep)]">
               {busy === "preview" ? "Analizando…" : "Elegir exportación"}
@@ -158,6 +163,17 @@ export function PosMigrationPageContent() {
                 title="2. Revisión automática"
                 description={`${preview.sourceFileName} · todavía no se ha escrito nada en Productos.`}
               />
+              <HostlySurface variant="flat" className="p-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-semibold text-[var(--hostly-navy-deep)]">TPV detectado:</span>
+                  <span>{preview.sourceVendorLabel}</span>
+                  {preview.sourceVendor !== "generic" ? (
+                    <span className="text-[var(--hostly-ink-muted)]">({Math.round(preview.sourceVendorConfidence * 100)} % de confianza)</span>
+                  ) : (
+                    <span className="text-[var(--hostly-ink-muted)]">· parser universal</span>
+                  )}
+                </div>
+              </HostlySurface>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <HostlyKpiCard title="Filas" value={preview.summary.rowCount} variant="ice" />
                 <HostlyKpiCard title="Listas" value={preview.summary.createCount} variant="soft" />
