@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Boxes, ChefHat, Layers3, Table2, type LucideIcon } from "lucide-react";
+import { BellRing, Boxes, ChefHat, Layers3, Table2, type LucideIcon } from "lucide-react";
 import { ConfigModulePageHeader } from "../_components/config-module-page-header";
 
 type OperationShortcut = {
@@ -27,6 +27,12 @@ const OPERATION_SHORTCUTS: OperationShortcut[] = [
     description: "Gestiona mesas y entra al editor visual del plano.",
     href: "/dashboard/configuracion/espacios/mesas",
     Icon: Table2,
+  },
+  {
+    title: "Comunicaciones",
+    description: "Decide quién recibe alertas operativas por push y email.",
+    href: "/dashboard/configuracion/operacion/comunicaciones",
+    Icon: BellRing,
   },
   {
     title: "Editor de mapas V2",
