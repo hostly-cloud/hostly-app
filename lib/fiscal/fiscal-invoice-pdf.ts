@@ -9,6 +9,8 @@ type FiscalPdfInvoice = {
   issueDate: string;
   issuedAtMs: number;
   qrUrl: string;
+  originalInvoiceNumber?: string | null;
+  rectificationReason?: string | null;
   issuerSnapshot: { legalName: string; nif: string; address: { line1: string; postalCode: string; city: string; province: string; countryCode: string } };
   establishmentSnapshot?: { name?: string; address?: { line1?: string } } | null;
   customerSnapshot?: { legalName: string; nif: string; address: { line1: string; postalCode: string; city: string; province: string; countryCode: string }; email?: string | null } | null;
@@ -47,11 +49,15 @@ export function generateFiscalInvoicePdf(input: {
   paper?: FiscalPdfPaper;
   duplicate?: boolean;
 }): Buffer {
+  if ((input.invoice.documentKind === "rectification" || input.invoice.documentKind === "replacement") && !input.invoice.originalInvoiceNumber?.trim()) {
+    throw new Error("FISCAL_ORIGINAL_INVOICE_NUMBER_REQUIRED");
+  }
+
   const paper = input.paper ?? "a4";
   const thermal = paper !== "a4";
   const width = paper === "58mm" ? 58 : paper === "80mm" ? 80 : 210;
   const estimatedHeight = thermal
-    ? Math.max(160, 112 + input.invoice.linesSnapshot.length * 8 + input.invoice.taxBreakdown.length * 8)
+    ? Math.max(160, 120 + input.invoice.linesSnapshot.length * 8 + input.invoice.taxBreakdown.length * 8)
     : 297;
   const doc = new jsPDF({ unit: "mm", format: thermal ? [width, estimatedHeight] : "a4", compress: true });
   const margin = thermal ? 4 : 16;
@@ -105,6 +111,12 @@ export function generateFiscalInvoicePdf(input: {
   if (input.duplicate) write("DUPLICADO", { bold: true, align: "center", size: thermal ? 8 : 11 });
   write(input.invoice.invoiceNumber, { bold: true, align: "center", size: thermal ? 9 : 12 });
   write(`Fecha: ${input.invoice.issueDate}`, { align: thermal ? "center" : "left" });
+  if (input.invoice.documentKind === "rectification") {
+    write(`Factura rectificada: ${input.invoice.originalInvoiceNumber}`, { bold: true });
+    write(`Rectificación: ${input.invoice.rectificationReason?.trim() || "Rectificación de importes de la factura original"}`);
+  } else if (input.invoice.documentKind === "replacement") {
+    write(`Factura simplificada sustituida: ${input.invoice.originalInvoiceNumber}`, { bold: true });
+  }
   rule();
 
   write(input.invoice.issuerSnapshot.legalName, { bold: true });
