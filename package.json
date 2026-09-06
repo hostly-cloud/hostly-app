@@ -2,6 +2,15 @@
   "name": "hostly-app",
   "version": "0.1.0",
   "private": true,
+  "allowScripts": {
+    "@firebase/util@1.15.1": true,
+    "core-js@3.49.0": true,
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true,
+    "protobufjs@7.6.5": true,
+    "re2@1.26.1": true,
+    "unrs-resolver@1.11.1": true
+  },
   "scripts": {
     "dev": "next dev --webpack --hostname 0.0.0.0 --port 3000",
     "build": "next build",
@@ -11,6 +20,9 @@
     "test:tpv-server": "firebase emulators:exec --only firestore --project demo-hostly-tpv-mutations \"tsx --test tests/server/tpv-mutations-emulator.test.ts\" && firebase emulators:exec --only firestore --project demo-hostly-tpv-table-lock \"tsx --test tests/server/tpv-table-order-lock-emulator.test.ts\" && firebase emulators:exec --only firestore --project demo-hostly-tpv-release-fx \"tsx --test tests/server/tpv-release-effects-emulator.test.ts\"",
     "test:catalog-images-server": "tsx --test tests/lib/catalog-image-bulk.test.ts tests/server/catalog-image-bulk-job.test.ts tests/server/catalog-image-bulk-queue.test.ts tests/server/catalog-image-bulk-request.test.ts tests/server/catalog-image-bulk-review.test.ts tests/server/catalog-image-bulk-telemetry.test.ts && firebase emulators:exec --only firestore --project demo-hostly-catalog-image-controls \"node --import tsx --test tests/server/catalog-image-bulk-control-emulator.test.ts\"",
     "test:tpv-unit": "tsx --test tests/server/tpv-mutations.test.ts tests/server/tpv-mutations-via-api.test.ts tests/server/sync-order-items-via-api.test.ts tests/server/tpv-table-order-lock.test.ts tests/carta/release-effects-exactly-once.test.ts tests/lib/back-to-map-pending-draft.test.ts tests/lib/recipe-stock-server.test.ts tests/lib/table-group-line-origin.test.ts tests/lib/table-group-topology.test.ts tests/lib/table-group-split-partition.test.ts tests/lib/comanda-pass-sequencing.test.ts tests/lib/tpv-voice-command.test.ts tests/lib/tpv-voice-table-match.test.ts tests/lib/tpv-voice-product-match.test.ts tests/lib/tpv-voice-language.test.ts tests/lib/tpv-voice-send-confirmation.test.ts && npm run test:pos-migration",
+    "test:fiscal": "node --import tsx --test tests/fiscal/*.test.ts",
+    "test:fiscal-xsd": "node --import tsx --test tests/fiscal-xsd/*.test.ts",
+    "test:fiscal-server": "firebase emulators:exec --only firestore --project demo-hostly-fiscal \"node --import tsx --test tests/server/fiscal-emission-emulator.test.ts\"",
     "test:tpv-topology": "tsx --test tests/lib/table-group-topology.test.ts",
     "test:tpv-split-partition": "tsx --test tests/lib/table-group-split-partition.test.ts",
     "test:tpv-line-origin": "tsx --test tests/lib/table-group-line-origin.test.ts",
@@ -23,6 +35,7 @@
     "audit:interactive-controls": "tsx scripts/audit-interactive-controls.ts",
     "audit:product-gtin-index": "tsx scripts/audit-product-gtin-index.ts",
     "admin:catalog-image-credits": "tsx scripts/administer-catalog-image-credits.ts",
+    "admin:fiscal-credential": "tsx scripts/administer-fiscal-credential.ts",
     "eval:menu-import": "tsx scripts/eval-menu-import-corpus.ts",
     "eval:menu-import:v2": "tsx scripts/eval-menu-import-corpus.ts --shadow-v2 --skip-baseline-check",
     "eval:menu-import:modern": "tsx scripts/eval-menu-import-modern.ts",
@@ -34,9 +47,11 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@google-cloud/secret-manager": "^6.1.1",
     "@google-cloud/vision": "^5.3.6",
     "@vercel/queue": "0.5.1",
     "ai": "^7.0.87",
+    "fast-xml-parser": "^5.11.0",
     "firebase": "^12.15.0",
     "firebase-admin": "^14.3.0",
     "geist": "1.7.2",
@@ -47,7 +62,8 @@
     "qrcode-generator": "2.0.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "xmllint-wasm": "^5.3.0"
   },
   "overrides": {
     "fast-uri": "3.1.6",
@@ -79,9 +95,9 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "firebase-tools": "^15.29.0",
+    "stream-json": "file:vendor/stream-json-compat",
     "tailwindcss": "^4",
     "tsx": "^4.20.3",
-    "typescript": "^5",
-    "stream-json": "file:vendor/stream-json-compat"
+    "typescript": "^5"
   }
 }
