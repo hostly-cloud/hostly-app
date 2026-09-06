@@ -73,7 +73,7 @@ jobs:
       - name: Editor V2 geometry and landscape tests
         run: npx tsx --test tests/lib/sala-wall-presets.test.ts tests/lib/sala-surface-shapes.test.ts tests/lib/sala-landscape-elements.test.ts tests/lib/sala-editor-publication-floor-plan.test.ts tests/lib/sala-editor-v2-publisher-write-context.test.ts tests/lib/sala-editor-publication-batching.test.ts tests/server/sala-editor-published-deactivation.test.ts
       - name: Hostly plan contract tests
-        run: npx tsx --test tests/lib/hostly-plan.test.ts tests/lib/hostly-plan-catalog.test.ts tests/lib/hostly-entitlements.test.ts tests/lib/hostly-subscription-access.test.ts tests/lib/hostly-commercial-policy.test.ts tests/lib/hostly-commercial-proposal.test.ts tests/lib/hostly-stripe-billing.test.ts tests/lib/catalog-image-plan.test.ts tests/lib/catalog-image-subscription-ui.test.ts
+        run: npx tsx --test tests/lib/hostly-plan.test.ts tests/lib/hostly-plan-catalog.test.ts tests/lib/hostly-entitlements.test.ts tests/lib/hostly-subscription-access.test.ts tests/lib/hostly-commercial-policy.test.ts tests/lib/hostly-commercial-proposal.test.ts tests/lib/hostly-stripe-billing.test.ts tests/lib/catalog-image-plan.test.ts tests/lib/catalog-image-subscription-ui.test.ts tests/lib/manager-analytics-ai.test.ts
       - name: Production health contract tests
         run: npx tsx --test tests/lib/hostly-health.test.ts
       - name: Production security config tests
