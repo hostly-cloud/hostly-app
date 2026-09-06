@@ -88,13 +88,16 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",
-    "@types/node": "^20",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
-    "firebase-tools": "^15.11.0",
-    "typescript": "^5",
-    "tsx": "^4.21.0"
+    "firebase-tools": "^15.29.0",
+    "stream-json": "file:vendor/stream-json-compat",
+    "tailwindcss": "^4",
+    "tsx": "^4.20.3",
+    "typescript": "^5"
   }
 }
