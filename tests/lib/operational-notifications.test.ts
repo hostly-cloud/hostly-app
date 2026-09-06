@@ -3,6 +3,12 @@ import test from "node:test";
 import type { OperationalDelayAlert } from "@/lib/operations/operational-delay-alerts";
 import { sanitizeOperationalAlertPolicy } from "@/lib/operations/operational-alert-policy";
 import {
+  buildManagerAutomationCopy,
+  managerAutomationPriority,
+  resolveManagerAutomationStage,
+  shouldReopenManagerAutomation,
+} from "@/lib/operations/manager-automations";
+import {
   canClaimOperationalNotificationDelivery,
   forceUnsupportedOperationalChannelsOff,
   isOperationalCronRequestAuthorized,
@@ -117,5 +123,51 @@ test("cron authorization prefers CRON_SECRET and has a narrow Vercel fallback", 
     cronScheduleHeader: "* * * * *",
     expectedSchedule: "* * * * *",
     isVercel: false,
+  }), false);
+});
+
+test("manager automation maps attention, critical and escalation to bounded priorities", () => {
+  assert.equal(resolveManagerAutomationStage(alert()), "attention");
+  assert.equal(managerAutomationPriority("attention"), "medium");
+  assert.equal(resolveManagerAutomationStage(alert({ level: "critical" })), "critical");
+  assert.equal(managerAutomationPriority("critical"), "high");
+  assert.equal(resolveManagerAutomationStage(alert({ level: "critical", escalated: true })), "escalated");
+  assert.equal(managerAutomationPriority("escalated"), "urgent");
+});
+
+test("manager automation only prepares safe navigation actions", () => {
+  const production = alert({
+    kind: "production_delay",
+    station: "kitchen",
+    stationLabel: "Cocina",
+    stationHref: "/dashboard/operacion/cocina",
+    delayedLineCount: 2,
+    elapsedMinutes: 16,
+  });
+  const copy = buildManagerAutomationCopy(production);
+  assert.equal(copy.title, "Mesa 7: retraso en Cocina");
+  assert.deepEqual(copy.action, {
+    kind: "navigate",
+    href: "/dashboard/operacion/cocina",
+    label: "Abrir Cocina",
+  });
+  assert.match(copy.detail, /2 líneas llevan/);
+});
+
+test("acknowledged automation remains quiet unless the incident worsens", () => {
+  assert.equal(shouldReopenManagerAutomation({
+    previousStatus: "acknowledged",
+    previousStage: "attention",
+    nextStage: "attention",
+  }), false);
+  assert.equal(shouldReopenManagerAutomation({
+    previousStatus: "acknowledged",
+    previousStage: "attention",
+    nextStage: "critical",
+  }), true);
+  assert.equal(shouldReopenManagerAutomation({
+    previousStatus: "active",
+    previousStage: "attention",
+    nextStage: "critical",
   }), false);
 });
