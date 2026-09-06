@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { authenticatedApiFetch } from "@/lib/auth/authenticated-api-fetch";
 import type { ManagerAutomationItem } from "@/lib/operations/manager-automations";
 
 type AutomationsResponse = {
@@ -30,9 +31,8 @@ export function ManagerAutomationsPanel() {
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch("/api/operations/automations", {
+      const response = await authenticatedApiFetch("/api/operations/automations", {
         method: "GET",
-        credentials: "include",
         cache: "no-store",
       });
       if (!response.ok) return;
@@ -55,9 +55,8 @@ export function ManagerAutomationsPanel() {
   const acknowledge = async (automationId: string) => {
     setBusyId(automationId);
     try {
-      const response = await fetch("/api/operations/automations", {
+      const response = await authenticatedApiFetch("/api/operations/automations", {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ automationId, action: "acknowledge" }),
       });
