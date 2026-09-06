@@ -1,4 +1,4 @@
-import type { Firestore } from "firebase-admin/firestore";
+import type { DocumentReference, Firestore } from "firebase-admin/firestore";
 import type { PosLayoutCandidate, PosLayoutPublishResult } from "@/lib/pos-migration/layout-types";
 
 const WRITE_CHUNK_SIZE = 300;
@@ -192,7 +192,7 @@ export async function publishPosLayoutMigration(params: {
         .filter((value): value is string => typeof value === "string")
         .map(normalize),
     );
-    const writes: { ref: FirebaseFirestore.DocumentReference; item: PosLayoutCandidate; data: Record<string, unknown> }[] = [];
+    const writes: { ref: DocumentReference; item: PosLayoutCandidate; data: Record<string, unknown> }[] = [];
     selected.forEach((item, index) => {
       if (!item.finalName || existingNames.has(normalize(item.finalName))) {
         if (!skippedItemIds.includes(item.id)) skippedItemIds.push(item.id);
