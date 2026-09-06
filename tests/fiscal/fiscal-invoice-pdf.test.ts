@@ -53,3 +53,24 @@ test("pagina una factura A4 larga en vez de cortar su contenido", () => {
   const pageObjects = text.match(/\/Type \/Page\b/g) ?? [];
   assert.ok(pageObjects.length >= 2);
 });
+
+test("no permite imprimir una rectificativa sin identificar la factura rectificada", () => {
+  assert.throws(
+    () => generateFiscalInvoicePdf({
+      invoice: { ...invoice, documentKind: "rectification" },
+      paper: "a4",
+    }),
+    /FISCAL_ORIGINAL_INVOICE_NUMBER_REQUIRED/,
+  );
+  const pdf = generateFiscalInvoicePdf({
+    invoice: {
+      ...invoice,
+      invoiceNumber: "FR-2027-000001",
+      documentKind: "rectification",
+      originalInvoiceNumber: "FS-2027-000001",
+      rectificationReason: "Devolución parcial",
+    },
+    paper: "a4",
+  });
+  assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-");
+});
