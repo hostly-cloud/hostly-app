@@ -37,3 +37,19 @@ test("mantiene el QR tributario al inicio y dentro de 30–40 mm", () => {
   assert.ok(FISCAL_PDF_QR_SIZE_MM <= AEAT_QR_SPECIFICATION.maxSizeMm);
   assert.equal(AEAT_QR_SPECIFICATION.errorCorrectionLevel, "M");
 });
+
+test("pagina una factura A4 larga en vez de cortar su contenido", () => {
+  const linesSnapshot = Array.from({ length: 90 }, (_, index) => ({
+    description: `Producto de prueba ${index + 1}`,
+    quantity: 1,
+    netGrossCents: 110,
+    vatRateBps: 1_000,
+  }));
+  const pdf = generateFiscalInvoicePdf({
+    invoice: { ...invoice, linesSnapshot },
+    paper: "a4",
+  });
+  const text = pdf.toString("latin1");
+  const pageObjects = text.match(/\/Type \/Page\b/g) ?? [];
+  assert.ok(pageObjects.length >= 2);
+});
