@@ -35,7 +35,12 @@ export async function readFiscalCertificateSecret(
     throw new Error("FISCAL_CERTIFICATE_SECRET_RESOURCE_INVALID");
   }
   const client = secretManagerClient();
-  const [version] = await client.accessSecretVersion({ name });
+  let version;
+  try {
+    [version] = await client.accessSecretVersion({ name });
+  } catch {
+    throw new Error("FISCAL_CERTIFICATE_SECRET_UNAVAILABLE");
+  }
   const payload = version.payload?.data?.toString("utf8") ?? "";
   let parsed: unknown;
   try {
