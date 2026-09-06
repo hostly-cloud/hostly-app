@@ -12,7 +12,8 @@ export async function GET(req: Request, context: { params: Promise<{ invoiceId: 
   }
   const { invoiceId } = await context.params;
   const snap = await ctx.db.collection("fiscalInvoices").doc(invoiceId).get();
-  if (!snap.exists || snap.data()?.restaurantId !== ctx.restaurantId) {
+  const invoice = snap.data();
+  if (!snap.exists || invoice?.restaurantId !== ctx.restaurantId) {
     return NextResponse.json({ ok: false, error: "FISCAL_INVOICE_NOT_FOUND" }, { status: 404 });
   }
   const url = new URL(req.url);
@@ -22,11 +23,26 @@ export async function GET(req: Request, context: { params: Promise<{ invoiceId: 
   }
   const duplicate = url.searchParams.get("duplicate") === "1";
   try {
-    const pdf = generateFiscalInvoicePdf({ invoice: snap.data() as never, paper: paperRaw as FiscalPdfPaper, duplicate });
+    let originalInvoiceNumber: string | null = null;
+    const originalInvoiceId = typeof invoice?.originalInvoiceId === "string" ? invoice.originalInvoiceId : "";
+    if (originalInvoiceId) {
+      const originalSnap = await ctx.db.collection("fiscalInvoices").doc(originalInvoiceId).get();
+      const original = originalSnap.data();
+      if (!originalSnap.exists || original?.restaurantId !== ctx.restaurantId || typeof original?.invoiceNumber !== "string") {
+        throw new Error("FISCAL_ORIGINAL_INVOICE_NOT_FOUND");
+      }
+      originalInvoiceNumber = original.invoiceNumber;
+    }
+
+    const pdf = generateFiscalInvoicePdf({
+      invoice: { ...invoice, originalInvoiceNumber } as never,
+      paper: paperRaw as FiscalPdfPaper,
+      duplicate,
+    });
     if (duplicate) {
       await ctx.db.collection("fiscalAuditEvents").doc(randomUUID()).set({
         restaurantId: ctx.restaurantId,
-        taxEntityId: snap.data()?.taxEntityId,
+        taxEntityId: invoice?.taxEntityId,
         actorUid: ctx.uid,
         action: "fiscal_invoice_duplicate_generated",
         entityType: "fiscalInvoice",
@@ -36,7 +52,7 @@ export async function GET(req: Request, context: { params: Promise<{ invoiceId: 
         createdAtMs: Date.now(),
       });
     }
-    const filename = `factura-${String(snap.data()?.invoiceNumber ?? invoiceId).replace(/[^A-Za-z0-9._-]/g, "_")}.pdf`;
+    const filename = `factura-${String(invoice?.invoiceNumber ?? invoiceId).replace(/[^A-Za-z0-9._-]/g, "_")}.pdf`;
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
