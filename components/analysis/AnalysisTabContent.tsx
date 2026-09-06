@@ -5,6 +5,7 @@ import type { ComensalesAnalyticsSectionProps } from "@/components/analysis/Come
 import { ComensalesAnalyticsSection } from "@/components/analysis/ComensalesAnalyticsSection";
 import type { HorasAnalyticsSectionProps } from "@/components/analysis/HorasAnalyticsSection";
 import { HorasAnalyticsSection } from "@/components/analysis/HorasAnalyticsSection";
+import { ManagerAnalyticsAiPanel } from "@/components/analysis/ManagerAnalyticsAiPanel";
 import type { ProductosAnalyticsSectionProps } from "@/components/analysis/ProductosAnalyticsSection";
 import { ProductosAnalyticsSection } from "@/components/analysis/ProductosAnalyticsSection";
 import type { RentabilidadAnalyticsSectionProps } from "@/components/analysis/RentabilidadAnalyticsSection";
@@ -50,7 +51,13 @@ export function AnalysisTabContent({
       role="tabpanel"
       aria-labelledby={`hostly-analysis-tab-${tab}`}
     >
-      {content}
+      <div className="grid gap-4">
+        <ManagerAnalyticsAiPanel
+          dateFrom={ventasSectionProps.dateFrom}
+          dateTo={ventasSectionProps.dateTo}
+        />
+        {content}
+      </div>
     </div>
   );
 }
