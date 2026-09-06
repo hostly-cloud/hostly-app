@@ -12,6 +12,7 @@ test("maps common Spanish POS headers and decimal comma values", () => {
     ].join("\n"),
   });
 
+  assert.equal(parsed.sourceVendor, "generic");
   assert.equal(parsed.items.length, 2);
   assert.equal(parsed.items[0].name, "Coca-Cola");
   assert.equal(parsed.items[0].category, "Refrescos");
