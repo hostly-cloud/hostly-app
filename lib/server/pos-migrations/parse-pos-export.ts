@@ -2,9 +2,11 @@ import type {
   PosMigrationCandidate,
   PosMigrationColumnMapping,
   PosMigrationTargetField,
+  PosMigrationVendor,
 } from "@/lib/pos-migration/types";
+import { detectPosVendor, mergeVendorAliases } from "./pos-vendor-adapters";
 
-const FIELD_ALIASES: Record<PosMigrationTargetField, string[]> = {
+const BASE_FIELD_ALIASES: Record<PosMigrationTargetField, string[]> = {
   name: ["producto", "product", "articulo", "nombre", "descripcion", "item"],
   category: ["categoria", "category", "familia", "grupo", "department", "seccion"],
   price: ["precio", "pvp", "pvp1", "price", "venta", "retail", "precio venta"],
@@ -20,6 +22,9 @@ const FIELD_ALIASES: Record<PosMigrationTargetField, string[]> = {
 
 export type ParsedPosExport = {
   sourceFormat: "csv" | "tsv" | "txt";
+  sourceVendor: PosMigrationVendor;
+  sourceVendorLabel: string;
+  sourceVendorConfidence: number;
   mapping: PosMigrationColumnMapping[];
   items: PosMigrationCandidate[];
 };
@@ -58,14 +63,9 @@ function countDelimiterOutsideQuotes(line: string, delimiter: string): number {
   let quoted = false;
   for (let i = 0; i < line.length; i += 1) {
     if (line[i] === '"') {
-      if (quoted && line[i + 1] === '"') {
-        i += 1;
-      } else {
-        quoted = !quoted;
-      }
-    } else if (!quoted && line[i] === delimiter) {
-      count += 1;
-    }
+      if (quoted && line[i + 1] === '"') i += 1;
+      else quoted = !quoted;
+    } else if (!quoted && line[i] === delimiter) count += 1;
   }
   return count;
 }
@@ -75,16 +75,13 @@ function parseDelimitedRows(text: string, delimiter: string): string[][] {
   let row: string[] = [];
   let cell = "";
   let quoted = false;
-
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i];
     if (ch === '"') {
       if (quoted && text[i + 1] === '"') {
         cell += '"';
         i += 1;
-      } else {
-        quoted = !quoted;
-      }
+      } else quoted = !quoted;
       continue;
     }
     if (!quoted && ch === delimiter) {
@@ -102,24 +99,20 @@ function parseDelimitedRows(text: string, delimiter: string): string[][] {
     }
     cell += ch;
   }
-
   row.push(cell.trim());
   if (row.some((value) => value.length > 0)) rows.push(row);
   return rows;
 }
 
-function inferField(header: string): { field: PosMigrationTargetField | null; confidence: number } {
+function inferField(header: string, aliases: Record<PosMigrationTargetField, string[]>): { field: PosMigrationTargetField | null; confidence: number } {
   const normalized = normalizeText(header);
   if (!normalized) return { field: null, confidence: 0 };
-
-  for (const [field, aliases] of Object.entries(FIELD_ALIASES) as [PosMigrationTargetField, string[]][]) {
-    const normalizedAliases = aliases.map(normalizeText);
+  for (const [field, fieldAliases] of Object.entries(aliases) as [PosMigrationTargetField, string[]][]) {
+    const normalizedAliases = fieldAliases.map(normalizeText);
     if (normalizedAliases.includes(normalized)) return { field, confidence: 1 };
   }
-  for (const [field, aliases] of Object.entries(FIELD_ALIASES) as [PosMigrationTargetField, string[]][]) {
-    if (aliases.some((alias) => normalized.includes(normalizeText(alias)))) {
-      return { field, confidence: 0.82 };
-    }
+  for (const [field, fieldAliases] of Object.entries(aliases) as [PosMigrationTargetField, string[]][]) {
+    if (fieldAliases.some((alias) => normalized.includes(normalizeText(alias)))) return { field, confidence: 0.82 };
   }
   return { field: null, confidence: 0 };
 }
@@ -130,13 +123,9 @@ function parseNumber(raw: string | undefined): number | null {
   if (!value) return null;
   const lastComma = value.lastIndexOf(",");
   const lastDot = value.lastIndexOf(".");
-  if (lastComma > lastDot) {
-    value = value.replace(/\./g, "").replace(",", ".");
-  } else if (lastDot > lastComma && lastComma >= 0) {
-    value = value.replace(/,/g, "");
-  } else if (lastComma >= 0) {
-    value = value.replace(",", ".");
-  }
+  if (lastComma > lastDot) value = value.replace(/\./g, "").replace(",", ".");
+  else if (lastDot > lastComma && lastComma >= 0) value = value.replace(/,/g, "");
+  else if (lastComma >= 0) value = value.replace(",", ".");
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -161,31 +150,25 @@ function safeText(raw: string | undefined): string | null {
   return value || null;
 }
 
-export function parsePosExport(args: {
-  text: string;
-  fileName: string;
-  maxRows?: number;
-}): ParsedPosExport {
+export function parsePosExport(args: { text: string; fileName: string; maxRows?: number }): ParsedPosExport {
   const normalizedText = args.text.replace(/^\uFEFF/, "");
   const delimiter = detectDelimiter(normalizedText);
   const rows = parseDelimitedRows(normalizedText, delimiter);
   if (rows.length < 2) throw new Error("POS_EXPORT_EMPTY");
 
   const headers = rows[0].map((header, index) => header.trim() || `Columna ${index + 1}`);
+  const vendorMatch = detectPosVendor(headers, args.fileName);
+  const aliases = mergeVendorAliases(BASE_FIELD_ALIASES, vendorMatch.adapter);
   const usedFields = new Set<PosMigrationTargetField>();
   const mapping = headers.map((sourceColumn) => {
-    const inferred = inferField(sourceColumn);
-    if (inferred.field && usedFields.has(inferred.field)) {
-      return { sourceColumn, targetField: null, confidence: 0 } satisfies PosMigrationColumnMapping;
-    }
+    const inferred = inferField(sourceColumn, aliases);
+    if (inferred.field && usedFields.has(inferred.field)) return { sourceColumn, targetField: null, confidence: 0 } satisfies PosMigrationColumnMapping;
     if (inferred.field) usedFields.add(inferred.field);
     return { sourceColumn, targetField: inferred.field, confidence: inferred.confidence } satisfies PosMigrationColumnMapping;
   });
 
   const indexByField = new Map<PosMigrationTargetField, number>();
-  mapping.forEach((entry, index) => {
-    if (entry.targetField) indexByField.set(entry.targetField, index);
-  });
+  mapping.forEach((entry, index) => { if (entry.targetField) indexByField.set(entry.targetField, index); });
   if (!indexByField.has("name")) throw new Error("POS_EXPORT_NAME_COLUMN_NOT_FOUND");
 
   const maxRows = Math.max(1, Math.min(args.maxRows ?? 1000, 2000));
@@ -214,7 +197,6 @@ export function parsePosExport(args: {
     if (cost != null && cost < 0) warnings.push("Coste negativo");
     const stock = parseNumber(get("stock"));
     if (stock != null && stock < 0) warnings.push("Stock negativo");
-
     const blocked = !name || (price != null && price < 0) || (cost != null && cost < 0) || (stock != null && stock < 0);
     const review = !blocked && warnings.length > 0;
     return {
@@ -239,5 +221,12 @@ export function parsePosExport(args: {
 
   const extension = args.fileName.toLowerCase().split(".").pop();
   const sourceFormat = extension === "tsv" || delimiter === "\t" ? "tsv" : extension === "txt" ? "txt" : "csv";
-  return { sourceFormat, mapping, items };
+  return {
+    sourceFormat,
+    sourceVendor: vendorMatch.vendor,
+    sourceVendorLabel: vendorMatch.label,
+    sourceVendorConfidence: vendorMatch.confidence,
+    mapping,
+    items,
+  };
 }
