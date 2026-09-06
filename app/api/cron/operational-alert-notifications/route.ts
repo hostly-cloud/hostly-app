@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getHostlyFirestore } from "@/lib/firebase/admin";
 import { isOperationalCronRequestAuthorized } from "@/lib/operations/operational-notifications";
-import { dispatchOperationalAlertNotifications } from "@/lib/server/operations/operational-notification-dispatcher";
+import { dispatchOperationalCommunications } from "@/lib/server/operations/operational-communication-dispatcher";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "ADMIN_NOT_CONFIGURED" }, { status: 503 });
   }
   try {
-    const result = await dispatchOperationalAlertNotifications(db);
+    const result = await dispatchOperationalCommunications(db);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     console.error("[operational-alert-notifications] cron failed", error);
