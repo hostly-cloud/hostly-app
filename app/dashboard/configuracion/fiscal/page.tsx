@@ -22,6 +22,7 @@ type Form = {
 type Readiness = { key: string; label: string; ready: boolean };
 
 const LIVE_NOT_BEFORE_MS = Date.parse("2027-01-01T00:00:00+01:00");
+const LIVE_WINDOW_OPEN_AT_MODULE_LOAD = Date.now() >= LIVE_NOT_BEFORE_MS;
 
 const EMPTY: Form = {
   mode: "demo",
@@ -43,8 +44,8 @@ export default function FiscalConfigurationPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ tone: "danger" | "success" | "info"; text: string } | null>(null);
+  const [liveWindowOpen, setLiveWindowOpen] = useState(LIVE_WINDOW_OPEN_AT_MODULE_LOAD);
   const allReady = readiness.length > 0 && readiness.every((item) => item.ready || (form.mode === "test" && item.key === "declaration"));
-  const liveWindowOpen = Date.now() >= LIVE_NOT_BEFORE_MS;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,6 +77,18 @@ export default function FiscalConfigurationPage() {
     const timeoutId = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timeoutId);
   }, [load]);
+
+  useEffect(() => {
+    if (liveWindowOpen) return;
+    const remainingMs = LIVE_NOT_BEFORE_MS - Date.now();
+    if (remainingMs <= 0) {
+      const timeoutId = window.setTimeout(() => setLiveWindowOpen(true), 0);
+      return () => window.clearTimeout(timeoutId);
+    }
+    const timeoutId = window.setTimeout(() => setLiveWindowOpen(true), Math.min(remainingMs, 2_147_483_647));
+    return () => window.clearTimeout(timeoutId);
+  }, [liveWindowOpen]);
+
   const patch = <K extends keyof Form,>(key: K, value: Form[K]) => setForm((current) => ({ ...current, [key]: value }));
 
   const save = async () => {
