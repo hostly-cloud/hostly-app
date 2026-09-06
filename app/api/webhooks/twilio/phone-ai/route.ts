@@ -8,8 +8,8 @@ import {
   validateTwilioSignature,
 } from "@/lib/phone-ai/twilio";
 import {
+  createPhoneAiSessionIfAbsent,
   resolveRestaurantForIncomingNumber,
-  upsertPhoneAiSession,
 } from "@/lib/server/phone-ai/phone-ai-center";
 
 function xml(body: string, status = 200) {
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   const resolved = await resolveRestaurantForIncomingNumber(db, to);
   if (!resolved) return xml(twimlSayAndHangup("Este número todavía no tiene el asistente Hostly activado."), 404);
 
-  await upsertPhoneAiSession(db, {
+  await createPhoneAiSessionIfAbsent(db, {
     restaurantId: resolved.restaurantId,
     callSid,
     callerPhone: from,

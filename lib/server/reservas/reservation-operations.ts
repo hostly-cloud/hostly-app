@@ -154,6 +154,7 @@ export async function createOperationalReservation(args: {
   restaurantId: string;
   userId: string;
   input: Record<string, unknown>;
+  reservationId?: string;
 }) {
   const customerName = clean(args.input.customerName, 160);
   if (!customerName) throw new Error("CUSTOMER_NAME_REQUIRED");
@@ -164,9 +165,29 @@ export async function createOperationalReservation(args: {
   const requestedStatus = normalizeOperationalReservationStatus(args.input.status);
   const status: OperationalReservationStatus =
     requestedStatus === "booked" ? "booked" : "pending";
-  const ref = args.db.collection("reservations").doc();
+  const requestedReservationId = clean(args.reservationId, 160);
+  if (args.reservationId !== undefined && (!requestedReservationId || requestedReservationId.includes("/"))) {
+    throw new Error("INVALID_RESERVATION_ID");
+  }
+  const ref = requestedReservationId
+    ? args.db.collection("reservations").doc(requestedReservationId)
+    : args.db.collection("reservations").doc();
 
   await args.db.runTransaction(async (transaction) => {
+    if (requestedReservationId) {
+      const existing = await transaction.get(ref);
+      if (existing.exists) {
+        const data = (existing.data() ?? {}) as Record<string, unknown>;
+        if (
+          clean(data.restaurantId, 120) !== args.restaurantId ||
+          clean(data.createdBy, 200) !== args.userId
+        ) {
+          throw new Error("RESERVATION_ID_CONFLICT");
+        }
+        return;
+      }
+    }
+
     const table = await tableAssignmentPayload({
       db: args.db,
       transaction,

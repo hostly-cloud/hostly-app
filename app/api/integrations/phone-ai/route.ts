@@ -38,6 +38,13 @@ export async function POST(req: Request) {
   }
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return noStore({ ok: false, error: "INVALID_JSON" }, 400);
-  const settings = await savePhoneAiSettings(authCtx.db, authCtx.restaurantId, body);
-  return noStore({ ok: true, settings });
+  try {
+    const settings = await savePhoneAiSettings(authCtx.db, authCtx.restaurantId, body);
+    return noStore({ ok: true, settings });
+  } catch (error) {
+    if (error instanceof Error && error.message === "INVALID_FALLBACK_PHONE") {
+      return noStore({ ok: false, error: "INVALID_FALLBACK_PHONE" }, 400);
+    }
+    throw error;
+  }
 }
