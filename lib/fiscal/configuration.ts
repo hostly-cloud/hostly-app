@@ -181,15 +181,19 @@ export function fiscalReadiness(config: FiscalConfiguration): FiscalReadinessChe
 export function assertFiscalConfigurationCanActivate(
   config: FiscalConfiguration,
   requestedMode: "test" | "live",
+  nowMs = Date.now(),
 ): void {
   if (config.mode !== requestedMode) throw new Error("FISCAL_ACTIVATION_MODE_MISMATCH");
   const missing = fiscalReadiness(config)
     .filter((check) => !check.ready && (requestedMode === "live" || check.key !== "declaration"))
     .map((check) => check.key);
   if (missing.length) throw new Error(`FISCAL_CONFIGURATION_INCOMPLETE:${missing.join(",")}`);
-  if (requestedMode === "live") assertFiscalLiveWindowOpen();
+  if (requestedMode === "live") assertFiscalLiveWindowOpen(nowMs);
   if (requestedMode === "live" && process.env.HOSTLY_FISCAL_LIVE_ACTIVATION_ENABLED !== "true") {
     throw new Error("FISCAL_LIVE_ACTIVATION_DISABLED");
+  }
+  if (requestedMode === "live" && process.env.HOSTLY_AEAT_PRODUCTION_SUBMISSION_ENABLED !== "true") {
+    throw new Error("FISCAL_AEAT_PRODUCTION_SUBMISSION_DISABLED");
   }
   if (requestedMode === "live" && config.aeatEnvironment !== "production") {
     throw new Error("FISCAL_LIVE_ENVIRONMENT_INVALID");
