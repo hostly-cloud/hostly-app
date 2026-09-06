@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { generateFiscalInvoicePdf } from "../../lib/fiscal/fiscal-invoice-pdf";
+import {
+  FISCAL_PDF_QR_POSITION,
+  FISCAL_PDF_QR_SIZE_MM,
+  generateFiscalInvoicePdf,
+} from "../../lib/fiscal/fiscal-invoice-pdf";
+import { AEAT_QR_SPECIFICATION } from "../../lib/fiscal/verifactu-qr";
 
 const invoice = {
   invoiceNumber: "FS-2027-000001",
@@ -24,4 +29,11 @@ test("genera PDF A4 y tickets térmicos con QR", () => {
     assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-");
     assert.ok(pdf.length > 2_000);
   }
+});
+
+test("mantiene el QR tributario al inicio y dentro de 30–40 mm", () => {
+  assert.equal(FISCAL_PDF_QR_POSITION, "before_invoice_content");
+  assert.ok(FISCAL_PDF_QR_SIZE_MM >= AEAT_QR_SPECIFICATION.minSizeMm);
+  assert.ok(FISCAL_PDF_QR_SIZE_MM <= AEAT_QR_SPECIFICATION.maxSizeMm);
+  assert.equal(AEAT_QR_SPECIFICATION.errorCorrectionLevel, "M");
 });
