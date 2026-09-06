@@ -29,6 +29,10 @@ export function isHostlyStripeBillingEnabled(): boolean {
   return env("HOSTLY_STRIPE_BILLING_ENABLED").toLowerCase() === "true";
 }
 
+export function isHostlyStripeSandboxMode(): boolean {
+  return env("STRIPE_SECRET_KEY").startsWith("sk_test_");
+}
+
 export function getHostlyStripePriceId(
   plan: HostlyPlan,
   interval: HostlyBillingInterval,
@@ -62,6 +66,7 @@ export function hostlyStripeConfigurationStatus() {
   );
   return {
     enabled: isHostlyStripeBillingEnabled(),
+    sandboxMode: isHostlyStripeSandboxMode(),
     secretKeyConfigured: Boolean(env("STRIPE_SECRET_KEY")),
     webhookSecretConfigured: Boolean(env("STRIPE_HOSTLY_SUBSCRIPTION_WEBHOOK_SECRET")),
     prices,
