@@ -1,0 +1,71 @@
+name: Firebase rules production deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_storage:
+        description: Also deploy Cloud Storage Security Rules
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: firebase-rules-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy-rules:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: production
+    env:
+      FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate production federation configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_PROJECT_ID" || { echo "Missing FIREBASE_PROJECT_ID environment variable" >&2; exit 1; }
+          test -n "$GCP_WORKLOAD_IDENTITY_PROVIDER" || { echo "Missing GCP_WORKLOAD_IDENTITY_PROVIDER environment variable" >&2; exit 1; }
+          test -n "$GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT" || { echo "Missing GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT environment variable" >&2; exit 1; }
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install reviewed dependencies
+        run: npm ci
+
+      - name: Verify Firestore tenant and fiscal boundaries
+        run: node --test tests/security/firestore-tenant-root-boundary.test.mjs
+
+      - name: Verify Storage RBAC contract
+        run: node --test tests/security/storage-product-image-rbac-contract.test.mjs
+
+      - name: Authenticate to Google Cloud with GitHub OIDC
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ env.FIREBASE_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Deploy Firestore Security Rules only
+        run: npx firebase deploy --only firestore:rules --project "$FIREBASE_PROJECT_ID" --non-interactive
+
+      - name: Deploy Cloud Storage Security Rules
+        if: ${{ inputs.deploy_storage }}
+        run: npx firebase deploy --only storage --project "$FIREBASE_PROJECT_ID" --non-interactive
