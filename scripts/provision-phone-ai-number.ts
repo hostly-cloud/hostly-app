@@ -13,7 +13,7 @@ const incomingNumber = normalizePhoneNumber(arg("--number"));
 const verify = process.argv.includes("--verify");
 
 if (!restaurantId || !incomingNumber) {
-  throw new Error("Usage: npm run admin:phone-ai-number -- --restaurant-id <id> --number +34... [--verify]");
+  throw new Error("Usage: npx tsx scripts/provision-phone-ai-number.ts --restaurant-id <id> --number +34... [--verify]");
 }
 
 const db = getHostlyFirestore();
