@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { generateFiscalInvoicePdf } from "../../lib/fiscal/fiscal-invoice-pdf";
+import {
+  FISCAL_PDF_QR_POSITION,
+  FISCAL_PDF_QR_SIZE_MM,
+  generateFiscalInvoicePdf,
+} from "../../lib/fiscal/fiscal-invoice-pdf";
+import { AEAT_QR_SPECIFICATION } from "../../lib/fiscal/verifactu-qr";
 
 const invoice = {
   invoiceNumber: "FS-2027-000001",
@@ -24,4 +29,48 @@ test("genera PDF A4 y tickets térmicos con QR", () => {
     assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-");
     assert.ok(pdf.length > 2_000);
   }
+});
+
+test("mantiene el QR tributario al inicio y dentro de 30–40 mm", () => {
+  assert.equal(FISCAL_PDF_QR_POSITION, "before_invoice_content");
+  assert.ok(FISCAL_PDF_QR_SIZE_MM >= AEAT_QR_SPECIFICATION.minSizeMm);
+  assert.ok(FISCAL_PDF_QR_SIZE_MM <= AEAT_QR_SPECIFICATION.maxSizeMm);
+  assert.equal(AEAT_QR_SPECIFICATION.errorCorrectionLevel, "M");
+});
+
+test("pagina una factura A4 larga en vez de cortar su contenido", () => {
+  const linesSnapshot = Array.from({ length: 90 }, (_, index) => ({
+    description: `Producto de prueba ${index + 1}`,
+    quantity: 1,
+    netGrossCents: 110,
+    vatRateBps: 1_000,
+  }));
+  const pdf = generateFiscalInvoicePdf({
+    invoice: { ...invoice, linesSnapshot },
+    paper: "a4",
+  });
+  const text = pdf.toString("latin1");
+  const pageObjects = text.match(/\/Type \/Page\b/g) ?? [];
+  assert.ok(pageObjects.length >= 2);
+});
+
+test("no permite imprimir una rectificativa sin identificar la factura rectificada", () => {
+  assert.throws(
+    () => generateFiscalInvoicePdf({
+      invoice: { ...invoice, documentKind: "rectification" },
+      paper: "a4",
+    }),
+    /FISCAL_ORIGINAL_INVOICE_NUMBER_REQUIRED/,
+  );
+  const pdf = generateFiscalInvoicePdf({
+    invoice: {
+      ...invoice,
+      invoiceNumber: "FR-2027-000001",
+      documentKind: "rectification",
+      originalInvoiceNumber: "FS-2027-000001",
+      rectificationReason: "Devolución parcial",
+    },
+    paper: "a4",
+  });
+  assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-");
 });

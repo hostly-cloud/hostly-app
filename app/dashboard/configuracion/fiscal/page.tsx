@@ -21,6 +21,8 @@ type Form = {
 };
 type Readiness = { key: string; label: string; ready: boolean };
 
+const LIVE_NOT_BEFORE_MS = Date.parse("2027-01-01T00:00:00+01:00");
+
 const EMPTY: Form = {
   mode: "demo",
   taxpayerLegalName: "",
@@ -42,6 +44,7 @@ export default function FiscalConfigurationPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ tone: "danger" | "success" | "info"; text: string } | null>(null);
   const allReady = readiness.length > 0 && readiness.every((item) => item.ready || (form.mode === "test" && item.key === "declaration"));
+  const liveWindowOpen = Date.now() >= LIVE_NOT_BEFORE_MS;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,12 +98,16 @@ export default function FiscalConfigurationPage() {
     else {
       setReadiness(payload.configuration?.readiness ?? []);
       setStatus(payload.configuration?.status ?? "draft");
-      setMessage({ tone: "success", text: form.mode === "demo" ? "Datos guardados. Hostly sigue en modo demo y no emitirá documentos fiscales." : "Datos guardados. Completa la autorización antes de activar." });
+      setMessage({ tone: "success", text: form.mode === "demo" ? "Datos guardados. Hostly sigue en modo demo y no emitirá documentos fiscales." : "Datos guardados. Completa el certificado y los requisitos pendientes antes de activar." });
     }
     setSaving(false);
   };
 
   const activate = async (mode: "test" | "live") => {
+    if (mode === "live" && !liveWindowOpen) {
+      setMessage({ tone: "info", text: "La producción fiscal real permanece bloqueada hasta el 1 de enero de 2027 (hora peninsular). Puedes dejar toda la configuración preparada mientras tanto." });
+      return;
+    }
     const confirmation = mode === "live" ? "ACTIVAR FISCAL REAL" : "ACTIVAR FISCAL TEST";
     if (mode === "live" && window.prompt(`Escribe exactamente: ${confirmation}`) !== confirmation) return;
     setSaving(true);
@@ -110,7 +117,11 @@ export default function FiscalConfigurationPage() {
       setStatus("active");
       setMessage({ tone: "success", text: mode === "live" ? "Facturación fiscal real activada." : "Entorno fiscal de pruebas activado. Los documentos indican que no tienen validez fiscal." });
     } else {
-      const text = payload?.error === "FISCAL_LIVE_ACTIVATION_DISABLED" ? "La activación real está bloqueada hasta completar la validación externa y habilitación operativa de Hostly." : "Aún faltan pasos obligatorios antes de activar.";
+      const text = payload?.error === "FISCAL_LIVE_NOT_YET_ALLOWED"
+        ? "La producción fiscal real permanece bloqueada hasta el 1 de enero de 2027 (hora peninsular)."
+        : payload?.error === "FISCAL_LIVE_ACTIVATION_DISABLED"
+          ? "La activación real está bloqueada hasta completar la validación externa y habilitación operativa de Hostly."
+          : "Aún faltan pasos obligatorios antes de activar.";
       setMessage({ tone: "danger", text });
     }
     setSaving(false);
@@ -132,6 +143,7 @@ export default function FiscalConfigurationPage() {
         </HostlySurface>
 
         <HostlyAlert tone="warning" title="Modo demo protegido">En demo Hostly no crea facturas ni registros fiscales. Los datos y comandas anteriores nunca se convierten automáticamente.</HostlyAlert>
+        {!liveWindowOpen ? <HostlyAlert tone="info" title="Producción fiscal bloqueada hasta 01/01/2027">Puedes completar toda la preparación. Hasta esa fecha Hostly no permite activar producción fiscal real ni enviar registros al endpoint AEAT de producción.</HostlyAlert> : null}
         {message ? <HostlyAlert tone={message.tone} title={message.tone === "danger" ? "Revisión necesaria" : "Configuración fiscal"}>{message.text}</HostlyAlert> : null}
 
         <HostlySurface variant="flat" className="p-5">
@@ -148,9 +160,9 @@ export default function FiscalConfigurationPage() {
         <HostlySurface variant="flat" className="p-5">
           <h2 className="text-lg font-bold text-slate-950">Preparación</h2>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">{readiness.length ? readiness.map((item) => <div key={item.key} className={`rounded-xl border px-4 py-3 text-sm font-semibold ${item.ready ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{item.ready ? "✓" : "○"} {item.label}</div>) : <p className="text-sm text-slate-500">Guarda los datos para ver la lista de preparación.</p>}</div>
-          {readiness.some((item) => item.key === "authorization" && !item.ready) ? <p className="mt-4 text-sm text-slate-600">La autorización o certificado se incorpora mediante soporte seguro de Hostly; la clave privada nunca se guarda en campos accesibles desde el navegador.</p> : null}
+          {readiness.some((item) => item.key === "authorization" && !item.ready) ? <p className="mt-4 text-sm text-slate-600">El certificado de envío AEAT se incorpora mediante soporte seguro de Hostly; la clave privada nunca se guarda en campos accesibles desde el navegador.</p> : null}
           {form.mode === "test" && status !== "active" ? <div className="mt-5"><HostlyButton disabled={!allReady || saving} onClick={() => void activate("test")}>Activar pruebas fiscales</HostlyButton></div> : null}
-          {form.mode === "live" && status !== "active" ? <div className="mt-5"><HostlyButton disabled={!allReady || saving} onClick={() => void activate("live")}>Activar producción fiscal</HostlyButton></div> : null}
+          {form.mode === "live" && status !== "active" ? <div className="mt-5"><HostlyButton disabled={!allReady || saving || !liveWindowOpen} onClick={() => void activate("live")}>{liveWindowOpen ? "Activar producción fiscal" : "Producción disponible desde 01/01/2027"}</HostlyButton></div> : null}
           <Link href="/dashboard/configuracion/fiscal/declaracion" className="mt-5 inline-block text-sm font-semibold text-sky-700 underline">Información y declaración responsable de Hostly</Link>
         </HostlySurface>
       </div>

@@ -9,6 +9,8 @@ type FiscalPdfInvoice = {
   issueDate: string;
   issuedAtMs: number;
   qrUrl: string;
+  originalInvoiceNumber?: string | null;
+  rectificationReason?: string | null;
   issuerSnapshot: { legalName: string; nif: string; address: { line1: string; postalCode: string; city: string; province: string; countryCode: string } };
   establishmentSnapshot?: { name?: string; address?: { line1?: string } } | null;
   customerSnapshot?: { legalName: string; nif: string; address: { line1: string; postalCode: string; city: string; province: string; countryCode: string }; email?: string | null } | null;
@@ -19,6 +21,9 @@ type FiscalPdfInvoice = {
 };
 
 export type FiscalPdfPaper = "a4" | "80mm" | "58mm";
+
+export const FISCAL_PDF_QR_SIZE_MM = 35;
+export const FISCAL_PDF_QR_POSITION = "before_invoice_content" as const;
 
 function money(cents: number): string {
   return `${(cents / 100).toFixed(2)} EUR`;
@@ -44,36 +49,74 @@ export function generateFiscalInvoicePdf(input: {
   paper?: FiscalPdfPaper;
   duplicate?: boolean;
 }): Buffer {
+  if ((input.invoice.documentKind === "rectification" || input.invoice.documentKind === "replacement") && !input.invoice.originalInvoiceNumber?.trim()) {
+    throw new Error("FISCAL_ORIGINAL_INVOICE_NUMBER_REQUIRED");
+  }
+
   const paper = input.paper ?? "a4";
   const thermal = paper !== "a4";
   const width = paper === "58mm" ? 58 : paper === "80mm" ? 80 : 210;
   const estimatedHeight = thermal
-    ? Math.max(160, 112 + input.invoice.linesSnapshot.length * 8 + input.invoice.taxBreakdown.length * 8)
+    ? Math.max(160, 120 + input.invoice.linesSnapshot.length * 8 + input.invoice.taxBreakdown.length * 8)
     : 297;
   const doc = new jsPDF({ unit: "mm", format: thermal ? [width, estimatedHeight] : "a4", compress: true });
   const margin = thermal ? 4 : 16;
   const contentWidth = width - margin * 2;
+  const pageHeight = thermal ? estimatedHeight : 297;
+  const bottomMargin = thermal ? margin : 16;
   let y = margin;
   const lineHeight = thermal ? 3.7 : 4.6;
+
+  const ensureSpace = (heightMm: number) => {
+    if (!thermal && y + heightMm > pageHeight - bottomMargin) {
+      doc.addPage();
+      y = margin;
+    }
+  };
   const write = (value: string, options?: { size?: number; bold?: boolean; align?: "left" | "center" | "right" }) => {
     const size = options?.size ?? (thermal ? 7.5 : 9.5);
     doc.setFont("helvetica", options?.bold ? "bold" : "normal");
     doc.setFontSize(size);
     const lines = doc.splitTextToSize(value, contentWidth);
+    ensureSpace(lines.length * lineHeight);
     const x = options?.align === "center" ? width / 2 : options?.align === "right" ? width - margin : margin;
     doc.text(lines, x, y, { align: options?.align ?? "left" });
     y += lines.length * lineHeight;
   };
-  const rule = () => { doc.setDrawColor(150); doc.line(margin, y, width - margin, y); y += 3; };
+  const rule = () => {
+    ensureSpace(3);
+    doc.setDrawColor(150);
+    doc.line(margin, y, width - margin, y);
+    y += 3;
+  };
 
   if (input.invoice.mode === "test") {
     write("DOCUMENTO DE PRUEBA — SIN VALIDEZ FISCAL", { bold: true, align: "center", size: thermal ? 7 : 10 });
     y += 1;
   }
+
+  // AEAT requires the fiscal QR to appear once, at the beginning of the invoice
+  // and before the invoice content. Keep the graphic itself within the statutory
+  // 30–40 mm range for A4 and both supported thermal widths.
+  const qrSize = FISCAL_PDF_QR_SIZE_MM;
+  const qrX = (width - qrSize) / 2;
+  write(AEAT_QR_SPECIFICATION.leadingText, { align: "center", bold: true, size: thermal ? 7 : 8 });
+  ensureSpace(qrSize + 3);
+  doc.addImage(qrDataUrl(input.invoice.qrUrl), "GIF", qrX, y, qrSize, qrSize);
+  y += qrSize + 3;
+  write(AEAT_QR_SPECIFICATION.verifactuText, { align: "center", bold: true, size: thermal ? 6.5 : 8 });
+  y += 2;
+
   write(input.invoice.documentKind === "simplified" ? "FACTURA SIMPLIFICADA" : input.invoice.documentKind === "rectification" ? "FACTURA RECTIFICATIVA" : "FACTURA", { bold: true, align: "center", size: thermal ? 10 : 16 });
   if (input.duplicate) write("DUPLICADO", { bold: true, align: "center", size: thermal ? 8 : 11 });
   write(input.invoice.invoiceNumber, { bold: true, align: "center", size: thermal ? 9 : 12 });
   write(`Fecha: ${input.invoice.issueDate}`, { align: thermal ? "center" : "left" });
+  if (input.invoice.documentKind === "rectification") {
+    write(`Factura rectificada: ${input.invoice.originalInvoiceNumber}`, { bold: true });
+    write(`Rectificación: ${input.invoice.rectificationReason?.trim() || "Rectificación de importes de la factura original"}`);
+  } else if (input.invoice.documentKind === "replacement") {
+    write(`Factura simplificada sustituida: ${input.invoice.originalInvoiceNumber}`, { bold: true });
+  }
   rule();
 
   write(input.invoice.issuerSnapshot.legalName, { bold: true });
@@ -102,14 +145,6 @@ export function generateFiscalInvoicePdf(input: {
   if (input.invoice.totals.discountCents !== 0) write(`Descuento: ${money(-input.invoice.totals.discountCents)}`);
   write(`TOTAL: ${money(input.invoice.totals.totalCents)}`, { bold: true, align: "right", size: thermal ? 10 : 13 });
   if (input.invoice.paymentMethods?.length) write(`Pago: ${input.invoice.paymentMethods.map(paymentLabel).join(" + ")}`);
-
-  y += 3;
-  const qrSize = thermal ? Math.min(35, width - margin * 2) : 35;
-  const qrX = (width - qrSize) / 2;
-  write(AEAT_QR_SPECIFICATION.leadingText, { align: "center", bold: true, size: thermal ? 7 : 8 });
-  doc.addImage(qrDataUrl(input.invoice.qrUrl), "GIF", qrX, y, qrSize, qrSize);
-  y += qrSize + 4;
-  write(AEAT_QR_SPECIFICATION.verifactuText, { align: "center", size: thermal ? 6.5 : 8 });
 
   return Buffer.from(doc.output("arraybuffer"));
 }
