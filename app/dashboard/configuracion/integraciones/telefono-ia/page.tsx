@@ -61,10 +61,10 @@ export default function PhoneAiSettingsPage() {
 
   return (
     <ModulePageShell
-      eyebrow="Integraciones"
       title="Teléfono IA"
-      description="Atiende llamadas entrantes, recoge solicitudes de reserva y deriva a una persona cuando no puede responder con seguridad."
+      subtitle="Atiende llamadas entrantes, recoge solicitudes de reserva y deriva a una persona cuando no puede responder con seguridad."
       backHref="/dashboard/configuracion/integraciones"
+      backLabel="Volver a integraciones"
     >
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
