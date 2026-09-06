@@ -45,7 +45,7 @@ const PLANS: PlanCard[] = [
     monthly: 39,
     annual: 390,
     description: "La operativa esencial para empezar con Hostly.",
-    features: ["TPV, carta y reservas", "Hasta 5 empleados", "Operativa esencial"],
+    features: ["TPV, carta y reservas", "Hasta 5 empleados", "Alta manual de carta y configuración", "Operativa esencial"],
   },
   {
     id: "pro",
@@ -53,7 +53,7 @@ const PLANS: PlanCard[] = [
     monthly: 79,
     annual: 790,
     description: "Más automatización e IA para equipos en crecimiento.",
-    features: ["Hasta 25 empleados", "100 imágenes IA/mes", "5 importaciones IA/mes", "Soporte prioritario"],
+    features: ["Hasta 25 empleados", "Migración de carta y productos desde otro TPV", "100 imágenes IA/mes", "5 importaciones IA/mes", "Soporte prioritario"],
     trial: "30 días de prueba",
   },
   {
@@ -62,7 +62,7 @@ const PLANS: PlanCard[] = [
     monthly: 139,
     annual: 1390,
     description: "La experiencia Hostly más completa para operaciones exigentes.",
-    features: ["Empleados ilimitados", "500 imágenes IA/mes", "20 importaciones IA/mes", "Imágenes IA en lote", "Analítica multiubicación"],
+    features: ["Empleados ilimitados", "Migración completa del restaurante desde otro TPV", "500 imágenes IA/mes", "20 importaciones IA/mes", "Imágenes IA en lote", "Analítica multiubicación"],
   },
 ];
 
@@ -218,19 +218,19 @@ export default function CuentaYFacturacionPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-300">Plan actual</p>
             <p className="mt-1 text-xl font-semibold">{loading ? "Cargando…" : currentPlanName}</p>
             {subscription?.status ? <p className="mt-1 text-sm text-slate-300">Estado Stripe: {subscription.status}</p> : null}
-            {formatDate(subscription?.trialEnd ?? null) ? <p className="mt-1 text-sm text-slate-300">Prueba hasta {formatDate(subscription?.trialEnd ?? null)}</p> : null}
-            {formatDate(subscription?.currentPeriodEnd ?? null) ? <p className="mt-1 text-sm text-slate-300">Periodo hasta {formatDate(subscription?.currentPeriodEnd ?? null)}</p> : null}
-            {subscription?.cancelAtPeriodEnd ? <p className="mt-1 text-sm font-medium text-amber-300">La suscripción se cancelará al finalizar el periodo.</p> : null}
-            {subscription?.lastPaymentFailedAt ? <p className="mt-1 text-sm font-medium text-red-300">Hay un pago pendiente de resolver.</p> : null}
+            {subscription?.trialEnd ? <p className="mt-1 text-sm text-slate-300">Prueba hasta {formatDate(subscription.trialEnd)}</p> : null}
+            {!subscription?.trialEnd && subscription?.currentPeriodEnd ? <p className="mt-1 text-sm text-slate-300">Periodo hasta {formatDate(subscription.currentPeriodEnd)}</p> : null}
+            {subscription?.lastPaymentFailedAt ? <p className="mt-2 text-sm font-semibold text-amber-300">Hay un pago fallido pendiente de revisar.</p> : null}
+            {subscription?.cancelAtPeriodEnd ? <p className="mt-2 text-sm font-semibold text-amber-300">La suscripción se cancelará al terminar el periodo actual.</p> : null}
           </div>
           {subscription?.customerLinked ? (
             <button
               type="button"
-              disabled={openingPortal}
               onClick={() => void openPortal()}
-              className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={openingPortal || !billingReady}
+              className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {openingPortal ? "Abriendo Stripe…" : "Gestionar suscripción"}
+              {openingPortal ? "Abriendo…" : "Gestionar suscripción"}
             </button>
           ) : null}
         </div>
@@ -238,42 +238,43 @@ export default function CuentaYFacturacionPage() {
 
       <section className="grid gap-4 lg:grid-cols-3">
         {PLANS.map((plan) => {
-          const selected = status?.effectivePlan === plan.id;
-          const amount = interval === "month" ? plan.monthly : plan.annual;
-          const available = status?.billing.prices?.[plan.id]?.[interval] ?? false;
-          const disabled = loading || busyPlan !== null || Boolean(subscription?.subscriptionLinked) || !billingReady || !available;
+          const current = status?.effectivePlan === plan.id;
+          const price = interval === "month" ? plan.monthly : plan.annual;
+          const configured = status?.billing.prices?.[plan.id]?.[interval] ?? false;
           return (
             <article key={plan.id} className={`flex flex-col rounded-3xl border bg-white p-5 shadow-sm ${plan.id === "ultra" ? "border-sky-300 ring-1 ring-sky-100" : "border-slate-200"}`}>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-semibold text-slate-950">{plan.name}</h2>
+                  <p className="text-xl font-semibold text-slate-950">{plan.name}</p>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{plan.description}</p>
                 </div>
-                {selected ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Actual</span> : null}
+                {current ? <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">Actual</span> : null}
               </div>
               <div className="mt-5">
-                <span className="text-4xl font-semibold tracking-tight text-slate-950">{amount} €</span>
+                <span className="text-4xl font-semibold tracking-tight text-slate-950">{price} €</span>
                 <span className="ml-1 text-sm text-slate-500">/{interval === "month" ? "mes" : "año"}</span>
               </div>
-              {plan.trial && !subscription?.trialUsed ? <p className="mt-2 text-sm font-semibold text-sky-700">{plan.trial}</p> : null}
+              {plan.trial ? <p className="mt-2 text-sm font-semibold text-sky-700">{plan.trial}</p> : null}
               <ul className="mt-5 flex flex-1 flex-col gap-2 text-sm text-slate-700">
                 {plan.features.map((feature) => <li key={feature}>✓ {feature}</li>)}
               </ul>
               <button
                 type="button"
-                disabled={disabled}
                 onClick={() => void startCheckout(plan.id)}
-                className={`mt-6 rounded-xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${plan.id === "ultra" ? "bg-sky-600 text-white hover:bg-sky-700" : "bg-slate-950 text-white hover:bg-slate-800"}`}
+                disabled={current || busyPlan !== null || !billingReady || !configured || Boolean(subscription?.subscriptionLinked)}
+                className="mt-6 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
               >
-                {busyPlan === plan.id ? "Abriendo Stripe…" : subscription?.subscriptionLinked ? "Gestiona el cambio en Stripe" : selected ? "Contratar este plan" : `Elegir ${plan.name.replace("Hostly ", "")}`}
+                {current ? "Plan actual" : busyPlan === plan.id ? "Abriendo Stripe…" : plan.id === "pro" && !subscription?.trialUsed ? "Probar Pro 30 días" : `Elegir ${plan.name.replace("Hostly ", "")}`}
               </button>
             </article>
           );
         })}
       </section>
 
-      {!billingReady && !loading ? (
-        <p className="text-center text-xs text-slate-500">La contratación está temporalmente cerrada hasta completar la configuración segura de Stripe.</p>
+      {!billingReady ? (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+          La contratación todavía está en modo seguro: faltan variables sandbox de Stripe en el entorno. Los planes se muestran, pero Hostly no abrirá Checkout hasta completar esa configuración.
+        </section>
       ) : null}
     </main>
   );
