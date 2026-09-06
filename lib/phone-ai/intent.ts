@@ -104,3 +104,19 @@ export function mergeReservationDraft(
 export function reservationDraftComplete(value: PhoneAiTurn["reservation"]): value is Required<Pick<NonNullable<PhoneAiTurn["reservation"]>, "customerName" | "date" | "time" | "partySize">> & NonNullable<PhoneAiTurn["reservation"]> {
   return Boolean(value?.customerName && /^\d{4}-\d{2}-\d{2}$/.test(value.date ?? "") && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.time ?? "") && Number.isFinite(value.partySize));
 }
+
+/**
+ * Returns the immutable reservation snapshot that may be created for this turn.
+ * A confirmation is valid only when the draft was already complete before the
+ * current utterance. Fields extracted from the confirmation turn are therefore
+ * never allowed to mutate the reservation being confirmed.
+ */
+export function confirmedReservationSnapshot(
+  previous: PhoneAiTurn["reservation"] | undefined,
+  turn: PhoneAiTurn,
+): NonNullable<PhoneAiTurn["reservation"]> | null {
+  if (turn.intent !== "reservation" || turn.reservation?.confirmed !== true || !reservationDraftComplete(previous)) {
+    return null;
+  }
+  return { ...previous };
+}
