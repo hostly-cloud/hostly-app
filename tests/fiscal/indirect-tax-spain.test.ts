@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildFiscalConfiguration } from "../../lib/fiscal/configuration";
-import { calculateFiscalInvoice } from "../../lib/fiscal/money";
+import { calculateFiscalCredit, calculateFiscalInvoice } from "../../lib/fiscal/money";
 import { buildRegistrationRecord } from "../../lib/fiscal/record-builder";
 import { buildVerifactuSoapEnvelope } from "../../lib/fiscal/verifactu-xml";
 
@@ -81,7 +81,6 @@ test("las rectificaciones conservan el impuesto indirecto original", () => {
   const original = calculateFiscalInvoice([
     { lineId: "1", description: "Servicio", quantity: 1, grossAmountCents: 1_070, vatRateBps: 700 },
   ], 0, "03");
-  const { calculateFiscalCredit } = require("../../lib/fiscal/money") as typeof import("../../lib/fiscal/money");
   const credit = calculateFiscalCredit(original, 535);
   assert.equal(credit.breakdown[0]?.taxCode, "03");
   assert.equal(credit.breakdown[0]?.regimeCode, "01");
