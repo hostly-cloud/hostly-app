@@ -60,6 +60,8 @@ jobs:
         run: node --test tests/security/storage-product-image-rbac-contract.test.mjs
       - name: Firestore tenant root and fiscal boundary
         run: node --test tests/security/firestore-tenant-root-boundary.test.mjs
+      - name: App Check browser transport boundary
+        run: node --test tests/security/app-check-browser-transport.test.mjs
       - name: TypeScript
         run: npx tsc --noEmit
       - name: Fiscal unit and official XSD tests
