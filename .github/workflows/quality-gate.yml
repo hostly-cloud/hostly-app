@@ -62,6 +62,12 @@ jobs:
         run: node --test tests/security/firestore-tenant-root-boundary.test.mjs
       - name: TypeScript
         run: npx tsc --noEmit
+      - name: Fiscal unit and official XSD tests
+        run: |
+          npm run test:fiscal
+          npm run test:fiscal-xsd
+      - name: Fiscal Firestore concurrency and tenant isolation
+        run: npm run test:fiscal-server
       - name: Editor V2 geometry and landscape tests
         run: npx tsx --test tests/lib/sala-wall-presets.test.ts tests/lib/sala-surface-shapes.test.ts tests/lib/sala-landscape-elements.test.ts tests/lib/sala-editor-publication-floor-plan.test.ts tests/lib/sala-editor-v2-publisher-write-context.test.ts tests/lib/sala-editor-publication-batching.test.ts tests/server/sala-editor-published-deactivation.test.ts
       - name: Hostly plan contract tests
