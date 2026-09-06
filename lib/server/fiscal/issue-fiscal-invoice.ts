@@ -144,7 +144,11 @@ export async function issueFiscalInvoiceInPaymentTransaction(input: {
   const customer = input.invoiceIntent ? customerSnapshot(input.invoiceIntent) : null;
   const invoiceType = input.invoiceIntent ? "F1" as const : "F2" as const;
   const fiscalLines = buildFiscalLines(input.items, config.defaultVatRateBps);
-  const calculation = calculateFiscalInvoice(fiscalLines, eurosToCents(input.economics.discountTotal));
+  const calculation = calculateFiscalInvoice(
+    fiscalLines,
+    eurosToCents(input.economics.discountTotal),
+    config.indirectTaxCode ?? "01",
+  );
   const expectedTotal = eurosToCents(input.economics.finalTotal);
   if (calculation.totals.totalCents !== expectedTotal) throw new Error("FISCAL_TOTAL_MISMATCH");
   if (invoiceType === "F2" && expectedTotal > RESTAURANT_SIMPLIFIED_INVOICE_LIMIT_CENTS) {
