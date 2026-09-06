@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import type { PhoneAiTurn } from "@/lib/phone-ai/intent";
 
@@ -21,6 +22,10 @@ const DEFAULTS: PhoneAiSettings = {
 
 function clean(value: unknown, max = 160): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+export function phoneAiNumberMappingId(incomingNumber: string): string {
+  return createHash("sha256").update(incomingNumber).digest("hex");
 }
 
 export async function readPhoneAiSettings(db: Firestore, restaurantId: string): Promise<PhoneAiSettings> {
@@ -53,13 +58,13 @@ export async function savePhoneAiSettings(db: Firestore, restaurantId: string, i
 }
 
 export async function resolveRestaurantForIncomingNumber(db: Firestore, incomingNumber: string): Promise<{ restaurantId: string; settings: PhoneAiSettings } | null> {
-  const snap = await db.collectionGroup("integrations").where("provider", "==", "twilio").where("incomingNumber", "==", incomingNumber).where("provisioningStatus", "==", "verified").limit(2).get();
-  if (snap.size !== 1) return null;
-  const doc = snap.docs[0];
-  const restaurantId = doc.ref.parent.parent?.id ?? "";
-  if (!restaurantId) return null;
+  const mapping = await db.collection("_phoneAiNumberMappings").doc(phoneAiNumberMappingId(incomingNumber)).get();
+  if (!mapping.exists) return null;
+  const restaurantId = clean(mapping.data()?.restaurantId, 120);
+  if (!restaurantId || mapping.data()?.verified !== true) return null;
   const settings = await readPhoneAiSettings(db, restaurantId);
-  return settings.enabled ? { restaurantId, settings } : null;
+  if (!settings.enabled || settings.incomingNumber !== incomingNumber || settings.provisioningStatus !== "verified") return null;
+  return { restaurantId, settings };
 }
 
 export type PhoneAiSession = {
