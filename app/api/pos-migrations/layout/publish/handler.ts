@@ -6,6 +6,7 @@ import {
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import { publishPosLayoutMigration } from "@/lib/server/pos-migrations/publish-layout-migration";
+import { restaurantHasPosMigrationEntitlement } from "@/lib/server/pos-migrations/require-pos-migration-entitlement";
 
 function jsonError(status: number, error: string, details?: string) {
   return NextResponse.json({ ok: false, error, details: details ?? null }, { status });
@@ -13,6 +14,7 @@ function jsonError(status: number, error: string, details?: string) {
 
 export type PosLayoutPublishRouteDependencies = AuthenticatedRestaurantDependencies & {
   publishMigration?: typeof publishPosLayoutMigration;
+  hasMigrationEntitlement?: typeof restaurantHasPosMigrationEntitlement;
 };
 
 export async function handlePosLayoutPublishRequest(
@@ -24,6 +26,17 @@ export async function handlePosLayoutPublishRequest(
     if (isAuthErrorResponse(authCtx)) return authCtx;
     if (!serverRoleHasCapability(authCtx.role, "settings.manage")) {
       return jsonError(403, "SETTINGS_MANAGE_REQUIRED");
+    }
+    const hasMigrationEntitlement =
+      dependencies?.hasMigrationEntitlement ?? restaurantHasPosMigrationEntitlement;
+    if (
+      !(await hasMigrationEntitlement({
+        db: authCtx.db,
+        restaurantId: authCtx.restaurantId,
+        entitlement: "migration.full",
+      }))
+    ) {
+      return jsonError(403, "POS_MIGRATION_FULL_PLAN_REQUIRED", "La migración completa de salas, zonas y mesas está incluida en Hostly Ultra.");
     }
 
     const body = (await req.json().catch(() => null)) as
