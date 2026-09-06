@@ -3,6 +3,12 @@ import test from "node:test";
 import type { OperationalDelayAlert } from "@/lib/operations/operational-delay-alerts";
 import { sanitizeOperationalAlertPolicy } from "@/lib/operations/operational-alert-policy";
 import {
+  DEFAULT_OPERATIONAL_COMMUNICATION_POLICY,
+  operationalCommunicationChannelEnabled,
+  recipientMatchesOperationalCommunicationAudience,
+  sanitizeOperationalCommunicationPolicy,
+} from "@/lib/operations/operational-communications";
+import {
   buildManagerAutomationCopy,
   managerAutomationPriority,
   resolveManagerAutomationStage,
@@ -169,5 +175,71 @@ test("acknowledged automation remains quiet unless the incident worsens", () => 
     previousStatus: "active",
     previousStage: "attention",
     nextStage: "critical",
+  }), false);
+});
+
+test("communication policy defaults route low noise attention and escalate to management", () => {
+  assert.deepEqual(DEFAULT_OPERATIONAL_COMMUNICATION_POLICY.attention, {
+    audience: "supervisors",
+    push: true,
+    email: false,
+  });
+  assert.deepEqual(DEFAULT_OPERATIONAL_COMMUNICATION_POLICY.escalated, {
+    audience: "managers",
+    push: true,
+    email: true,
+  });
+});
+
+test("communication policy sanitizes invalid audiences without enabling phantom values", () => {
+  const policy = sanitizeOperationalCommunicationPolicy({
+    enabled: true,
+    attention: { audience: "everyone", push: false, email: true },
+    escalated: { audience: "managers", push: true, email: false },
+  });
+  assert.equal(policy.attention.audience, "supervisors");
+  assert.equal(policy.attention.push, false);
+  assert.equal(policy.attention.email, true);
+  assert.equal(policy.escalated.audience, "managers");
+});
+
+test("manager audience excludes operational supervisors without a management role", () => {
+  assert.equal(recipientMatchesOperationalCommunicationAudience("owner", "managers"), true);
+  assert.equal(recipientMatchesOperationalCommunicationAudience("admin", "managers"), true);
+  assert.equal(recipientMatchesOperationalCommunicationAudience("manager", "managers"), true);
+  assert.equal(recipientMatchesOperationalCommunicationAudience("waiter", "managers"), false);
+  assert.equal(recipientMatchesOperationalCommunicationAudience("kitchen", "managers"), false);
+  assert.equal(recipientMatchesOperationalCommunicationAudience("waiter", "supervisors"), true);
+});
+
+test("communication channel requires stage rule, global switch and real provider", () => {
+  const policy = DEFAULT_OPERATIONAL_COMMUNICATION_POLICY;
+  assert.equal(operationalCommunicationChannelEnabled({
+    policy,
+    stage: "attention",
+    channel: "email",
+    globalChannelEnabled: true,
+    providerAvailable: true,
+  }), false);
+  assert.equal(operationalCommunicationChannelEnabled({
+    policy,
+    stage: "critical",
+    channel: "email",
+    globalChannelEnabled: true,
+    providerAvailable: true,
+  }), true);
+  assert.equal(operationalCommunicationChannelEnabled({
+    policy,
+    stage: "critical",
+    channel: "email",
+    globalChannelEnabled: false,
+    providerAvailable: true,
+  }), false);
+  assert.equal(operationalCommunicationChannelEnabled({
+    policy,
+    stage: "critical",
+    channel: "email",
+    globalChannelEnabled: true,
+    providerAvailable: false,
   }), false);
 });
