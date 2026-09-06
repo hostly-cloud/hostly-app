@@ -14,6 +14,7 @@ const EXPLICIT_ROUTE_CLASSIFICATION = new Map([
   ["app/api/tpv/orders/sync-items/route.ts", "retired-410"],
   ["app/api/debug/firebase/route.ts", "production-disabled"],
   ["app/api/queues/catalog-image-bulk/route.ts", "signed-callback"],
+  ["app/api/ai/manager-analytics/route.ts", "authenticated-ai-tenant"],
 ]);
 
 const SECURITY_SIGNALS = [
