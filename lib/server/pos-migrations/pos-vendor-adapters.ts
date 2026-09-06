@@ -1,14 +1,4 @@
-import type { PosMigrationTargetField } from "@/lib/pos-migration/types";
-
-export type PosMigrationVendor =
-  | "revo"
-  | "glop"
-  | "lastapp"
-  | "frontrest"
-  | "agora"
-  | "square"
-  | "lightspeed"
-  | "generic";
+import type { PosMigrationTargetField, PosMigrationVendor } from "@/lib/pos-migration/types";
 
 export type PosVendorAdapter = {
   id: PosMigrationVendor;
@@ -135,24 +125,34 @@ export function detectPosVendor(headers: string[], fileName = ""): {
 } {
   const normalizedHeaders = headers.map(normalize);
   const normalizedFileName = normalize(fileName);
-  let best: { adapter: PosVendorAdapter; score: number } | null = null;
+  let best: { adapter: PosVendorAdapter; score: number; fileMatched: boolean; exactHints: number } | null = null;
 
   for (const adapter of POS_VENDOR_ADAPTERS) {
     let score = 0;
+    let fileMatched = false;
+    let exactHints = 0;
     for (const hint of adapter.headerHints.map(normalize)) {
-      if (normalizedFileName.includes(hint)) score += 3;
-      if (normalizedHeaders.some((header) => header === hint)) score += 2;
-      else if (normalizedHeaders.some((header) => header.includes(hint))) score += 1;
+      if (normalizedFileName.includes(hint)) {
+        score += 3;
+        fileMatched = true;
+      }
+      if (normalizedHeaders.some((header) => header === hint)) {
+        score += 2;
+        exactHints += 1;
+      } else if (normalizedHeaders.some((header) => header.includes(hint))) {
+        score += 1;
+      }
     }
     for (const aliases of Object.values(adapter.aliases)) {
       for (const alias of (aliases ?? []).map(normalize)) {
         if (normalizedHeaders.includes(alias)) score += 0.75;
       }
     }
-    if (!best || score > best.score) best = { adapter, score };
+    if (!best || score > best.score) best = { adapter, score, fileMatched, exactHints };
   }
 
-  if (!best || best.score < 2.5) {
+  const hasStrongSignature = Boolean(best && (best.fileMatched || best.exactHints >= 3 || best.score >= 6));
+  if (!best || best.score < 2.5 || !hasStrongSignature) {
     return { vendor: "generic", label: "Formato genérico", confidence: 0, adapter: null };
   }
   const confidence = Math.min(0.98, Math.max(0.55, best.score / 10));
