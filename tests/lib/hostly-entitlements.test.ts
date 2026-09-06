@@ -18,9 +18,13 @@ test("Hostly keeps commercial entitlements separated by module", () => {
     "tpv.productInfo.gastronomy",
   ]);
   assert.deepEqual(HOSTLY_ENTITLEMENTS.ai, ["ai.sommelierPairing"]);
+  assert.deepEqual(HOSTLY_ENTITLEMENTS.posMigration, [
+    "migration.products",
+    "migration.full",
+  ]);
 });
 
-test("Basic has no AI catalog image, product gastronomy or Sommelier entitlement", () => {
+test("Basic has no AI catalog image, product gastronomy, Sommelier or automatic migration entitlement", () => {
   assert.deepEqual(getHostlyPlanEntitlements("basic"), []);
   assert.equal(
     hasHostlyPlanEntitlement("basic", "catalog.image.ai.single"),
@@ -31,6 +35,8 @@ test("Basic has no AI catalog image, product gastronomy or Sommelier entitlement
     false,
   );
   assert.equal(hasHostlyPlanEntitlement("basic", "ai.sommelierPairing"), false);
+  assert.equal(hasHostlyPlanEntitlement("basic", "migration.products"), false);
+  assert.equal(hasHostlyPlanEntitlement("basic", "migration.full"), false);
   assert.deepEqual(resolveTpvProductInfoAccess("basic"), {
     canOpenGastronomy: false,
     canSeeAllergens: false,
@@ -39,11 +45,12 @@ test("Basic has no AI catalog image, product gastronomy or Sommelier entitlement
   });
 });
 
-test("Pro enables individual image tools and TPV gastronomy, but not bulk generation or Sommelier", () => {
+test("Pro enables individual image tools, TPV gastronomy and product migration, but not bulk generation, Sommelier or full layout migration", () => {
   assert.deepEqual(HOSTLY_PLAN_ENTITLEMENTS.pro, [
     "catalog.image.ai.single",
     "catalog.image.catalogSearch",
     "tpv.productInfo.gastronomy",
+    "migration.products",
   ]);
   assert.equal(
     hasHostlyPlanEntitlement("pro", "catalog.image.ai.single"),
@@ -58,6 +65,8 @@ test("Pro enables individual image tools and TPV gastronomy, but not bulk genera
     true,
   );
   assert.equal(hasHostlyPlanEntitlement("pro", "ai.sommelierPairing"), false);
+  assert.equal(hasHostlyPlanEntitlement("pro", "migration.products"), true);
+  assert.equal(hasHostlyPlanEntitlement("pro", "migration.full"), false);
   assert.deepEqual(resolveTpvProductInfoAccess("pro"), {
     canOpenGastronomy: true,
     canSeeAllergens: true,
@@ -66,13 +75,15 @@ test("Pro enables individual image tools and TPV gastronomy, but not bulk genera
   });
 });
 
-test("Ultra enables the complete catalog image, TPV gastronomy and Sommelier entitlement set", () => {
+test("Ultra enables the complete catalog image, TPV gastronomy, Sommelier and migration entitlement set", () => {
   assert.deepEqual(HOSTLY_PLAN_ENTITLEMENTS.ultra, [
     "catalog.image.ai.single",
     "catalog.image.ai.bulk",
     "catalog.image.catalogSearch",
     "tpv.productInfo.gastronomy",
     "ai.sommelierPairing",
+    "migration.products",
+    "migration.full",
   ]);
   assert.equal(
     hasHostlyPlanEntitlement("ultra", "catalog.image.ai.bulk"),
@@ -83,6 +94,8 @@ test("Ultra enables the complete catalog image, TPV gastronomy and Sommelier ent
     true,
   );
   assert.equal(hasHostlyPlanEntitlement("ultra", "ai.sommelierPairing"), true);
+  assert.equal(hasHostlyPlanEntitlement("ultra", "migration.products"), true);
+  assert.equal(hasHostlyPlanEntitlement("ultra", "migration.full"), true);
   assert.deepEqual(resolveTpvProductInfoAccess("ultra"), {
     canOpenGastronomy: true,
     canSeeAllergens: true,
