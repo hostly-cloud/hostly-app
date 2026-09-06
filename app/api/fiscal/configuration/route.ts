@@ -6,6 +6,7 @@ import {
   isStoredFiscalConfiguration,
   type FiscalConfigurationInput,
 } from "@/lib/fiscal/configuration";
+import { fiscalLiveReadiness } from "@/lib/fiscal/live-readiness";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import {
   isAuthErrorResponse,
@@ -19,6 +20,7 @@ function publicConfiguration(config: ReturnType<typeof buildFiscalConfiguration>
     ...safe,
     certificateConfigured: Boolean(config.certificateSecretResource),
     readiness: fiscalReadiness(config),
+    liveReadiness: fiscalLiveReadiness(config),
   };
 }
 
