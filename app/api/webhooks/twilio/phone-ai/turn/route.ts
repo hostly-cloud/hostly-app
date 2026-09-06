@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getHostlyFirestore } from "@/lib/firebase/admin";
 import {
+  confirmedReservationSnapshot,
   mergeReservationDraft,
   parsePhoneAiTurn,
   reservationDraftComplete,
@@ -15,9 +16,12 @@ import {
 } from "@/lib/phone-ai/twilio";
 import { createOperationalReservation } from "@/lib/server/reservas/reservation-operations";
 import {
+  claimPhoneAiReservationCreation,
+  completePhoneAiReservationCreation,
+  failPhoneAiReservationCreation,
   readPhoneAiSession,
   resolveRestaurantForIncomingNumber,
-  upsertPhoneAiSession,
+  updatePhoneAiSession,
 } from "@/lib/server/phone-ai/phone-ai-center";
 
 function xml(body: string, status = 200) {
@@ -65,7 +69,7 @@ export async function POST(req: Request) {
   if (!resolved) return xml(twimlSayAndHangup("Este número no tiene el asistente activado."), 404);
   const session = await readPhoneAiSession(db, resolved.restaurantId, callSid);
   if (!session) return xml(twimlSayAndHangup("La sesión de llamada ha caducado. Vuelve a llamar, por favor."), 409);
-  if (session.reservationId) {
+  if (session.reservationId || session.reservationCreationState === "created") {
     return xml(twimlSayAndHangup("Tu solicitud de reserva ya está registrada. El restaurante la confirmará lo antes posible.", resolved.settings.language));
   }
   if (session.turns >= 6) {
@@ -76,7 +80,6 @@ export async function POST(req: Request) {
     return xml(twimlSayAndGather({ message: "No te he oído bien. Repítelo, por favor.", actionUrl: turnUrl, language: resolved.settings.language }));
   }
 
-  const previousWasComplete = reservationDraftComplete(session.reservation);
   const parsed = await parsePhoneAiTurn({
     transcript,
     currentDate: madridDate(),
@@ -86,26 +89,37 @@ export async function POST(req: Request) {
   const nextSession = { ...session, turns: session.turns + 1, reservation: draft };
 
   if (parsed.needsHuman || parsed.intent === "handoff" || parsed.intent === "info") {
-    await upsertPhoneAiSession(db, nextSession);
+    await updatePhoneAiSession(db, nextSession);
     return xml(handoff("Te paso con el restaurante para darte una respuesta segura.", resolved.settings.fallbackPhone, resolved.settings.language));
   }
 
   if (parsed.intent !== "reservation") {
-    await upsertPhoneAiSession(db, nextSession);
+    await updatePhoneAiSession(db, nextSession);
     const turnUrl = new URL("/api/webhooks/twilio/phone-ai/turn", canonicalTwilioUrl(req)).toString();
     return xml(twimlSayAndGather({ message: "Ahora mismo puedo ayudarte con una solicitud de reserva. Dime día, hora y número de personas.", actionUrl: turnUrl, language: resolved.settings.language }));
   }
 
-  if (previousWasComplete && parsed.reservation?.confirmed === true) {
-    const stableDraft = session.reservation;
-    if (!reservationDraftComplete(stableDraft)) {
-      return xml(twimlSayAndHangup("No he podido confirmar todos los datos. Te paso con el restaurante.", resolved.settings.language));
+  const stableDraft = confirmedReservationSnapshot(session.reservation, parsed);
+  if (stableDraft) {
+    await updatePhoneAiSession(db, { ...nextSession, reservation: stableDraft });
+    const claim = await claimPhoneAiReservationCreation({
+      db,
+      restaurantId: resolved.restaurantId,
+      callSid,
+    });
+    if (claim.status === "created") {
+      return xml(twimlSayAndHangup("Tu solicitud de reserva ya está registrada. El restaurante la confirmará lo antes posible.", resolved.settings.language));
     }
+    if (claim.status === "busy") {
+      return xml(twimlSayAndHangup("Tu solicitud se está registrando. El restaurante la confirmará lo antes posible.", resolved.settings.language));
+    }
+
     try {
       const created = await createOperationalReservation({
         db,
         restaurantId: resolved.restaurantId,
         userId: `phone-ai:${callSid}`,
+        reservationId: claim.reservationId,
         input: {
           customerName: stableDraft.customerName,
           customerPhone: session.callerPhone,
@@ -116,15 +130,24 @@ export async function POST(req: Request) {
           notes: ["Solicitud recibida por Teléfono IA", stableDraft.notes].filter(Boolean).join(" · "),
         },
       });
-      await upsertPhoneAiSession(db, { ...nextSession, reservation: stableDraft, reservationId: created.id });
+      await completePhoneAiReservationCreation({
+        db,
+        restaurantId: resolved.restaurantId,
+        callSid,
+        reservationId: created.id,
+      });
       return xml(twimlSayAndHangup("Perfecto. He registrado tu solicitud de reserva. El restaurante la confirmará; todavía no te estoy prometiendo disponibilidad. Gracias.", resolved.settings.language));
     } catch {
-      await upsertPhoneAiSession(db, nextSession);
+      await failPhoneAiReservationCreation({
+        db,
+        restaurantId: resolved.restaurantId,
+        callSid,
+      });
       return xml(handoff("No he podido registrar la solicitud con seguridad. Te paso con el restaurante.", resolved.settings.fallbackPhone, resolved.settings.language));
     }
   }
 
-  await upsertPhoneAiSession(db, nextSession);
+  await updatePhoneAiSession(db, nextSession);
   const turnUrl = new URL("/api/webhooks/twilio/phone-ai/turn", canonicalTwilioUrl(req)).toString();
   const message = reservationDraftComplete(draft) ? confirmationMessage(draft) : parsed.reply;
   return xml(twimlSayAndGather({ message, actionUrl: turnUrl, language: resolved.settings.language }));
