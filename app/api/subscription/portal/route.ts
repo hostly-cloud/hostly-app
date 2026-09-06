@@ -4,7 +4,10 @@ import {
   requireAuthenticatedRestaurant,
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import { isOwnerOrAdminRole } from "@/lib/server/auth/profile-role";
-import { createHostlyBillingPortalSession } from "@/lib/subscription/hostly-stripe-billing";
+import {
+  createHostlyBillingPortalSession,
+  isHostlyStripeSandboxMode,
+} from "@/lib/subscription/hostly-stripe-billing";
 
 function jsonError(status: number, error: string) {
   return NextResponse.json({ ok: false, error }, { status });
@@ -28,9 +31,12 @@ export async function POST(req: Request) {
     .doc(authCtx.restaurantId)
     .get();
   const data = restaurantSnap.data() as Record<string, unknown> | undefined;
+  const sourceField = isHostlyStripeSandboxMode()
+    ? "subscriptionSandbox"
+    : "subscription";
   const subscription =
-    data?.subscription && typeof data.subscription === "object"
-      ? (data.subscription as Record<string, unknown>)
+    data?.[sourceField] && typeof data[sourceField] === "object"
+      ? (data[sourceField] as Record<string, unknown>)
       : null;
   const customerId =
     typeof subscription?.stripeCustomerId === "string"
@@ -41,7 +47,7 @@ export async function POST(req: Request) {
   try {
     const session = await createHostlyBillingPortalSession({
       customerId,
-      returnUrl: `${requestBaseUrl(req)}/dashboard/configuracion`,
+      returnUrl: `${requestBaseUrl(req)}/dashboard/configuracion/cuenta`,
     });
     return NextResponse.json({ ok: true, portalUrl: session.url });
   } catch (error) {

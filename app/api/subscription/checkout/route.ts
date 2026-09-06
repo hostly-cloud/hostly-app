@@ -6,6 +6,7 @@ import {
 import { isOwnerOrAdminRole } from "@/lib/server/auth/profile-role";
 import {
   createHostlyCheckoutSession,
+  isHostlyStripeSandboxMode,
   normalizeHostlyBillingInterval,
   normalizeRequestedHostlyPlan,
 } from "@/lib/subscription/hostly-stripe-billing";
@@ -44,9 +45,12 @@ export async function POST(req: Request) {
     .doc(authCtx.restaurantId)
     .get();
   const restaurant = restaurantSnap.data() as Record<string, unknown> | undefined;
+  const sourceField = isHostlyStripeSandboxMode()
+    ? "subscriptionSandbox"
+    : "subscription";
   const subscription =
-    restaurant?.subscription && typeof restaurant.subscription === "object"
-      ? (restaurant.subscription as Record<string, unknown>)
+    restaurant?.[sourceField] && typeof restaurant[sourceField] === "object"
+      ? (restaurant[sourceField] as Record<string, unknown>)
       : null;
   const linkedSubscriptionId =
     typeof subscription?.stripeSubscriptionId === "string"
