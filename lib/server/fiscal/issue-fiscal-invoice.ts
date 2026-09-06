@@ -275,6 +275,8 @@ export async function issueFiscalInvoiceInPaymentTransaction(input: {
   input.tx.create(input.db.collection("fiscalOutbox").doc(recordId), {
     restaurantId: input.restaurantId,
     taxEntityId: config.taxEntityId,
+    installationNumber: config.software.installationNumber,
+    chainSequence: previousChainSequence + 1,
     invoiceId,
     recordId,
     environment: config.aeatEnvironment,
@@ -290,6 +292,8 @@ export async function issueFiscalInvoiceInPaymentTransaction(input: {
   input.tx.create(input.db.collection("fiscalDeliveryStates").doc(recordId), {
     restaurantId: input.restaurantId,
     taxEntityId: config.taxEntityId,
+    installationNumber: config.software.installationNumber,
+    chainSequence: previousChainSequence + 1,
     invoiceId,
     recordId,
     status: "pending",
@@ -442,8 +446,8 @@ export async function issueFiscalRefundRectificationInTransaction(input: {
     issuedAtMs, issueDate, generatedAt, qrUrl, immutable: true, version: HOSTLY_FISCAL_VERSION_SNAPSHOT,
     createdBy: input.actorUid, rectificationReason: input.reason.trim().slice(0, 500),
   });
-  input.tx.create(input.db.collection("fiscalOutbox").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, invoiceId, recordId, environment: config.aeatEnvironment, xmlEnvelope, payloadHash: createHash("sha256").update(xmlEnvelope, "utf8").digest("hex"), status: "pending", attempts: 0, nextAttemptAtMs: issuedAtMs, leaseUntilMs: null, createdAtMs: issuedAtMs, updatedAtMs: issuedAtMs });
-  input.tx.create(input.db.collection("fiscalDeliveryStates").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, invoiceId, recordId, status: "pending", attempts: 0, updatedAtMs: issuedAtMs });
+  input.tx.create(input.db.collection("fiscalOutbox").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, installationNumber: config.software.installationNumber, chainSequence: previousChainSequence + 1, invoiceId, recordId, environment: config.aeatEnvironment, xmlEnvelope, payloadHash: createHash("sha256").update(xmlEnvelope, "utf8").digest("hex"), status: "pending", attempts: 0, nextAttemptAtMs: issuedAtMs, leaseUntilMs: null, createdAtMs: issuedAtMs, updatedAtMs: issuedAtMs });
+  input.tx.create(input.db.collection("fiscalDeliveryStates").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, installationNumber: config.software.installationNumber, chainSequence: previousChainSequence + 1, invoiceId, recordId, status: "pending", attempts: 0, updatedAtMs: issuedAtMs });
   input.tx.create(input.db.collection("fiscalRelations").doc(invoiceId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, kind: "rectifies", fromInvoiceId: invoiceId, toInvoiceId: input.originalInvoiceId, paymentId: input.paymentId, createdAtMs: issuedAtMs });
   input.tx.create(input.db.collection("fiscalAuditEvents").doc(stableDocumentId("audit", recordId, "issued")), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, actorUid: input.actorUid, action: "fiscal_rectification_issued", entityType: "fiscalInvoice", entityId: invoiceId, recordId, result: "success", source: "tpv_refund", createdAtMs: issuedAtMs });
 
@@ -578,8 +582,8 @@ export async function issueFiscalReplacementInTransaction(input: {
     issuedAtMs, issueDate, generatedAt, qrUrl, immutable: true, version: HOSTLY_FISCAL_VERSION_SNAPSHOT,
     createdBy: input.actorUid,
   });
-  input.tx.create(input.db.collection("fiscalOutbox").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, invoiceId: replacementInvoiceId, recordId, environment: config.aeatEnvironment, xmlEnvelope, payloadHash: createHash("sha256").update(xmlEnvelope, "utf8").digest("hex"), status: "pending", attempts: 0, nextAttemptAtMs: issuedAtMs, leaseUntilMs: null, createdAtMs: issuedAtMs, updatedAtMs: issuedAtMs });
-  input.tx.create(input.db.collection("fiscalDeliveryStates").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, invoiceId: replacementInvoiceId, recordId, status: "pending", attempts: 0, updatedAtMs: issuedAtMs });
+  input.tx.create(input.db.collection("fiscalOutbox").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, installationNumber: config.software.installationNumber, chainSequence: previousChainSequence + 1, invoiceId: replacementInvoiceId, recordId, environment: config.aeatEnvironment, xmlEnvelope, payloadHash: createHash("sha256").update(xmlEnvelope, "utf8").digest("hex"), status: "pending", attempts: 0, nextAttemptAtMs: issuedAtMs, leaseUntilMs: null, createdAtMs: issuedAtMs, updatedAtMs: issuedAtMs });
+  input.tx.create(input.db.collection("fiscalDeliveryStates").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, installationNumber: config.software.installationNumber, chainSequence: previousChainSequence + 1, invoiceId: replacementInvoiceId, recordId, status: "pending", attempts: 0, updatedAtMs: issuedAtMs });
   input.tx.create(input.db.collection("fiscalRelations").doc(replacementInvoiceId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, kind: "replaces", fromInvoiceId: replacementInvoiceId, toInvoiceId: input.originalInvoiceId, createdAtMs: issuedAtMs });
   input.tx.create(input.db.collection("fiscalAuditEvents").doc(stableDocumentId("audit", recordId, "issued")), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, actorUid: input.actorUid, action: "fiscal_replacement_issued", entityType: "fiscalInvoice", entityId: replacementInvoiceId, recordId, result: "success", source: "fiscal_api", createdAtMs: issuedAtMs });
 
@@ -653,8 +657,8 @@ export async function issueFiscalCancellationInTransaction(input: {
   input.tx.set(chainRef, { taxEntityId: config.taxEntityId, installationNumber: config.software.installationNumber, sequence: previousChainSequence + 1, lastRecord: chainLastRecord, updatedAtMs: issuedAtMs });
   input.tx.create(input.db.collection("fiscalRecords").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, invoiceId: input.invoiceId, recordId, record, createdAtMs: issuedAtMs, immutable: true, version: HOSTLY_FISCAL_VERSION_SNAPSHOT });
   input.tx.create(cancellationRef, { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, cancellationId, recordId, invoiceId: input.invoiceId, invoiceNumber: invoice.invoiceNumber, reason: input.reason.trim().slice(0, 500), createdBy: input.actorUid, createdAtMs: issuedAtMs, immutable: true });
-  input.tx.create(input.db.collection("fiscalOutbox").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, invoiceId: input.invoiceId, recordId, environment: config.aeatEnvironment, xmlEnvelope, payloadHash: createHash("sha256").update(xmlEnvelope, "utf8").digest("hex"), status: "pending", attempts: 0, nextAttemptAtMs: issuedAtMs, leaseUntilMs: null, createdAtMs: issuedAtMs, updatedAtMs: issuedAtMs });
-  input.tx.create(input.db.collection("fiscalDeliveryStates").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, invoiceId: input.invoiceId, recordId, status: "pending", attempts: 0, updatedAtMs: issuedAtMs });
+  input.tx.create(input.db.collection("fiscalOutbox").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, installationNumber: config.software.installationNumber, chainSequence: previousChainSequence + 1, invoiceId: input.invoiceId, recordId, environment: config.aeatEnvironment, xmlEnvelope, payloadHash: createHash("sha256").update(xmlEnvelope, "utf8").digest("hex"), status: "pending", attempts: 0, nextAttemptAtMs: issuedAtMs, leaseUntilMs: null, createdAtMs: issuedAtMs, updatedAtMs: issuedAtMs });
+  input.tx.create(input.db.collection("fiscalDeliveryStates").doc(recordId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, installationNumber: config.software.installationNumber, chainSequence: previousChainSequence + 1, invoiceId: input.invoiceId, recordId, status: "pending", attempts: 0, updatedAtMs: issuedAtMs });
   input.tx.create(input.db.collection("fiscalRelations").doc(cancellationId), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, kind: "cancels_record", cancellationId, invoiceId: input.invoiceId, recordId, createdAtMs: issuedAtMs });
   input.tx.create(input.db.collection("fiscalAuditEvents").doc(stableDocumentId("audit", recordId, "issued")), { restaurantId: input.restaurantId, taxEntityId: config.taxEntityId, actorUid: input.actorUid, action: "fiscal_cancellation_record_issued", entityType: "fiscalInvoice", entityId: input.invoiceId, recordId, result: "success", source: "fiscal_api", createdAtMs: issuedAtMs });
   return { cancellationId, recordId, invoiceId: input.invoiceId, invoiceNumber: String(invoice.invoiceNumber), recordStatus: "pending", mode: config.mode };
