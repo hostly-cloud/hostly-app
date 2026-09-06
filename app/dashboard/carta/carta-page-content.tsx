@@ -594,6 +594,11 @@ type CartOrderLine = {
   tableGroupSourceOrderId?: string;
 };
 
+type TpvLineActionConfirmation = {
+  kind: "remove-one" | "comp" | "cancel";
+  lineId: string;
+};
+
 const CARTA_PRESET_EXTRAS: readonly CartOrderLineExtra[] = [];
 
 function normalizeComandaCourseForStorage(raw: unknown): number | undefined {
@@ -2645,6 +2650,10 @@ export function CartaPageContent({
   const [comandaLineActionsTargetId, setComandaLineActionsTargetId] = useState<string | null>(
     null,
   );
+  const [lineActionConfirmation, setLineActionConfirmation] =
+    useState<TpvLineActionConfirmation | null>(null);
+  const [lineActionConfirmationBusy, setLineActionConfirmationBusy] =
+    useState(false);
   const [tpvQuickActionsAnchor, setTpvQuickActionsAnchor] = useState<{
     lineId: string;
     x: number;
@@ -5605,14 +5614,6 @@ export function CartaPageContent({
 
       const statusBeforeCancel = st;
 
-      const confirmMessage =
-        st === "served"
-          ? "¿Anular esta línea ya servida?"
-          : "¿Anular esta línea ya enviada?";
-      const ok = window.confirm(confirmMessage);
-      if (!ok) return;
-      if (!confirmCriticalActionIfUnstable(connectivityStatus)) return;
-
       const lineAny = line as unknown as {
         orderItemDocId?: unknown;
         orderId?: unknown;
@@ -5804,7 +5805,6 @@ export function CartaPageContent({
       syncEmbeddedOrderItems,
       activityActorName,
       activityActorRole,
-      connectivityStatus,
       canCancelLine,
     ],
   );
@@ -5812,8 +5812,6 @@ export function CartaPageContent({
   const handleRemoveOneUnitFromLine = useCallback(
     async (line: CartOrderLine) => {
       if (!isFirebaseConfigured) return;
-      const ok = window.confirm("¿Quitar 1 unidad de este producto?");
-      if (!ok) return;
 
       const selectedLine = line;
 
@@ -5883,8 +5881,6 @@ export function CartaPageContent({
   const handleCompProductFromLine = useCallback(
     async (line: CartOrderLine) => {
       if (!isFirebaseConfigured) return;
-      const ok = window.confirm("¿Invitar este producto?");
-      if (!ok) return;
 
       const lineEditorTarget = line;
       const lineAny = line as unknown as { orderId?: unknown };
@@ -5937,6 +5933,60 @@ export function CartaPageContent({
       updateCurrentTableOrder,
     ],
   );
+
+  const requestLineActionConfirmation = useCallback(
+    (kind: TpvLineActionConfirmation["kind"], line: CartOrderLine) => {
+      setComandaLineActionsOpen(false);
+      setComandaLineActionsTargetId(null);
+      setComandaLineActionsAnchorRect(null);
+      setTpvQuickActionsAnchor(null);
+      setLineActionConfirmation({ kind, lineId: line.id });
+    },
+    [],
+  );
+
+  const lineActionConfirmationTarget = useMemo(() => {
+    if (!lineActionConfirmation) return null;
+    return (
+      order.find((line) => line.id === lineActionConfirmation.lineId) ?? null
+    );
+  }, [lineActionConfirmation, order]);
+
+  const closeLineActionConfirmation = useCallback(() => {
+    if (lineActionConfirmationBusy) return;
+    setLineActionConfirmation(null);
+  }, [lineActionConfirmationBusy]);
+
+  const confirmLineAction = useCallback(async () => {
+    if (
+      !lineActionConfirmation ||
+      !lineActionConfirmationTarget ||
+      lineActionConfirmationBusy
+    ) {
+      return;
+    }
+
+    setLineActionConfirmationBusy(true);
+    try {
+      if (lineActionConfirmation.kind === "remove-one") {
+        await handleRemoveOneUnitFromLine(lineActionConfirmationTarget);
+      } else if (lineActionConfirmation.kind === "comp") {
+        await handleCompProductFromLine(lineActionConfirmationTarget);
+      } else {
+        await handleCancelSentOrderLine(lineActionConfirmationTarget);
+      }
+      setLineActionConfirmation(null);
+    } finally {
+      setLineActionConfirmationBusy(false);
+    }
+  }, [
+    handleCancelSentOrderLine,
+    handleCompProductFromLine,
+    handleRemoveOneUnitFromLine,
+    lineActionConfirmation,
+    lineActionConfirmationBusy,
+    lineActionConfirmationTarget,
+  ]);
 
   const handleRepeatItem = useCallback(
     async (item: CartOrderLine) => {
@@ -8528,17 +8578,17 @@ export function CartaPageContent({
             return;
           }
           if (canCancel && !isCancelling && canCancelLine) {
-            void handleCancelSentOrderLine(line);
+            requestLineActionConfirmation("cancel", line);
           }
         },
       },
     ];
   }, [
     cancellingLineIds,
-    handleCancelSentOrderLine,
     handleRemoveLine,
     handleRepeatItem,
     openComandaLineEditor,
+    requestLineActionConfirmation,
     tpvQuickActionsLine,
     canCancelLine,
   ]);
@@ -9476,6 +9526,79 @@ export function CartaPageContent({
           </div>
         </div>
       ) : null}
+      {lineActionConfirmation && lineActionConfirmationTarget ? (
+        <div
+          className="fixed inset-0 z-[83] flex items-center justify-center bg-black/45 p-3"
+          role="presentation"
+          onClick={closeLineActionConfirmation}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="carta-line-action-confirm-title"
+            aria-describedby="carta-line-action-confirm-description"
+            className="carta-march-confirm-modal"
+            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h3 id="carta-line-action-confirm-title">
+              {lineActionConfirmation.kind === "remove-one"
+                ? "Quitar una unidad"
+                : lineActionConfirmation.kind === "comp"
+                  ? "Invitar producto"
+                  : "Anular línea"}
+            </h3>
+            <p
+              id="carta-line-action-confirm-description"
+              className="carta-march-confirm-modal__hint"
+            >
+              {lineActionConfirmation.kind === "remove-one"
+                ? lineActionConfirmationTarget.quantity <= 1
+                  ? `Se anulará ${comandaLineDisplayName(lineActionConfirmationTarget)} porque solo queda una unidad.`
+                  : `Se reducirá ${comandaLineDisplayName(lineActionConfirmationTarget)} de ×${lineActionConfirmationTarget.quantity} a ×${lineActionConfirmationTarget.quantity - 1}.`
+                : lineActionConfirmation.kind === "comp"
+                  ? `${comandaLineDisplayName(lineActionConfirmationTarget)} se marcará como invitación y se ajustará el total.`
+                  : normalizeOrderLineStatus(lineActionConfirmationTarget.status) ===
+                      "served"
+                    ? `Se anulará ${comandaLineDisplayName(lineActionConfirmationTarget)} ×${lineActionConfirmationTarget.quantity}, aunque ya está servida.`
+                    : `Se anulará ${comandaLineDisplayName(lineActionConfirmationTarget)} ×${lineActionConfirmationTarget.quantity} y dejará de formar parte de la cuenta.`}
+              {connectivityStatus !== "online"
+                ? " La conexión no es estable; confirma solo si quieres continuar igualmente."
+                : ""}
+            </p>
+            <div className="carta-march-confirm-modal__actions">
+              <button
+                type="button"
+                className="carta-march-confirm-modal__btn carta-march-confirm-modal__btn-secondary"
+                disabled={lineActionConfirmationBusy}
+                onClick={closeLineActionConfirmation}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={`carta-march-confirm-modal__btn ${
+                  lineActionConfirmation.kind === "comp"
+                    ? "carta-march-confirm-modal__btn-primary"
+                    : "carta-march-confirm-modal__btn-danger"
+                }`}
+                disabled={lineActionConfirmationBusy}
+                onClick={() => void confirmLineAction()}
+              >
+                {lineActionConfirmationBusy
+                  ? lineActionConfirmation.kind === "cancel"
+                    ? "Anulando…"
+                    : "Guardando…"
+                  : lineActionConfirmation.kind === "remove-one"
+                    ? "Quitar unidad"
+                    : lineActionConfirmation.kind === "comp"
+                      ? "Confirmar invitación"
+                      : "Anular línea"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {comandaLineActionsOpen && comandaLineActionsTarget ? (
         <>
           <div
@@ -9548,8 +9671,10 @@ export function CartaPageContent({
                         if (!allowRemoveOne) {
                           return;
                         }
-                        void handleRemoveOneUnitFromLine(comandaLineActionsTarget);
-                        close();
+                        requestLineActionConfirmation(
+                          "remove-one",
+                          comandaLineActionsTarget,
+                        );
                       }}
                     >
                       Quitar 1 unidad
@@ -9572,7 +9697,10 @@ export function CartaPageContent({
                         if (!allowInvite) {
                           return;
                         }
-                        void handleCompProductFromLine(comandaLineActionsTarget);
+                        requestLineActionConfirmation(
+                          "comp",
+                          comandaLineActionsTarget,
+                        );
                       }}
                     >
                       Invitar producto
@@ -9593,8 +9721,10 @@ export function CartaPageContent({
                       }
                       onClick={() => {
                         if (!allowCancel || isCancelling) return;
-                        void handleCancelSentOrderLine(comandaLineActionsTarget);
-                        close();
+                        requestLineActionConfirmation(
+                          "cancel",
+                          comandaLineActionsTarget,
+                        );
                       }}
                     >
                       {isCancelling ? "Anulando…" : "Anular línea"}
@@ -11598,6 +11728,12 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 .carta-march-confirm-modal__btn-primary {
   border: 1px solid #0f172a;
   background: #0f172a;
+  color: #ffffff;
+}
+
+.carta-march-confirm-modal__btn-danger {
+  border: 1px solid #be123c;
+  background: #be123c;
   color: #ffffff;
 }
 
