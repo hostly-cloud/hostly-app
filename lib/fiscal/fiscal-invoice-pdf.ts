@@ -15,7 +15,7 @@ type FiscalPdfInvoice = {
   establishmentSnapshot?: { name?: string; address?: { line1?: string } } | null;
   customerSnapshot?: { legalName: string; nif: string; address: { line1: string; postalCode: string; city: string; province: string; countryCode: string }; email?: string | null } | null;
   linesSnapshot: Array<{ description: string; quantity: number; netGrossCents: number; vatRateBps: number }>;
-  taxBreakdown: Array<{ vatRateBps: number; taxableBaseCents: number; taxAmountCents: number }>;
+  taxBreakdown: Array<{ taxCode?: "01" | "02" | "03"; vatRateBps: number; taxableBaseCents: number; taxAmountCents: number }>;
   totals: { discountCents: number; taxableBaseCents: number; taxAmountCents: number; totalCents: number };
   paymentMethods?: string[];
 };
@@ -31,6 +31,12 @@ function money(cents: number): string {
 
 function percent(bps: number): string {
   return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 2)} %`;
+}
+
+function taxLabel(code: "01" | "02" | "03" | undefined): "IVA" | "IPSI" | "IGIC" {
+  if (code === "02") return "IPSI";
+  if (code === "03") return "IGIC";
+  return "IVA";
 }
 
 function paymentLabel(value: string): string {
@@ -95,9 +101,6 @@ export function generateFiscalInvoicePdf(input: {
     y += 1;
   }
 
-  // AEAT requires the fiscal QR to appear once, at the beginning of the invoice
-  // and before the invoice content. Keep the graphic itself within the statutory
-  // 30–40 mm range for A4 and both supported thermal widths.
   const qrSize = FISCAL_PDF_QR_SIZE_MM;
   const qrX = (width - qrSize) / 2;
   write(AEAT_QR_SPECIFICATION.leadingText, { align: "center", bold: true, size: thermal ? 7 : 8 });
@@ -134,13 +137,14 @@ export function generateFiscalInvoicePdf(input: {
   }
   rule();
 
+  const primaryTaxLabel = taxLabel(input.invoice.taxBreakdown[0]?.taxCode);
   for (const line of input.invoice.linesSnapshot) {
     write(`${line.quantity} × ${line.description}`, { bold: false });
-    write(`${percent(line.vatRateBps)} IVA · ${money(line.netGrossCents)}`, { align: "right" });
+    write(`${percent(line.vatRateBps)} ${primaryTaxLabel} · ${money(line.netGrossCents)}`, { align: "right" });
   }
   rule();
   for (const row of input.invoice.taxBreakdown) {
-    write(`Base ${percent(row.vatRateBps)}: ${money(row.taxableBaseCents)} · IVA: ${money(row.taxAmountCents)}`);
+    write(`Base ${percent(row.vatRateBps)}: ${money(row.taxableBaseCents)} · ${taxLabel(row.taxCode)}: ${money(row.taxAmountCents)}`);
   }
   if (input.invoice.totals.discountCents !== 0) write(`Descuento: ${money(-input.invoice.totals.discountCents)}`);
   write(`TOTAL: ${money(input.invoice.totals.totalCents)}`, { bold: true, align: "right", size: thermal ? 10 : 13 });

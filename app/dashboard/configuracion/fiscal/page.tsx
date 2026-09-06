@@ -7,6 +7,7 @@ import { HostlyAlert, HostlyButton, HostlyInput, HostlySelect, HostlySurface } f
 import { authenticatedApiFetch } from "@/lib/auth/authenticated-api-fetch";
 
 type Mode = "demo" | "test" | "live";
+type IndirectTaxCode = "01" | "02" | "03";
 type Form = {
   mode: Mode;
   taxpayerLegalName: string;
@@ -17,6 +18,7 @@ type Form = {
   province: string;
   establishmentName: string;
   timezone: string;
+  indirectTaxCode: IndirectTaxCode;
   defaultVatRate: string;
 };
 type Readiness = { key: string; label: string; ready: boolean };
@@ -44,7 +46,14 @@ const EMPTY: Form = {
   province: "",
   establishmentName: "",
   timezone: "Europe/Madrid",
+  indirectTaxCode: "01",
   defaultVatRate: "10",
+};
+
+const TAX_LABELS: Record<IndirectTaxCode, string> = {
+  "01": "IVA",
+  "02": "IPSI",
+  "03": "IGIC",
 };
 
 export default function FiscalConfigurationPage() {
@@ -77,6 +86,7 @@ export default function FiscalConfigurationPage() {
         province: config.taxpayer?.address?.province ?? "",
         establishmentName: config.establishmentName ?? "",
         timezone: config.timezone ?? "Europe/Madrid",
+        indirectTaxCode: config.indirectTaxCode === "02" || config.indirectTaxCode === "03" ? config.indirectTaxCode : "01",
         defaultVatRate: config.defaultVatRateBps == null ? "" : String(config.defaultVatRateBps / 100),
       });
     } else if (!response.ok) {
@@ -115,6 +125,7 @@ export default function FiscalConfigurationPage() {
       establishmentName: form.establishmentName,
       establishmentAddress: { line1: form.address, postalCode: form.postalCode, city: form.city, province: form.province, countryCode: "ES" },
       timezone: form.timezone,
+      indirectTaxCode: form.indirectTaxCode,
       defaultVatRateBps: Number.isFinite(vat) ? Math.round(vat * 100) : null,
     };
     const response = await authenticatedApiFetch("/api/fiscal/configuration", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -188,8 +199,9 @@ export default function FiscalConfigurationPage() {
           {loading ? <p className="mt-4 text-sm text-slate-500">Cargando…</p> : <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-semibold text-slate-700">Modo<HostlySelect className="mt-1" value={form.mode} disabled={status === "active"} onChange={(event) => patch("mode", event.target.value as Mode)}><option value="demo">Demo — no fiscal</option><option value="test">Pruebas AEAT</option><option value="live">Producción fiscal real</option></HostlySelect></label>
             {fields.map(([key, label]) => <label key={key} className="text-sm font-semibold text-slate-700">{label}<HostlyInput className="mt-1" value={form[key]} disabled={status === "active"} onChange={(event) => patch(key, event.target.value)} /></label>)}
-            <label className="text-sm font-semibold text-slate-700">IVA predeterminado (%)<HostlyInput className="mt-1" inputMode="decimal" value={form.defaultVatRate} disabled={status === "active"} onChange={(event) => patch("defaultVatRate", event.target.value)} /></label>
-            <label className="text-sm font-semibold text-slate-700">Zona horaria<HostlySelect className="mt-1" value={form.timezone} disabled={status === "active"} onChange={(event) => patch("timezone", event.target.value)}><option value="Europe/Madrid">Península y Baleares</option><option value="Atlantic/Canary">Canarias</option></HostlySelect></label>
+            <label className="text-sm font-semibold text-slate-700">Impuesto indirecto<HostlySelect className="mt-1" value={form.indirectTaxCode} disabled={status === "active"} onChange={(event) => patch("indirectTaxCode", event.target.value as IndirectTaxCode)}><option value="01">IVA — Península y Baleares</option><option value="03">IGIC — Canarias</option><option value="02">IPSI — Ceuta y Melilla</option></HostlySelect></label>
+            <label className="text-sm font-semibold text-slate-700">{TAX_LABELS[form.indirectTaxCode]} predeterminado (%)<HostlyInput className="mt-1" inputMode="decimal" value={form.defaultVatRate} disabled={status === "active"} onChange={(event) => patch("defaultVatRate", event.target.value)} /></label>
+            <label className="text-sm font-semibold text-slate-700">Zona horaria<HostlySelect className="mt-1" value={form.timezone} disabled={status === "active"} onChange={(event) => patch("timezone", event.target.value)}><option value="Europe/Madrid">Península, Baleares, Ceuta y Melilla</option><option value="Atlantic/Canary">Canarias</option></HostlySelect></label>
           </div>}
           <div className="mt-5"><HostlyButton onClick={() => void save()} disabled={loading || saving || status === "active"}>{saving ? "Guardando…" : "Guardar configuración"}</HostlyButton></div>
         </HostlySurface>

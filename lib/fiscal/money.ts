@@ -1,4 +1,5 @@
 import type {
+  AeatIndirectTaxCode,
   FiscalInvoiceCalculation,
   FiscalInvoiceLine,
   FiscalInvoiceLineInput,
@@ -16,9 +17,7 @@ function checkedBigIntToNumber(value: bigint): number {
 }
 
 function roundDivisionHalfAwayFromZero(numerator: bigint, denominator: bigint): number {
-  if (denominator <= BigInt(0)) {
-    throw new Error("INVALID_INTEGER_DIVISION");
-  }
+  if (denominator <= BigInt(0)) throw new Error("INVALID_INTEGER_DIVISION");
   const sign = numerator < BigInt(0) ? BigInt(-1) : BigInt(1);
   const absolute = numerator < BigInt(0) ? -numerator : numerator;
   return checkedBigIntToNumber(sign * ((absolute + denominator / BigInt(2)) / denominator));
@@ -52,11 +51,18 @@ function allocateDiscount(lines: readonly FiscalInvoiceLineInput[], discountCent
   const total = lines.reduce((sum, line) => sum + line.grossAmountCents, 0);
   if (discountCents > total) throw new Error("DISCOUNT_EXCEEDS_GROSS");
   if (total === 0) {
-    if (discountCents !== 0) throw new Error("DISCOUNT_WITH_ZERO_GROSS");
+    if (discountCents !== 0) throw new Error("DISCOUNT_WITH_ZERO_TOTAL");
     return lines.map(() => 0);
   }
-
   return allocateByWeight(lines.map((line) => line.grossAmountCents), discountCents);
+}
+
+function taxMetadata(taxCode: AeatIndirectTaxCode) {
+  return {
+    taxCode,
+    regimeCode: taxCode === "02" ? null : "01" as const,
+    operationClassification: "S1" as const,
+  };
 }
 
 export function calculateFiscalCredit(
@@ -64,35 +70,18 @@ export function calculateFiscalCredit(
   creditTotalCents: number,
 ): FiscalInvoiceCalculation {
   assertInteger("FISCAL_CREDIT_TOTAL_CENTS", creditTotalCents);
-  if (creditTotalCents <= 0 || creditTotalCents > original.totals.totalCents) {
-    throw new Error("FISCAL_CREDIT_TOTAL_INVALID");
-  }
-  const allocatedGross = allocateByWeight(
-    original.lines.map((line) => line.netGrossCents),
-    creditTotalCents,
-  );
+  if (creditTotalCents <= 0 || creditTotalCents > original.totals.totalCents) throw new Error("FISCAL_CREDIT_TOTAL_INVALID");
+  const allocatedGross = allocateByWeight(original.lines.map((line) => line.netGrossCents), creditTotalCents);
   const lines: FiscalInvoiceLine[] = original.lines.map((line, index) => {
     const gross = allocatedGross[index]!;
     const tax = calculateTaxIncluded(gross, line.vatRateBps);
-    return {
-      ...line,
-      grossAmountCents: -gross,
-      discountCents: 0,
-      netGrossCents: -gross,
-      taxableBaseCents: -tax.taxableBaseCents,
-      taxAmountCents: -tax.taxAmountCents,
-    };
+    return { ...line, grossAmountCents: -gross, discountCents: 0, netGrossCents: -gross, taxableBaseCents: -tax.taxableBaseCents, taxAmountCents: -tax.taxAmountCents };
   }).filter((line) => line.netGrossCents !== 0);
   const grouped = new Map<number, FiscalTaxBreakdown>();
   for (const line of lines) {
+    const originalTax = original.breakdown.find((row) => row.vatRateBps === line.vatRateBps)?.taxCode ?? "01";
     const current = grouped.get(line.vatRateBps) ?? {
-      taxCode: "01" as const,
-      regimeCode: "01" as const,
-      operationClassification: "S1" as const,
-      vatRateBps: line.vatRateBps,
-      taxableBaseCents: 0,
-      taxAmountCents: 0,
-      grossAmountCents: 0,
+      ...taxMetadata(originalTax), vatRateBps: line.vatRateBps, taxableBaseCents: 0, taxAmountCents: 0, grossAmountCents: 0,
     };
     current.taxableBaseCents += line.taxableBaseCents;
     current.taxAmountCents += line.taxAmountCents;
@@ -102,77 +91,46 @@ export function calculateFiscalCredit(
   const breakdown = [...grouped.values()].sort((a, b) => a.vatRateBps - b.vatRateBps);
   const taxableBaseCents = breakdown.reduce((sum, row) => sum + row.taxableBaseCents, 0);
   const taxAmountCents = breakdown.reduce((sum, row) => sum + row.taxAmountCents, 0);
-  return {
-    lines,
-    breakdown,
-    totals: {
-      grossBeforeDiscountCents: -creditTotalCents,
-      discountCents: 0,
-      taxableBaseCents,
-      taxAmountCents,
-      totalCents: taxableBaseCents + taxAmountCents,
-    },
-  };
+  return { lines, breakdown, totals: { grossBeforeDiscountCents: -creditTotalCents, discountCents: 0, taxableBaseCents, taxAmountCents, totalCents: taxableBaseCents + taxAmountCents } };
 }
 
-function calculateTaxIncluded(grossCents: number, vatRateBps: number): {
-  taxableBaseCents: number;
-  taxAmountCents: number;
-} {
+function calculateTaxIncluded(grossCents: number, vatRateBps: number): { taxableBaseCents: number; taxAmountCents: number } {
   assertInteger("GROSS_CENTS", grossCents);
   assertInteger("VAT_RATE_BPS", vatRateBps);
   if (grossCents < 0) throw new Error("GROSS_CENTS_NEGATIVE");
   if (vatRateBps < 0 || vatRateBps > 10_000) throw new Error("VAT_RATE_BPS_INVALID");
-  const taxableBaseCents = roundDivisionHalfAwayFromZero(
-    BigInt(grossCents) * BigInt(10_000),
-    BigInt(10_000 + vatRateBps),
-  );
+  const taxableBaseCents = roundDivisionHalfAwayFromZero(BigInt(grossCents) * BigInt(10_000), BigInt(10_000 + vatRateBps));
   return { taxableBaseCents, taxAmountCents: grossCents - taxableBaseCents };
 }
 
 export function calculateFiscalInvoice(
   inputLines: readonly FiscalInvoiceLineInput[],
   discountCents = 0,
+  taxCode: AeatIndirectTaxCode = "01",
 ): FiscalInvoiceCalculation {
   if (inputLines.length === 0) throw new Error("FISCAL_LINES_REQUIRED");
+  if (!["01", "02", "03"].includes(taxCode)) throw new Error("FISCAL_INDIRECT_TAX_INVALID");
   const seen = new Set<string>();
   for (const line of inputLines) {
     if (!line.lineId.trim()) throw new Error("FISCAL_LINE_ID_REQUIRED");
     if (seen.has(line.lineId)) throw new Error("FISCAL_LINE_ID_DUPLICATED");
     seen.add(line.lineId);
     if (!line.description.trim()) throw new Error("FISCAL_LINE_DESCRIPTION_REQUIRED");
-    if (!Number.isFinite(line.quantity) || line.quantity <= 0) {
-      throw new Error("FISCAL_LINE_QUANTITY_INVALID");
-    }
+    if (!Number.isFinite(line.quantity) || line.quantity <= 0) throw new Error("FISCAL_LINE_QUANTITY_INVALID");
     assertInteger("FISCAL_LINE_GROSS_CENTS", line.grossAmountCents);
     assertInteger("FISCAL_LINE_VAT_RATE_BPS", line.vatRateBps);
     if (line.grossAmountCents < 0) throw new Error("FISCAL_LINE_GROSS_NEGATIVE");
   }
-
   const discounts = allocateDiscount(inputLines, discountCents);
   const lines: FiscalInvoiceLine[] = inputLines.map((line, index) => {
     const lineDiscount = discounts[index]!;
     const netGrossCents = line.grossAmountCents - lineDiscount;
-    const tax = calculateTaxIncluded(netGrossCents, line.vatRateBps);
-    return {
-      ...line,
-      description: line.description.trim(),
-      discountCents: lineDiscount,
-      netGrossCents,
-      ...tax,
-    };
+    return { ...line, description: line.description.trim(), discountCents: lineDiscount, netGrossCents, ...calculateTaxIncluded(netGrossCents, line.vatRateBps) };
   });
-
   const grouped = new Map<number, FiscalTaxBreakdown>();
   for (const line of lines) {
     const current = grouped.get(line.vatRateBps) ?? {
-      taxCode: "01" as const,
-      regimeCode: "01" as const,
-      operationClassification: "S1" as const,
-      vatRateBps: line.vatRateBps,
-      taxableBaseCents: 0,
-      taxAmountCents: 0,
-      grossAmountCents: 0,
+      ...taxMetadata(taxCode), vatRateBps: line.vatRateBps, taxableBaseCents: 0, taxAmountCents: 0, grossAmountCents: 0,
     };
     current.taxableBaseCents += line.taxableBaseCents;
     current.taxAmountCents += line.taxAmountCents;
@@ -180,25 +138,10 @@ export function calculateFiscalInvoice(
     grouped.set(line.vatRateBps, current);
   }
   const breakdown = [...grouped.values()].sort((a, b) => a.vatRateBps - b.vatRateBps);
-  const grossBeforeDiscountCents = inputLines.reduce(
-    (sum, line) => sum + line.grossAmountCents,
-    0,
-  );
+  const grossBeforeDiscountCents = inputLines.reduce((sum, line) => sum + line.grossAmountCents, 0);
   const taxableBaseCents = breakdown.reduce((sum, row) => sum + row.taxableBaseCents, 0);
   const taxAmountCents = breakdown.reduce((sum, row) => sum + row.taxAmountCents, 0);
-  const totalCents = taxableBaseCents + taxAmountCents;
-
-  return {
-    lines,
-    breakdown,
-    totals: {
-      grossBeforeDiscountCents,
-      discountCents,
-      taxableBaseCents,
-      taxAmountCents,
-      totalCents,
-    },
-  };
+  return { lines, breakdown, totals: { grossBeforeDiscountCents, discountCents, taxableBaseCents, taxAmountCents, totalCents: taxableBaseCents + taxAmountCents } };
 }
 
 export function eurosToCents(value: number): number {
