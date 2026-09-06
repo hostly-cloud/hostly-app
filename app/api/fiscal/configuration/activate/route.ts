@@ -10,6 +10,7 @@ import {
   isAuthErrorResponse,
   requireAuthenticatedRestaurant,
 } from "@/lib/server/auth/require-authenticated-restaurant";
+import { readFiscalCertificateSecret } from "@/lib/server/fiscal/fiscal-certificate-secret";
 
 export async function POST(req: Request) {
   const ctx = await requireAuthenticatedRestaurant(req);
@@ -29,6 +30,21 @@ export async function POST(req: Request) {
   const ref = ctx.db.collection("fiscalConfigurations").doc(ctx.restaurantId);
   const nowMs = Date.now();
   try {
+    const preflightSnap = await ref.get();
+    const preflight = preflightSnap.data();
+    if (!preflightSnap.exists || !isStoredFiscalConfiguration(preflight)) {
+      throw new Error("FISCAL_CONFIGURATION_NOT_FOUND");
+    }
+    if (preflight.status === "active") throw new Error("FISCAL_CONFIGURATION_ALREADY_ACTIVE");
+    assertFiscalConfigurationCanActivate(preflight, mode);
+    const preflightCertificateResource = preflight.certificateSecretResource;
+    if (!preflightCertificateResource) throw new Error("FISCAL_CERTIFICATE_SECRET_REQUIRED");
+
+    // Re-read and parse the PKCS#12 immediately before activation. This catches
+    // deleted/rotated secrets, invalid passphrases and broken PFX material without
+    // ever persisting or logging the certificate itself.
+    await readFiscalCertificateSecret(preflightCertificateResource);
+
     let activated: Record<string, unknown> | null = null;
     await ctx.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -36,6 +52,9 @@ export async function POST(req: Request) {
       if (!snap.exists || !isStoredFiscalConfiguration(raw)) throw new Error("FISCAL_CONFIGURATION_NOT_FOUND");
       if (raw.status === "active") throw new Error("FISCAL_CONFIGURATION_ALREADY_ACTIVE");
       assertFiscalConfigurationCanActivate(raw, mode);
+      if (raw.certificateSecretResource !== preflightCertificateResource) {
+        throw new Error("FISCAL_CERTIFICATE_CHANGED_DURING_ACTIVATION");
+      }
       activated = { ...raw, status: "active", activatedAt: new Date(nowMs).toISOString(), activatedBy: ctx.uid, updatedAtMs: nowMs, updatedBy: ctx.uid };
       tx.set(ref, activated);
       tx.create(ctx.db.collection("fiscalAuditEvents").doc(randomUUID()), {

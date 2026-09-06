@@ -1,3 +1,4 @@
+import { createSecureContext } from "node:tls";
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 
 export type FiscalCertificateMaterial = {
@@ -18,6 +19,14 @@ function secretManagerClient(): SecretManagerServiceClient {
   return new SecretManagerServiceClient();
 }
 
+export function assertValidFiscalCertificateMaterial(material: FiscalCertificateMaterial): void {
+  try {
+    createSecureContext({ pfx: material.pfx, passphrase: material.passphrase, minVersion: "TLSv1.2" });
+  } catch {
+    throw new Error("FISCAL_CERTIFICATE_PKCS12_INVALID");
+  }
+}
+
 export async function readFiscalCertificateSecret(
   secretResource: string,
 ): Promise<FiscalCertificateMaterial> {
@@ -26,7 +35,12 @@ export async function readFiscalCertificateSecret(
     throw new Error("FISCAL_CERTIFICATE_SECRET_RESOURCE_INVALID");
   }
   const client = secretManagerClient();
-  const [version] = await client.accessSecretVersion({ name });
+  let version;
+  try {
+    [version] = await client.accessSecretVersion({ name });
+  } catch {
+    throw new Error("FISCAL_CERTIFICATE_SECRET_UNAVAILABLE");
+  }
   const payload = version.payload?.data?.toString("utf8") ?? "";
   let parsed: unknown;
   try {
@@ -45,5 +59,7 @@ export async function readFiscalCertificateSecret(
   }
   const pfx = Buffer.from(pfxBase64, "base64");
   if (pfx.length < 64 || pfx.length > 3_000_000) throw new Error("FISCAL_CERTIFICATE_PFX_INVALID");
-  return { pfx, passphrase };
+  const material = { pfx, passphrase };
+  assertValidFiscalCertificateMaterial(material);
+  return material;
 }
