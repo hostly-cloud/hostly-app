@@ -6,6 +6,7 @@ import {
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import { createPosMigrationPreview } from "@/lib/server/pos-migrations/create-pos-migration-preview";
+import { restaurantHasPosMigrationEntitlement } from "@/lib/server/pos-migrations/require-pos-migration-entitlement";
 
 function jsonError(status: number, error: string, details?: string) {
   return NextResponse.json({ ok: false, error, details: details ?? null }, { status });
@@ -13,6 +14,7 @@ function jsonError(status: number, error: string, details?: string) {
 
 export type PosMigrationPreviewRouteDependencies = AuthenticatedRestaurantDependencies & {
   createPreview?: typeof createPosMigrationPreview;
+  hasMigrationEntitlement?: typeof restaurantHasPosMigrationEntitlement;
 };
 
 export async function handlePosMigrationPreviewRequest(
@@ -24,6 +26,17 @@ export async function handlePosMigrationPreviewRequest(
     if (isAuthErrorResponse(authCtx)) return authCtx;
     if (!serverRoleHasCapability(authCtx.role, "settings.manage")) {
       return jsonError(403, "SETTINGS_MANAGE_REQUIRED");
+    }
+    const hasMigrationEntitlement =
+      dependencies?.hasMigrationEntitlement ?? restaurantHasPosMigrationEntitlement;
+    if (
+      !(await hasMigrationEntitlement({
+        db: authCtx.db,
+        restaurantId: authCtx.restaurantId,
+        entitlement: "migration.products",
+      }))
+    ) {
+      return jsonError(403, "POS_MIGRATION_PRODUCTS_PLAN_REQUIRED", "La migración de carta está incluida en Hostly Pro y Ultra.");
     }
 
     const formData = await req.formData().catch(() => null);
