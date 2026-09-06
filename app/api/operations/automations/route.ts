@@ -21,10 +21,6 @@ function isManagerRole(role: string): boolean {
   return normalized === "owner" || normalized === "admin" || normalized === "manager";
 }
 
-async function resolveEntitlement(db: Awaited<ReturnType<typeof requireAuthenticatedRestaurant>> extends infer T ? never : never) {
-  return db;
-}
-
 export async function GET(req: Request) {
   const authCtx = await requireAuthenticatedRestaurant(req);
   if (isAuthErrorResponse(authCtx)) return authCtx;
