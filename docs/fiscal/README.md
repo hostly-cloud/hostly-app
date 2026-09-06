@@ -21,7 +21,7 @@ El aislamiento no usa únicamente `restaurantId`. La configuración modela:
 4. Vercel Queue reclama el outbox mediante lease. El worker valida el XML contra los XSD oficiales, obtiene el certificado desde Secret Manager y usa mTLS.
 5. Cada intento se conserva en `fiscalSubmissions`. La respuesta funcional se guarda en `fiscalDeliveryStates`; factura y registro nunca se actualizan.
 6. Los fallos temporales generan reintento exponencial, como máximo una hora. En el reenvío se informa `RemisionVoluntaria/Incidencia=S`.
-7. El control por obligado y entorno serializa envíos y respeta `TiempoEsperaEnvio` devuelto por AEAT.
+7. El control por obligado, instalación y entorno persiste la última secuencia efectivamente remitida. Solo reclama el registro inmediatamente siguiente, por lo que una entrega desordenada de la cola no puede saltarse un eslabón; también respeta `TiempoEsperaEnvio` devuelto por AEAT.
 
 ## Colecciones Firestore
 
@@ -81,4 +81,3 @@ Cada factura y registro guarda `hostlyVersion`, `fiscalModuleVersion`, `sifVersi
 - [Reglamento de facturación, Real Decreto 1619/2012](https://www.boe.es/buscar/act.php?id=BOE-A-2012-14696)
 - [Información técnica SIF y VERI*FACTU de AEAT](https://sede.agenciatributaria.gob.es/Sede/iva/sistemas-informaticos-facturacion-verifactu/informacion-tecnica.html)
 - [Real Decreto 238/2026 sobre factura electrónica empresarial](https://www.boe.es/buscar/doc.php?id=BOE-A-2026-7295)
-

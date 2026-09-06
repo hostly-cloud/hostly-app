@@ -40,7 +40,7 @@ Alertas mínimas en Vercel:
 - Dos TPV: Firestore reintenta la transacción sobre contador y cadena.
 - Respuesta duplicada: el estado final hace idempotente el consumidor; AEAT duplicado correcto se trata como aceptado.
 - Impresora falla: reimprimir genera duplicado visual, no nueva factura.
-- XML inválido: rechazo local permanente, evento de auditoría y aviso; corregir el software antes de emitir el registro procedente.
+- XML inválido: queda en `schema_error`, bloquea los eslabones posteriores y se reintenta cada hora; corregir y desplegar el generador antes de que venza el siguiente reintento.
 - Certificado inválido: no se registra el secreto; queda pendiente y se reintenta tras rotación.
 
 ## Checklist de piloto real
@@ -60,4 +60,3 @@ No activar hasta cumplir todos los puntos:
 - [ ] doble aprobación para ambos interruptores de producción.
 
 Durante el piloto no fiscal se mantiene `mode=demo` y el TPV actual del pub sigue siendo el sistema fiscal. Los datos demo nunca se convierten. Para el pase real se crea/configura el obligado, se verifica desde cero el contador y la cadena, se activa deliberadamente y se hace una primera venta controlada con cotejo del QR y respuesta AEAT.
-

@@ -129,7 +129,13 @@ describe("fiscal emission transaction", () => {
     const previousValues = records.docs.map((row) => row.data().record.previous);
     assert.equal(previousValues.filter((value) => value == null).length, 1);
     assert.equal(previousValues.filter((value) => value != null).length, 1);
-    assert.equal((await adminDb.collection("fiscalOutbox").get()).size, 2);
+    const outbox = await adminDb.collection("fiscalOutbox").get();
+    assert.equal(outbox.size, 2);
+    assert.deepEqual(
+      outbox.docs.map((row) => Number(row.data().chainSequence)).sort((a, b) => a - b),
+      [1, 2],
+    );
+    assert.equal(outbox.docs.every((row) => typeof row.data().installationNumber === "string"), true);
   });
 
   test("doble pulsación no duplica pago, número ni registro", async () => {

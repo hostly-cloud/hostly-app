@@ -58,23 +58,44 @@ type ClaimedOutbox = {
   recordId: string;
   restaurantId: string;
   taxEntityId: string;
+  installationNumber: string;
+  chainSequence: number;
   invoiceId: string;
   environment: AeatEnvironment;
   xmlEnvelope: string;
   attempts: number;
 };
 
+export type FiscalChainDeliveryDecision = "next" | "wait_for_predecessor" | "already_passed";
+
+export function fiscalChainDeliveryDecision(
+  lastSubmittedChainSequence: number,
+  chainSequence: number,
+): FiscalChainDeliveryDecision {
+  if (!Number.isSafeInteger(lastSubmittedChainSequence) || lastSubmittedChainSequence < 0) {
+    throw new Error("FISCAL_FLOW_SEQUENCE_CORRUPT");
+  }
+  if (!Number.isSafeInteger(chainSequence) || chainSequence < 1) {
+    throw new Error("FISCAL_OUTBOX_CHAIN_SEQUENCE_CORRUPT");
+  }
+  if (chainSequence === lastSubmittedChainSequence + 1) return "next";
+  if (chainSequence > lastSubmittedChainSequence + 1) return "wait_for_predecessor";
+  return "already_passed";
+}
+
 function readClaim(recordId: string, value: FirebaseFirestore.DocumentData): ClaimedOutbox {
   const restaurantId = typeof value.restaurantId === "string" ? value.restaurantId : "";
   const taxEntityId = typeof value.taxEntityId === "string" ? value.taxEntityId : "";
+  const installationNumber = typeof value.installationNumber === "string" ? value.installationNumber : "";
+  const chainSequence = Number(value.chainSequence);
   const invoiceId = typeof value.invoiceId === "string" ? value.invoiceId : "";
   const environment = value.environment;
   const xmlEnvelope = typeof value.xmlEnvelope === "string" ? value.xmlEnvelope : "";
   const attempts = Number(value.attempts);
-  if (!restaurantId || !taxEntityId || !invoiceId || (environment !== "test" && environment !== "production") || !xmlEnvelope || !Number.isSafeInteger(attempts) || attempts < 0) {
+  if (!restaurantId || !taxEntityId || !installationNumber || !Number.isSafeInteger(chainSequence) || chainSequence < 1 || !invoiceId || (environment !== "test" && environment !== "production") || !xmlEnvelope || !Number.isSafeInteger(attempts) || attempts < 0) {
     throw new Error("FISCAL_OUTBOX_CORRUPT");
   }
-  return { recordId, restaurantId, taxEntityId, invoiceId, environment, xmlEnvelope, attempts };
+  return { recordId, restaurantId, taxEntityId, installationNumber, chainSequence, invoiceId, environment, xmlEnvelope, attempts };
 }
 
 function finalDeliveryStatus(result: AeatSubmissionResult): "accepted" | "accepted_with_errors" | "rejected" {
@@ -119,7 +140,7 @@ export async function processFiscalOutboxMessage(
     const status = String(data.status ?? "");
     if (["accepted", "accepted_with_errors", "rejected"].includes(status)) return;
     const parsedClaim = readClaim(recordId, data);
-    const flowId = createHash("sha256").update(`${parsedClaim.taxEntityId}\u0000${parsedClaim.environment}`, "utf8").digest("hex");
+    const flowId = createHash("sha256").update(`${parsedClaim.taxEntityId}\u0000${parsedClaim.installationNumber}\u0000${parsedClaim.environment}`, "utf8").digest("hex");
     const nextFlowControlRef = db.collection("fiscalAeatFlowControls").doc(flowId);
     const flowSnap = await tx.get(nextFlowControlRef);
     const nextAttemptAtMs = Number(data.nextAttemptAtMs) || 0;
@@ -132,6 +153,14 @@ export async function processFiscalOutboxMessage(
     }
     const flowAvailableAtMs = Number(flowSnap.data()?.availableAtMs) || 0;
     const flowLeaseUntilMs = Number(flowSnap.data()?.leaseUntilMs) || 0;
+    const lastSubmittedChainSequence = Number(flowSnap.data()?.lastSubmittedChainSequence) || 0;
+    const chainDecision = fiscalChainDeliveryDecision(lastSubmittedChainSequence, parsedClaim.chainSequence);
+    if (chainDecision === "wait_for_predecessor") {
+      throw new FiscalQueueRetryError(60, "FISCAL_CHAIN_PREDECESSOR_PENDING");
+    }
+    if (chainDecision === "already_passed") {
+      throw new FiscalQueueMessageError("FISCAL_CHAIN_SEQUENCE_ALREADY_PASSED");
+    }
     if (flowAvailableAtMs > nowMs || flowLeaseUntilMs > nowMs) {
       const resumeAtMs = Math.max(flowAvailableAtMs, flowLeaseUntilMs);
       throw new FiscalQueueRetryError(Math.max(1, Math.ceil((resumeAtMs - nowMs) / 1_000)), "FISCAL_AEAT_FLOW_CONTROL_ACTIVE");
@@ -146,6 +175,7 @@ export async function processFiscalOutboxMessage(
     });
     tx.set(nextFlowControlRef, {
       taxEntityId: parsedClaim.taxEntityId,
+      installationNumber: parsedClaim.installationNumber,
       environment: parsedClaim.environment,
       lockedByRecordId: recordId,
       leaseUntilMs: nowMs + LEASE_MS,
@@ -164,7 +194,11 @@ export async function processFiscalOutboxMessage(
     const configSnap = await db.collection("fiscalConfigurations").doc(claimed.restaurantId).get();
     const config = configSnap.data();
     if (!configSnap.exists || !isStoredFiscalConfiguration(config)) throw new Error("FISCAL_CONFIGURATION_NOT_FOUND");
-    if (config.restaurantId !== claimed.restaurantId || config.taxEntityId !== claimed.taxEntityId) {
+    if (
+      config.restaurantId !== claimed.restaurantId
+      || config.taxEntityId !== claimed.taxEntityId
+      || config.software.installationNumber !== claimed.installationNumber
+    ) {
       throw new Error("FISCAL_OUTBOX_TENANT_MISMATCH");
     }
     if (!config.certificateSecretResource) throw new Error("FISCAL_CERTIFICATE_NOT_CONFIGURED");
@@ -187,6 +221,8 @@ export async function processFiscalOutboxMessage(
       tx.create(submissionRef, {
         restaurantId: claimed.restaurantId,
         taxEntityId: claimed.taxEntityId,
+        installationNumber: claimed.installationNumber,
+        chainSequence: claimed.chainSequence,
         invoiceId: claimed.invoiceId,
         recordId,
         attempt,
@@ -201,6 +237,8 @@ export async function processFiscalOutboxMessage(
       tx.set(deliveryRef, {
         restaurantId: claimed.restaurantId,
         taxEntityId: claimed.taxEntityId,
+        installationNumber: claimed.installationNumber,
+        chainSequence: claimed.chainSequence,
         invoiceId: claimed.invoiceId,
         recordId,
         status,
@@ -210,7 +248,9 @@ export async function processFiscalOutboxMessage(
       });
       tx.set(claimedFlowControlRef, {
         taxEntityId: claimed.taxEntityId,
+        installationNumber: claimed.installationNumber,
         environment: claimed.environment,
+        lastSubmittedChainSequence: claimed.chainSequence,
         lockedByRecordId: null,
         leaseUntilMs: null,
         availableAtMs: completedAtMs + Math.max(0, response.waitSeconds) * 1_000,
@@ -220,6 +260,8 @@ export async function processFiscalOutboxMessage(
       tx.create(db.collection("fiscalAuditEvents").doc(`${recordId}_${String(attempt).padStart(6, "0")}`), {
         restaurantId: claimed.restaurantId,
         taxEntityId: claimed.taxEntityId,
+        installationNumber: claimed.installationNumber,
+        chainSequence: claimed.chainSequence,
         actorUid: "system",
         action: "fiscal_record_submitted",
         entityType: "fiscalRecord",
@@ -235,12 +277,15 @@ export async function processFiscalOutboxMessage(
     const failureCode = safeFailureCode(error);
     const failedAtMs = (dependencies?.now ?? Date.now)();
     if (error instanceof FiscalXmlSchemaError) {
+      const schemaRetryMs = MAX_BACKOFF_MS;
       await db.runTransaction(async (tx) => {
         const current = await tx.get(outboxRef);
         if (!current.exists || Number(current.data()?.attempts) !== attempt) return;
         tx.create(submissionRef, {
           restaurantId: claimed.restaurantId,
           taxEntityId: claimed.taxEntityId,
+          installationNumber: claimed.installationNumber,
+          chainSequence: claimed.chainSequence,
           invoiceId: claimed.invoiceId,
           recordId,
           attempt,
@@ -249,12 +294,18 @@ export async function processFiscalOutboxMessage(
           failureCode,
           completedAtMs: failedAtMs,
         });
-        tx.update(outboxRef, { status: "rejected", leaseUntilMs: null, lastFailureCode: failureCode, updatedAtMs: failedAtMs, completedAtMs: failedAtMs });
+        tx.update(outboxRef, {
+          status: "retry_scheduled",
+          leaseUntilMs: null,
+          nextAttemptAtMs: failedAtMs + schemaRetryMs,
+          lastFailureCode: failureCode,
+          updatedAtMs: failedAtMs,
+        });
         tx.set(claimedFlowControlRef, { lockedByRecordId: null, leaseUntilMs: null, updatedAtMs: failedAtMs }, { merge: true });
-        tx.set(deliveryRef, { restaurantId: claimed.restaurantId, taxEntityId: claimed.taxEntityId, invoiceId: claimed.invoiceId, recordId, status: "rejected", attempts: attempt, lastFailureCode: failureCode, updatedAtMs: failedAtMs });
-        tx.create(db.collection("fiscalAuditEvents").doc(`${recordId}_${String(attempt).padStart(6, "0")}`), { restaurantId: claimed.restaurantId, taxEntityId: claimed.taxEntityId, actorUid: "system", action: "fiscal_xml_schema_rejected", entityType: "fiscalRecord", entityId: recordId, result: "rejected", source: "aeat_queue", createdAtMs: failedAtMs });
+        tx.set(deliveryRef, { restaurantId: claimed.restaurantId, taxEntityId: claimed.taxEntityId, installationNumber: claimed.installationNumber, chainSequence: claimed.chainSequence, invoiceId: claimed.invoiceId, recordId, status: "schema_error", attempts: attempt, lastFailureCode: failureCode, nextAttemptAtMs: failedAtMs + schemaRetryMs, updatedAtMs: failedAtMs });
+        tx.create(db.collection("fiscalAuditEvents").doc(`${recordId}_${String(attempt).padStart(6, "0")}`), { restaurantId: claimed.restaurantId, taxEntityId: claimed.taxEntityId, actorUid: "system", action: "fiscal_xml_schema_error", entityType: "fiscalRecord", entityId: recordId, result: "retry_scheduled", source: "aeat_queue", createdAtMs: failedAtMs });
       });
-      return { status: "rejected", processed: true };
+      throw new FiscalQueueRetryError(Math.ceil(schemaRetryMs / 1_000), failureCode);
     }
     const backoffMs = Math.min(MAX_BACKOFF_MS, 5_000 * 2 ** Math.min(attempt - 1, 10));
     await db.runTransaction(async (tx) => {
@@ -263,6 +314,8 @@ export async function processFiscalOutboxMessage(
       tx.create(submissionRef, {
         restaurantId: claimed.restaurantId,
         taxEntityId: claimed.taxEntityId,
+        installationNumber: claimed.installationNumber,
+        chainSequence: claimed.chainSequence,
         invoiceId: claimed.invoiceId,
         recordId,
         attempt,
@@ -282,6 +335,8 @@ export async function processFiscalOutboxMessage(
       tx.set(deliveryRef, {
         restaurantId: claimed.restaurantId,
         taxEntityId: claimed.taxEntityId,
+        installationNumber: claimed.installationNumber,
+        chainSequence: claimed.chainSequence,
         invoiceId: claimed.invoiceId,
         recordId,
         status: "retry_scheduled",
