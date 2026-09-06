@@ -865,7 +865,7 @@ service cloud.firestore {
       allow update: if sameRestaurant(restaurantId)
         && canManageSettings()
         && preservesRestaurantCommercialAuthority();
-      allow delete: if sameRestaurant(restaurantId) && canManageSettings();
+      allow delete: if false;
 
       // Config operacional / sensible por docId.
       // tableGroups: join/separar mesas (manager+). floorPlanLayouts/printers: settings (owner/admin).
