@@ -3,8 +3,14 @@ import {
   isAuthErrorResponse,
   requireAuthenticatedRestaurant,
 } from "@/lib/server/auth/require-authenticated-restaurant";
-import { resolveHostlyPlanFromRestaurant } from "@/lib/subscription/hostly-plan";
-import { hostlyStripeConfigurationStatus } from "@/lib/subscription/hostly-stripe-billing";
+import {
+  normalizeHostlyPlan,
+  resolveHostlyPlanFromRestaurant,
+} from "@/lib/subscription/hostly-plan";
+import {
+  hostlyStripeConfigurationStatus,
+  isHostlyStripeSandboxMode,
+} from "@/lib/subscription/hostly-stripe-billing";
 
 export async function GET(req: Request) {
   const authCtx = await requireAuthenticatedRestaurant(req);
@@ -16,15 +22,18 @@ export async function GET(req: Request) {
     .get();
   const restaurant = (restaurantSnap.data() ?? null) as Record<string, unknown> | null;
   const resolved = resolveHostlyPlanFromRestaurant(restaurant);
+  const sandboxMode = isHostlyStripeSandboxMode();
+  const sourceField = sandboxMode ? "subscriptionSandbox" : "subscription";
   const subscription =
-    restaurant?.subscription && typeof restaurant.subscription === "object"
-      ? (restaurant.subscription as Record<string, unknown>)
+    restaurant?.[sourceField] && typeof restaurant[sourceField] === "object"
+      ? (restaurant[sourceField] as Record<string, unknown>)
       : null;
+  const sandboxPlan = sandboxMode ? normalizeHostlyPlan(subscription?.plan) : null;
 
   return NextResponse.json({
     ok: true,
-    effectivePlan: resolved.effectivePlan,
-    planSource: resolved.source,
+    effectivePlan: sandboxPlan ?? resolved.effectivePlan,
+    planSource: sandboxPlan ? "sandbox_subscription" : resolved.source,
     subscription: subscription
       ? {
           status: typeof subscription.status === "string" ? subscription.status : null,
