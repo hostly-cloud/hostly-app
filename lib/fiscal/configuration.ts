@@ -172,7 +172,7 @@ export function fiscalReadiness(config: FiscalConfiguration): FiscalReadinessChe
     { key: "series", label: "Series", ready: (["simplified", "complete", "rectification"] as const).every((kind) => config.series.some((row) => row.kind === kind && row.active)) },
     { key: "taxes", label: "Impuestos", ready: config.defaultVatRateBps != null },
     { key: "verifactu", label: "VERI*FACTU", ready: validProducer && config.software.onlyVerifactuCapable },
-    { key: "authorization", label: "Autorización o certificado", ready: Boolean(config.certificateSecretResource || config.representationVerifiedAt) },
+    { key: "authorization", label: "Certificado de envío AEAT", ready: Boolean(config.certificateSecretResource) },
     { key: "declaration", label: "Declaración responsable de esta versión", ready: isResponsibleDeclarationPublishedForCurrentVersion(config.responsibleDeclaration) },
   ];
 }
