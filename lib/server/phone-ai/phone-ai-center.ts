@@ -127,7 +127,7 @@ export async function createPhoneAiSessionIfAbsent(db: Firestore, session: Phone
 }
 
 export async function updatePhoneAiSession(db: Firestore, session: PhoneAiSession): Promise<void> {
-  await sessionRef(db, session.restaurantId, session.callSid).set({
+  await sessionRef(db, session.restaurantId, session.callSid).update({
     restaurantId: session.restaurantId,
     callSid: session.callSid,
     callerPhone: session.callerPhone,
@@ -136,7 +136,7 @@ export async function updatePhoneAiSession(db: Firestore, session: PhoneAiSessio
     ...(session.reservationId !== undefined ? { reservationId: session.reservationId } : {}),
     ...(session.reservationCreationState !== undefined ? { reservationCreationState: session.reservationCreationState } : {}),
     updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  });
 }
 
 export type PhoneAiReservationClaim =
