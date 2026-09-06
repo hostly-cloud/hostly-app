@@ -15,6 +15,8 @@ const EXPLICIT_ROUTE_CLASSIFICATION = new Map([
   ["app/api/tpv/orders/sync-items/route.ts", "retired-410"],
   ["app/api/debug/firebase/route.ts", "production-disabled"],
   ["app/api/queues/catalog-image-bulk/route.ts", "signed-callback"],
+  ["app/api/webhooks/twilio/phone-ai/route.ts", "signed-callback"],
+  ["app/api/webhooks/twilio/phone-ai/turn/route.ts", "signed-callback"],
   ["app/api/ai/manager-analytics/route.ts", "authenticated-ai-tenant"],
   ["app/api/ai/manager-home/route.ts", "authenticated-ai-tenant"],
 ]);
