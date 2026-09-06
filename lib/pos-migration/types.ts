@@ -11,6 +11,16 @@ export type PosMigrationTargetField =
   | "barcode"
   | "active";
 
+export type PosMigrationVendor =
+  | "revo"
+  | "glop"
+  | "lastapp"
+  | "frontrest"
+  | "agora"
+  | "square"
+  | "lightspeed"
+  | "generic";
+
 export type PosMigrationStatus =
   | "preview"
   | "published"
@@ -59,6 +69,9 @@ export type PosMigrationPreview = {
   status: PosMigrationStatus;
   sourceFileName: string;
   sourceFormat: "csv" | "tsv" | "txt";
+  sourceVendor: PosMigrationVendor;
+  sourceVendorLabel: string;
+  sourceVendorConfidence: number;
   mapping: PosMigrationColumnMapping[];
   items: PosMigrationCandidate[];
   summary: PosMigrationSummary;
