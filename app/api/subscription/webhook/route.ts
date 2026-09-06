@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getHostlyFirestore } from "@/lib/firebase/admin";
 import {
   isHostlyStripeBillingEnabled,
+  isHostlyStripeSandboxMode,
   retrieveHostlyStripeSubscription,
   verifyHostlyStripeWebhook,
 } from "@/lib/subscription/hostly-stripe-billing";
@@ -44,6 +45,16 @@ function metadataRestaurantId(object: Record<string, unknown>): string {
     : "";
 }
 
+function subscriptionFieldName(): "subscription" | "subscriptionSandbox" {
+  return isHostlyStripeSandboxMode() ? "subscriptionSandbox" : "subscription";
+}
+
+function eventCollectionName(): "stripeWebhookEvents" | "stripeWebhookEventsSandbox" {
+  return isHostlyStripeSandboxMode()
+    ? "stripeWebhookEventsSandbox"
+    : "stripeWebhookEvents";
+}
+
 async function syncSubscription(input: {
   subscriptionId: string;
   restaurantId?: string;
@@ -52,13 +63,14 @@ async function syncSubscription(input: {
 }) {
   const db = getHostlyFirestore();
   if (!db) throw new Error("ADMIN_NOT_CONFIGURED");
+  const subscriptionField = subscriptionFieldName();
 
   if (input.deleted) {
     const restaurantId = input.restaurantId?.trim() ?? "";
     if (!restaurantId) throw new Error("STRIPE_RESTAURANT_ID_MISSING");
     await db.collection("restaurants").doc(restaurantId).set(
       {
-        subscription: {
+        [subscriptionField]: {
           plan: "basic",
           status: "canceled",
           stripeSubscriptionId: FieldValue.delete(),
@@ -67,7 +79,7 @@ async function syncSubscription(input: {
           cancelAtPeriodEnd: false,
           currentPeriodEnd: null,
           trialEnd: null,
-          source: "stripe",
+          source: isHostlyStripeSandboxMode() ? "stripe_sandbox" : "stripe",
           lastCanceledSubscriptionId: input.subscriptionId,
           updatedAt: FieldValue.serverTimestamp(),
         },
@@ -93,7 +105,7 @@ async function syncSubscription(input: {
     cancelAtPeriodEnd: snapshot.cancelAtPeriodEnd,
     currentPeriodEnd: snapshot.currentPeriodEnd,
     trialEnd: snapshot.trialEnd,
-    source: "stripe",
+    source: isHostlyStripeSandboxMode() ? "stripe_sandbox" : "stripe",
     updatedAt: FieldValue.serverTimestamp(),
   };
   if (snapshot.trialEnd !== null) subscriptionUpdate.trialUsed = true;
@@ -104,7 +116,7 @@ async function syncSubscription(input: {
   }
 
   await db.collection("restaurants").doc(restaurantId).set(
-    { subscription: subscriptionUpdate },
+    { [subscriptionField]: subscriptionUpdate },
     { merge: true },
   );
 }
@@ -114,7 +126,7 @@ async function claimEvent(event: StripeEvent): Promise<"claimed" | "completed" |
   if (!db) throw new Error("ADMIN_NOT_CONFIGURED");
   const eventId = event.id?.trim() ?? "";
   if (!eventId) throw new Error("STRIPE_EVENT_ID_MISSING");
-  const ref = db.collection("stripeWebhookEvents").doc(eventId);
+  const ref = db.collection(eventCollectionName()).doc(eventId);
   const token = randomUUID();
 
   return db.runTransaction(async (tx) => {
@@ -130,6 +142,7 @@ async function claimEvent(event: StripeEvent): Promise<"claimed" | "completed" |
       {
         status: "processing",
         token,
+        mode: isHostlyStripeSandboxMode() ? "sandbox" : "live",
         type: event.type ?? null,
         stripeCreatedAt: event.created ?? null,
         startedAtMs: Date.now(),
@@ -146,7 +159,7 @@ async function completeEvent(event: StripeEvent, status: "completed" | "failed",
   if (!db) throw new Error("ADMIN_NOT_CONFIGURED");
   const eventId = event.id?.trim() ?? "";
   if (!eventId) return;
-  await db.collection("stripeWebhookEvents").doc(eventId).set(
+  await db.collection(eventCollectionName()).doc(eventId).set(
     {
       status,
       error: error ?? FieldValue.delete(),
