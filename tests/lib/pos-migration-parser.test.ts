@@ -54,3 +54,36 @@ test("flags duplicates inside the same export for review", () => {
   assert.equal(parsed.items[1].decision, "review");
   assert.match(parsed.items[1].warnings.join(" "), /duplicado/i);
 });
+
+test("detects Glop-shaped exports and applies vendor aliases", () => {
+  const parsed = parsePosExport({
+    fileName: "glop_articulos.csv",
+    text: [
+      "Código artículo;Descripción artículo;Familia;Tarifa;Porcentaje IVA;Existencia actual",
+      "A-1;Agua 50cl;Bebidas;2,20;10;15",
+    ].join("\n"),
+  });
+
+  assert.equal(parsed.sourceVendor, "glop");
+  assert.equal(parsed.sourceVendorLabel, "Glop");
+  assert.equal(parsed.items[0].name, "Agua 50cl");
+  assert.equal(parsed.items[0].price, 2.2);
+  assert.equal(parsed.items[0].stock, 15);
+  assert.equal(parsed.items[0].sku, "A-1");
+});
+
+test("detects Square exports without requiring a hardcoded exact layout", () => {
+  const parsed = parsePosExport({
+    fileName: "square-items.csv",
+    text: [
+      "Item Name,Reporting Category,Variation Price,Current Quantity,SKU,GTIN",
+      "IPA,Beer,5.50,18,BEER-IPA,1234567890123",
+    ].join("\n"),
+  });
+
+  assert.equal(parsed.sourceVendor, "square");
+  assert.equal(parsed.items[0].name, "IPA");
+  assert.equal(parsed.items[0].category, "Beer");
+  assert.equal(parsed.items[0].stock, 18);
+  assert.equal(parsed.items[0].barcode, "1234567890123");
+});
