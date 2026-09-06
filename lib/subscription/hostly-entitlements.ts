@@ -14,6 +14,7 @@ export const HOSTLY_ENTITLEMENTS = {
   ],
   tpvProductInfo: ["tpv.productInfo.gastronomy"],
   ai: ["ai.sommelierPairing"],
+  posMigration: ["migration.products", "migration.full"],
 } as const;
 
 export type HostlyEntitlement =
@@ -21,9 +22,9 @@ export type HostlyEntitlement =
 
 /**
  * Matriz comercial confirmada.
- * - Básico: producto TPV solo clicable; sin ficha gastronómica ni Sommelier.
- * - Pro: ficha gastronómica (alérgenos + perfil de vino), sin maridajes IA.
- * - Ultra: Pro + Sommelier IA bidireccional sobre productos reales del tenant.
+ * - Básico: producto TPV solo clicable; sin ficha gastronómica, Sommelier ni migración automática.
+ * - Pro: ficha gastronómica + migración de carta/productos; sin maridajes IA ni migración completa.
+ * - Ultra: Pro + Sommelier IA, imágenes en lote y migración operativa completa del restaurante.
  */
 export const HOSTLY_PLAN_ENTITLEMENTS: Readonly<
   Record<HostlyPlan, readonly HostlyEntitlement[]>
@@ -33,6 +34,7 @@ export const HOSTLY_PLAN_ENTITLEMENTS: Readonly<
     "catalog.image.ai.single",
     "catalog.image.catalogSearch",
     "tpv.productInfo.gastronomy",
+    "migration.products",
   ],
   ultra: [
     "catalog.image.ai.single",
@@ -40,6 +42,8 @@ export const HOSTLY_PLAN_ENTITLEMENTS: Readonly<
     "catalog.image.catalogSearch",
     "tpv.productInfo.gastronomy",
     "ai.sommelierPairing",
+    "migration.products",
+    "migration.full",
   ],
 };
 

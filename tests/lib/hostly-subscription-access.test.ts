@@ -18,6 +18,8 @@ test("global subscription access resolves the canonical plan and entitlements", 
     "catalog.image.catalogSearch",
     "tpv.productInfo.gastronomy",
     "ai.sommelierPairing",
+    "migration.products",
+    "migration.full",
   ]);
   assert.equal(
     subscriptionAccessHasEntitlement(access, "catalog.image.ai.bulk"),
@@ -31,6 +33,14 @@ test("global subscription access resolves the canonical plan and entitlements", 
     subscriptionAccessHasEntitlement(access, "ai.sommelierPairing"),
     true,
   );
+  assert.equal(
+    subscriptionAccessHasEntitlement(access, "migration.products"),
+    true,
+  );
+  assert.equal(
+    subscriptionAccessHasEntitlement(access, "migration.full"),
+    true,
+  );
 });
 
 test("global subscription access preserves the Pro compatibility fallback", () => {
@@ -42,6 +52,7 @@ test("global subscription access preserves the Pro compatibility fallback", () =
     "catalog.image.ai.single",
     "catalog.image.catalogSearch",
     "tpv.productInfo.gastronomy",
+    "migration.products",
   ]);
   assert.equal(
     subscriptionAccessHasEntitlement(access, "tpv.productInfo.gastronomy"),
@@ -49,6 +60,14 @@ test("global subscription access preserves the Pro compatibility fallback", () =
   );
   assert.equal(
     subscriptionAccessHasEntitlement(access, "ai.sommelierPairing"),
+    false,
+  );
+  assert.equal(
+    subscriptionAccessHasEntitlement(access, "migration.products"),
+    true,
+  );
+  assert.equal(
+    subscriptionAccessHasEntitlement(access, "migration.full"),
     false,
   );
 });
@@ -70,6 +89,14 @@ test("Basic exposes no confirmed commercial entitlements", () => {
   );
   assert.equal(
     subscriptionAccessHasEntitlement(access, "ai.sommelierPairing"),
+    false,
+  );
+  assert.equal(
+    subscriptionAccessHasEntitlement(access, "migration.products"),
+    false,
+  );
+  assert.equal(
+    subscriptionAccessHasEntitlement(access, "migration.full"),
     false,
   );
 });
