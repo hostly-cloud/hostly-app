@@ -16,6 +16,7 @@ export type AeatInvoiceType = "F1" | "F2" | "F3" | "R1" | "R2" | "R3" | "R4" | "
 export type AeatRectificationType = "S" | "I";
 export type AeatRecordKind = "alta" | "anulacion";
 export type AeatEnvironment = "test" | "production";
+export type AeatIndirectTaxCode = "01" | "02" | "03";
 export type AeatRecordStatus =
   | "pending"
   | "sending"
@@ -88,6 +89,7 @@ export type FiscalConfiguration = {
   establishmentAddress: FiscalAddress;
   timezone: string;
   currency: "EUR";
+  indirectTaxCode?: AeatIndirectTaxCode;
   defaultVatRateBps: number | null;
   series: FiscalSeries[];
   software: FiscalSoftwareIdentity;
@@ -115,8 +117,8 @@ export type FiscalInvoiceLine = FiscalInvoiceLineInput & {
 };
 
 export type FiscalTaxBreakdown = {
-  taxCode: "01";
-  regimeCode: "01";
+  taxCode: AeatIndirectTaxCode;
+  regimeCode: "01" | null;
   operationClassification: "S1";
   vatRateBps: number;
   taxableBaseCents: number;
