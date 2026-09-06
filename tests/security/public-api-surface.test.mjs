@@ -15,6 +15,7 @@ const EXPLICIT_ROUTE_CLASSIFICATION = new Map([
   ["app/api/debug/firebase/route.ts", "production-disabled"],
   ["app/api/queues/catalog-image-bulk/route.ts", "signed-callback"],
   ["app/api/ai/manager-analytics/route.ts", "authenticated-ai-tenant"],
+  ["app/api/ai/manager-home/route.ts", "authenticated-ai-tenant"],
 ]);
 
 const SECURITY_SIGNALS = [

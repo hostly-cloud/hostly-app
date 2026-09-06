@@ -5,6 +5,7 @@ import { useMemo, type ReactNode } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { useI18n } from "@/components/i18n-provider";
 import { OperationalDelayAlertsPanel } from "@/components/dashboard/operational-delay-alerts-panel";
+import { ManagerHomeIntelligencePanel } from "@/components/dashboard/manager-home-intelligence-panel";
 import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import type { HostlyCapability } from "@/lib/auth/hostly-capabilities";
 import ModulePageShell from "@/components/module-page-shell";
@@ -194,6 +195,7 @@ export default function DashboardPage() {
   );
   const title = restaurantName?.trim() || DEFAULT_RESTAURANT_NAME;
   const canSeeOperationalAlerts = can("kds.manage") || can("tpv.sell");
+  const canSeeManagerIntelligence = can("analytics.view");
 
   const getOperationCopy = (key: OperationKey) => {
     switch (key) {
@@ -247,6 +249,7 @@ export default function DashboardPage() {
             </div>
           </header>
           {canSeeOperationalAlerts && <OperationalDelayAlertsPanel />}
+          {canSeeManagerIntelligence && <ManagerHomeIntelligencePanel />}
           <section
             className="hostly-dashboard-command-main"
             aria-label={copy.operationalActions}
