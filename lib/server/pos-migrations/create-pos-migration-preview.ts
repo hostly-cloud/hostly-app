@@ -49,7 +49,7 @@ export async function createPosMigrationPreview(params: {
   if (!["csv", "tsv", "txt"].includes(extension)) {
     throw new CreatePosMigrationPreviewError(
       "UNSUPPORTED_FILE_TYPE",
-      "Esta primera versión acepta exportaciones CSV, TSV o TXT del TPV",
+      "Esta versión acepta exportaciones CSV, TSV o TXT del TPV",
       415,
     );
   }
@@ -61,11 +61,7 @@ export async function createPosMigrationPreview(params: {
   } catch (error) {
     const code = error instanceof Error ? error.message : "POS_EXPORT_PARSE_FAILED";
     if (code === "POS_EXPORT_NAME_COLUMN_NOT_FOUND") {
-      throw new CreatePosMigrationPreviewError(
-        code,
-        "No hemos podido identificar la columna de nombre del producto",
-        422,
-      );
+      throw new CreatePosMigrationPreviewError(code, "No hemos podido identificar la columna de nombre del producto", 422);
     }
     if (code === "POS_EXPORT_EMPTY") {
       throw new CreatePosMigrationPreviewError(code, "No hay filas de productos para importar", 422);
@@ -108,6 +104,9 @@ export async function createPosMigrationPreview(params: {
   };
 
   const warnings: string[] = [];
+  if (parsed.sourceVendor !== "generic") {
+    warnings.push(`Formato probable detectado: ${parsed.sourceVendorLabel}. El mapeo sigue siendo revisable antes de publicar.`);
+  }
   if (items.length >= MAX_ROWS) warnings.push(`Se han analizado las primeras ${MAX_ROWS} filas del archivo.`);
   if (summary.taxRateDetectedCount > 0) {
     warnings.push("El IVA se conserva en el borrador para revisión, pero no se aplicará al producto hasta que exista un contrato fiscal canónico en Hostly.");
@@ -123,6 +122,9 @@ export async function createPosMigrationPreview(params: {
     status: "preview",
     sourceFileName: fileName,
     sourceFormat: parsed.sourceFormat,
+    sourceVendor: parsed.sourceVendor,
+    sourceVendorLabel: parsed.sourceVendorLabel,
+    sourceVendorConfidence: parsed.sourceVendorConfidence,
     mapping: parsed.mapping,
     summary,
     warnings,
@@ -145,6 +147,9 @@ export async function createPosMigrationPreview(params: {
     status: "preview",
     sourceFileName: fileName,
     sourceFormat: parsed.sourceFormat,
+    sourceVendor: parsed.sourceVendor,
+    sourceVendorLabel: parsed.sourceVendorLabel,
+    sourceVendorConfidence: parsed.sourceVendorConfidence,
     mapping: parsed.mapping,
     items,
     summary,
