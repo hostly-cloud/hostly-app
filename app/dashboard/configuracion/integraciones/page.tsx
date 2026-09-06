@@ -140,6 +140,17 @@ export default function ConfigIntegracionesPage() {
               <span>Datos trazables</span>
               <span>Control del restaurante</span>
             </div>
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <Link
+                href="/dashboard/configuracion/integraciones/telefono-ia"
+                className="hostly-button-primary hostly-button-compact"
+              >
+                Configurar Teléfono IA
+              </Link>
+              <span className="text-sm text-slate-500">
+                Nueva integración · llamadas y solicitudes de reserva
+              </span>
+            </div>
           </div>
           <div className="hostly-integrations-hub__orbit" aria-hidden>
             <div className="hostly-integrations-hub__orbit-core">H</div>
