@@ -8,7 +8,10 @@ import {
   type ManagerAutomationStage,
   type ManagerAutomationStatus,
 } from "@/lib/operations/manager-automations";
-import { buildAndSyncOperationalAlertCenter } from "@/lib/server/operations/operational-alert-center";
+import {
+  buildAndSyncOperationalAlertCenter,
+  type OperationalAlertCenterAlert,
+} from "@/lib/server/operations/operational-alert-center";
 
 function automationsRef(db: Firestore, restaurantId: string) {
   return db.collection(`restaurants/${restaurantId}/managerAutomations`);
@@ -44,21 +47,21 @@ function fromData(id: string, data: Record<string, unknown>): ManagerAutomationI
   };
 }
 
-export async function buildAndSyncManagerAutomationCenter(
+export async function syncManagerAutomationsFromAlerts(
   db: Firestore,
   restaurantId: string,
+  alerts: OperationalAlertCenterAlert[],
   nowMs = Date.now(),
 ): Promise<{ active: ManagerAutomationItem[]; history: ManagerAutomationItem[] }> {
-  const alertCenter = await buildAndSyncOperationalAlertCenter(db, restaurantId, nowMs);
   const collection = automationsRef(db, restaurantId);
-  const refs = alertCenter.alerts.map((alert) => collection.doc(alert.incidentId));
+  const refs = alerts.map((alert) => collection.doc(alert.incidentId));
   const snapshots = refs.length ? await db.getAll(...refs) : [];
   const existingById = new Map(snapshots.map((snapshot) => [snapshot.id, snapshot]));
   const batch = db.batch();
   let writes = 0;
   const activeIds = new Set<string>();
 
-  for (const alert of alertCenter.alerts) {
+  for (const alert of alerts) {
     const id = alert.incidentId;
     activeIds.add(id);
     const ref = collection.doc(id);
@@ -78,8 +81,7 @@ export async function buildAndSyncManagerAutomationCenter(
       || existing.stage !== stage
       || existing.status !== status
       || existing.title !== copy.title
-      || existing.detail !== copy.detail
-      || nowMs - existing.lastPreparedAtMs >= 60_000;
+      || existing.detail !== copy.detail;
     if (!changed) continue;
     batch.set(ref, {
       restaurantId,
@@ -120,6 +122,15 @@ export async function buildAndSyncManagerAutomationCenter(
   const historySnapshot = await collection.orderBy("updatedAtMs", "desc").limit(50).get();
   const history = historySnapshot.docs.map((snapshot) => fromData(snapshot.id, snapshot.data() as Record<string, unknown>));
   return { active: history.filter((item) => item.status === "active"), history };
+}
+
+export async function buildAndSyncManagerAutomationCenter(
+  db: Firestore,
+  restaurantId: string,
+  nowMs = Date.now(),
+): Promise<{ active: ManagerAutomationItem[]; history: ManagerAutomationItem[] }> {
+  const alertCenter = await buildAndSyncOperationalAlertCenter(db, restaurantId, nowMs);
+  return syncManagerAutomationsFromAlerts(db, restaurantId, alertCenter.alerts, nowMs);
 }
 
 export async function updateManagerAutomation(
