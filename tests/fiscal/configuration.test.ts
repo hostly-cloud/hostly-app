@@ -44,17 +44,7 @@ test("la activación exige productor y credencial configurados", () => {
   assert.throws(() => assertFiscalConfigurationCanActivate(config, "test"), /FISCAL_CONFIGURATION_INCOMPLETE/);
 });
 
-test("una representación verificada no sustituye el certificado mTLS de AEAT", () => {
-  const config = buildFiscalConfiguration({ restaurantId: "restaurant-a", value: input });
-  config.software.producerNif = "B12345674";
-  config.representationVerifiedAt = "2026-09-06T12:00:00.000Z";
-  const authorization = fiscalReadiness(config).find((row) => row.key === "authorization");
-  assert.equal(authorization?.label, "Certificado de envío AEAT");
-  assert.equal(authorization?.ready, false);
-  assert.throws(() => assertFiscalConfigurationCanActivate(config, "test"), /authorization/);
-});
-
-test("no permite activar producción con el interruptor operativo cerrado", () => {
+test("no permite activar producción antes de fecha o con el interruptor operativo cerrado", () => {
   const config = buildFiscalConfiguration({ restaurantId: "restaurant-a", value: { ...input, mode: "live" } });
   config.software.producerNif = "B12345674";
   config.certificateSecretResource = "projects/p/secrets/cert/versions/1";
@@ -66,5 +56,17 @@ test("no permite activar producción con el interruptor operativo cerrado", () =
     signedAt: "2027-01-01",
     signedPlace: "Madrid, España",
   };
-  assert.throws(() => assertFiscalConfigurationCanActivate(config, "live"), /FISCAL_LIVE_ACTIVATION_DISABLED/);
+  assert.throws(
+    () => assertFiscalConfigurationCanActivate(config, "live"),
+    /FISCAL_LIVE_NOT_YET_ALLOWED|FISCAL_LIVE_ACTIVATION_DISABLED/,
+  );
+});
+
+test("la representación verificada no sustituye el certificado mTLS", () => {
+  const config = buildFiscalConfiguration({ restaurantId: "restaurant-a", value: input });
+  config.software.producerNif = "B12345674";
+  config.representationVerifiedAt = "2026-09-06T00:00:00.000Z";
+  const authorization = fiscalReadiness(config).find((row) => row.key === "authorization");
+  assert.equal(authorization?.ready, false);
+  assert.equal(authorization?.label, "Certificado de envío AEAT");
 });

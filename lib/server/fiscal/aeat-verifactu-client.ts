@@ -1,5 +1,6 @@
 import { request as httpsRequest } from "node:https";
 import { XMLParser } from "fast-xml-parser";
+import { assertFiscalLiveWindowOpen } from "@/lib/fiscal/live-activation-policy";
 import type { AeatEnvironment } from "@/lib/fiscal/model";
 import type { FiscalCertificateMaterial } from "@/lib/server/fiscal/fiscal-certificate-secret";
 
@@ -121,8 +122,11 @@ export async function submitAeatVerifactu(input: {
   timeoutMs?: number;
   transport?: AeatHttpTransport;
 }): Promise<AeatSubmissionResult> {
-  if (input.environment === "production" && process.env.HOSTLY_AEAT_PRODUCTION_SUBMISSION_ENABLED !== "true") {
-    throw new Error("AEAT_PRODUCTION_SUBMISSION_DISABLED");
+  if (input.environment === "production") {
+    assertFiscalLiveWindowOpen();
+    if (process.env.HOSTLY_AEAT_PRODUCTION_SUBMISSION_ENABLED !== "true") {
+      throw new Error("AEAT_PRODUCTION_SUBMISSION_DISABLED");
+    }
   }
   if (!input.xmlEnvelope.startsWith("<?xml") || !input.xmlEnvelope.includes("RegFactuSistemaFacturacion")) {
     throw new Error("AEAT_REQUEST_XML_INVALID");

@@ -39,7 +39,7 @@ test("usa el endpoint de pruebas oficial y transporta certificado sin registrarl
   assert.equal(result.recordStatus, "Correcto");
 });
 
-test("producción permanece bloqueada por defecto", async () => {
+test("producción permanece bloqueada por fecha o por interruptor", async () => {
   const previous = process.env.HOSTLY_AEAT_PRODUCTION_SUBMISSION_ENABLED;
   delete process.env.HOSTLY_AEAT_PRODUCTION_SUBMISSION_ENABLED;
   try {
@@ -50,7 +50,7 @@ test("producción permanece bloqueada por defecto", async () => {
         certificate: { pfx: Buffer.alloc(100, 1), passphrase: "secret" },
         transport: async () => ({ statusCode: 200, body: response }),
       }),
-      /AEAT_PRODUCTION_SUBMISSION_DISABLED/,
+      /FISCAL_LIVE_NOT_YET_ALLOWED|AEAT_PRODUCTION_SUBMISSION_DISABLED/,
     );
   } finally {
     if (previous == null) delete process.env.HOSTLY_AEAT_PRODUCTION_SUBMISSION_ENABLED;
